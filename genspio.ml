@@ -76,6 +76,8 @@ module EDSL = struct
 
     val switch: (bool t * 'a t) list -> default: 'a t -> 'a t
 
+    val unsafe: string -> 'a t
+    val unsafe_exec: string list -> 'a t
     (*
     val list: ('a t) list -> 'a list t
     val list_map: ('a list t) -> f:('a -> 'b) t -> ('b list t)
@@ -155,6 +157,12 @@ module EDSL = struct
                 (chain more)
           in
           chain cases
+        )
+
+    let unsafe s = Expr Posix_sh.Construct.(cmd s)
+    let unsafe_exec s =
+      Expr Posix_sh.Construct.(
+          cmd (List.map s ~f:escape |> String.concat ~sep:" ")
         )
 
     (*
