@@ -190,8 +190,13 @@ module Test = struct
           let l =
             if exit_status = `Exited i
             then (true, "exited well") :: prev
-            else (false,
-                  Pvem_lwt_unix.System.Shell.status_to_string exit_status) :: prev
+            else (
+              false,
+              sprintf "%s: %S %S"
+                (Pvem_lwt_unix.System.Shell.status_to_string exit_status)
+                out
+                err
+            ) :: prev
           in
           return l)
     >>= fun results ->
@@ -216,68 +221,109 @@ module Test = struct
     return ()
 end
 
+let posix_sh_tests = [
+  Test.command
+    Posix_sh.(
+      Construct.(cf "ls" && (cf "exit 1" || cf "pwd"))
+      |> to_one_liner)
+    [`Exits_with 0];
+  Test.command
+    Posix_sh.(
+      Construct.(cf "ls" && (cf "exit 1" || cf "exit 2"))
+      |> to_one_liner)
+    [`Exits_with 2];
+  Test.command
+    Posix_sh.(
+      Construct.(cf "exit 4"
+                 || (Function.define "one"  (cf "exit $1")
+                     && Function.call "one" ["3"]))
+      |> to_one_liner)
+    [`Exits_with 3];
+  Test.command
+    Posix_sh.(
+      Construct.(cf "exit 4"
+                 || (Function.define "one"  (cf "exit 2")
+                     && Function.call "one" [])
+                 || (Function.define "one"  (cf "exit 3")
+                     && Function.call "one" []))
+      |> to_one_liner)
+    [`Exits_with 3];
+]
+
+let basic_edsl_tests = [
+  Test.command
+    begin
+      let module Script(Shell : EDSL.Semantics) = struct
+        open Shell
+        let e =
+          observe begin
+            test EDSL.Condition.(file_exists "/etc/passwd")
+          end
+      end in
+      let module Compiled = Script(EDSL.To_posix_sh) in
+      Compiled.e |> Posix_sh.to_one_liner
+    end
+    [`Exits_with 0];
+  Test.command
+    begin
+      let module Script(Shell : EDSL.Semantics) = struct
+        open Shell
+        let t = test EDSL.Condition.(file_exists "/etc/passwd")
+        let f = test EDSL.Condition.(file_exists "/etc/passwdijljdiedjsdi")
+        let e =
+          observe begin
+            switch ~default:(fail ~exit:1 "default should not happen") [
+              f, fail ~exit:2 "should not happen";
+              f &&& t, fail ~exit:3 "should not happen either";
+              t &&& f, fail ~exit:4 "should not happen either";
+              f ||| t, fail ~exit:5 "should be displayed";
+              f ||| t, fail ~exit:6 "should not be displayed";
+            ]
+          end
+      end in
+      let module Compiled = Script(EDSL.To_posix_sh) in
+      Compiled.e |> Posix_sh.to_one_liner
+    end
+    [`Exits_with 5];
+]
+
+let more_edsl_tests =
+  let module Script(Shell : EDSL.Semantics) = struct
+    open Shell
+    let t = test EDSL.Condition.(file_exists "/etc/passwd")
+    let f = test EDSL.Condition.(file_exists "/etc/passwdijljdiedjsdi")
+    let goes_to_default =
+      observe begin
+        switch ~default:(fail ~exit:1 "default should not happen") [
+          f, fail ~exit:2 "should not happen";
+          f &&& t, fail ~exit:3 "should not happen either";
+          f ||| f, fail ~exit:4 "should not happen either";
+        ]
+      end
+    let uses_exec =
+      observe begin
+        unsafe_exec ["bash"; "-c";
+                     "export B=$(whoami) ; \
+                      (echo \"$B\" | sed 's/\\(.*\\)$/You \"are\" \\1/' \
+                      | grep -v are) || exit 9 \
+                     "]
+      end
+  end in
+  let module Compiled = Script(EDSL.To_posix_sh) in
+  let make_test compiled expectations =
+    Test.command (compiled |> Posix_sh.to_one_liner) expectations in
+  [
+    make_test Compiled.goes_to_default [`Exits_with 1];
+    make_test Compiled.uses_exec [`Exits_with 9];
+  ]
+
+
 let () =
-  let tests = [
-    Test.command
-      Posix_sh.(
-        Construct.(cf "ls" && (cf "exit 1" || cf "pwd"))
-        |> to_one_liner)
-      [`Exits_with 0];
-    Test.command
-      Posix_sh.(
-        Construct.(cf "ls" && (cf "exit 1" || cf "exit 2"))
-        |> to_one_liner)
-      [`Exits_with 2];
-    Test.command
-      Posix_sh.(
-        Construct.(cf "exit 4"
-                   || (Function.define "one"  (cf "exit $1")
-                       && Function.call "one" ["3"]))
-        |> to_one_liner)
-      [`Exits_with 3];
-    Test.command
-      Posix_sh.(
-        Construct.(cf "exit 4"
-                   || (Function.define "one"  (cf "exit 2")
-                       && Function.call "one" [])
-                   || (Function.define "one"  (cf "exit 3")
-                       && Function.call "one" []))
-        |> to_one_liner)
-      [`Exits_with 3];
-    Test.command
-      begin
-        let module Script(Shell : EDSL.Semantics) = struct
-          open Shell
-          let e =
-            observe begin
-              test EDSL.Condition.(file_exists "/etc/passwd")
-            end
-        end in
-        let module Compiled = Script(EDSL.To_posix_sh) in
-        Compiled.e |> Posix_sh.to_one_liner
-      end
-      [`Exits_with 0];
-    Test.command
-      begin
-        let module Script(Shell : EDSL.Semantics) = struct
-          open Shell
-          let t = test EDSL.Condition.(file_exists "/etc/passwd")
-          let f = test EDSL.Condition.(file_exists "/etc/passwdijljdiedjsdi")
-          let e =
-            observe begin
-              switch ~default:(fail ~exit:1 "default should not happen") [
-                f, fail ~exit:2 "should not happen";
-                f &&& t, fail ~exit:3 "should not happen either";
-                t &&& f, fail ~exit:4 "should not happen either";
-                f ||| t, fail ~exit:5 "should be displayed";
-              ]
-            end
-        end in
-        let module Compiled = Script(EDSL.To_posix_sh) in
-        Compiled.e |> Posix_sh.to_one_liner
-      end
-      [`Exits_with 5];
-  ] in
+  let tests =
+    posix_sh_tests
+    @ basic_edsl_tests
+    @ more_edsl_tests
+  in
   begin match Lwt_main.run (Test.run tests) with
   | `Ok () -> printf "Done.\n%!"
   | `Error (`Shell (s, `Exn e)) ->
