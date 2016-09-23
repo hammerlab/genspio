@@ -15,6 +15,7 @@ module Posix_sh = struct
     | Define_function of string * t
     | If of t * t * t option
     | Seq of t list
+    | Exec of string list
 
   module Construct = struct
     let cmd = fun s -> Command s
@@ -49,6 +50,7 @@ module Posix_sh = struct
         (to_one_liner c) (to_one_liner t)
     | Seq l ->
       String.concat (List.map l ~f:to_one_liner) ~sep:" ; "
+    | Exec l -> List.map l ~f:Filename.quote |> String.concat ~sep:" "
 
 end
 
