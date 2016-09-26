@@ -56,14 +56,29 @@ end
 
 module Script = struct
 
+  module Literal = struct
+    type _ t =
+      | Int: int -> int t
+      | String: string -> string t
+      | Bool: bool -> bool t
+    let to_shell: type a. a t -> string =
+      function
+      | Int i -> sprintf "%d" i
+      | String s -> Filename.quote s
+      | Bool true -> "0"
+      | Bool false -> "1"
+  end
   type _ t =
     | Exec: string list -> unit t
     | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
+    | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
     | Not: bool t -> bool t
     | Succeed: { expr: 'a t; exit_with: int} -> bool t
     | Noop: 'a t
     | If: bool t * 'a t * 'a t -> 'a t
     | Seq: unit t list -> unit t
+    | Literal: 'a Literal.t -> 'a t
+    | Output_as_string: unit t -> string t
     | Write_output: {
         expr: unit t;
         stdout: string option;
@@ -75,6 +90,8 @@ module Script = struct
     let exec l = Exec l
     let (&&&) a b = Bool_operator (a, `And, b)
     let (|||) a b = Bool_operator (a, `Or, b)
+    let (=$=) a b = String_operator (a, `Eq, b)
+    let (<$>) a b = String_operator (a, `Neq, b)
     let succeed ?(exit_with = 2) expr = Succeed {expr; exit_with}
     let (~$) x = succeed x
     let nop = Noop
@@ -99,45 +116,80 @@ module Script = struct
       Write_output {expr; stdout; stderr; return_value}
 
     let write_stdout ~path expr = write_output expr ~stdout:path
+
+    let literal l = Literal l
+    let string s = Literal.String s |> literal
+    let int s = Literal.Int s |> literal
+    let bool = Literal.Bool true |> literal
+
+    let output_as_string e = Output_as_string e
   end
 
-  let rec to_one_liner: type a. a t -> string =
-    fun e ->
+  type output_parameters = {
+    statement_separator: string;
+  }
+  let rec to_shell: type a. _ -> a t -> string =
+    fun params e ->
+      let continue e = to_shell params e in
+      let seq l = String.concat  ~sep:params.statement_separator l in
       match e with
       | Exec l -> List.map l ~f:Filename.quote |> String.concat ~sep:" "
       | Succeed {expr; exit_with} ->
-        sprintf "%s ; ( if [ $? -ne 0 ] ; then exit %d ; else exit 0 ; fi )"
-          (to_one_liner expr) exit_with
+        seq [
+          (continue expr);
+          sprintf "( if [ $? -ne 0 ] ; then exit %d ; else exit 0 ; fi )"
+            exit_with;
+        ]
       | Bool_operator (a, op, b) ->
-        sprintf "{ %s %s %s }"
-          (to_one_liner a)
+        sprintf "{ %s %s %s ; }"
+          (continue a)
           (match op with `And -> "&&" | `Or -> "||")
-          (to_one_liner b)
+          (continue b)
+      | String_operator (a, op, b) ->
+        sprintf "[ %s %s %s ]"
+          (continue a)
+          (match op with `Eq -> "=" | `Neq -> "!=")
+          (continue b)
       | Noop -> "printf ''"
       | If (c, t, e) ->
-        sprintf "if { %s } ; then %s ; else %s ; fi"
-          (to_one_liner c) (to_one_liner t) (to_one_liner e)
-      | Seq l ->
-        String.concat (List.map l ~f:to_one_liner) ~sep:" ; "
+        seq [
+          sprintf "if { %s ; }" (continue c);
+          sprintf "then %s" (continue t);
+          sprintf "else %s" (continue e);
+          "fi";
+        ]
+      | Seq l -> seq (List.map l ~f:continue)
       | Not t ->
-        sprintf "! { %s }" (to_one_liner t)
+        sprintf "! { %s ; }" (continue t)
       | Write_output { expr; stdout; stderr; return_value } ->
         sprintf " ( %s %s ) %s %s"
-          (to_one_liner expr)
+          (continue expr)
           (Option.value_map return_value ~default:"" ~f:(fun path ->
-               sprintf "echo \"$?\" > %s" path))
+               sprintf "; echo \"$?\" > %s" path))
           (Option.value_map stdout ~default:"" ~f:(fun path ->
                sprintf " > %s" path))
-          (Option.value_map return_value ~default:"" ~f:(fun path ->
+          (Option.value_map stderr ~default:"" ~f:(fun path ->
                sprintf "2> %s" path))
+      | Literal lit ->
+        Literal.to_shell lit
+      | Output_as_string e ->
+        sprintf "\"$( %s )\"" (continue e)
 
-  let exits n c =
-    Test.command (to_one_liner c) [`Exits_with n]
+  let rec to_one_liner: type a. a t -> string = fun e ->
+    to_shell {statement_separator = " ; "} e
+  let rec to_many_lines: type a. a t -> string = fun e ->
+    to_shell {statement_separator = "\n"} e
+
+  let exits n c = [
+      Test.command (to_one_liner c) [`Exits_with n];
+      Test.command (to_many_lines c) [`Exits_with n];
+    ]
+
   let tests =
     let exit n = Construct.exec ["exit"; Int.to_string n] in
     let return n =
       Construct.exec ["bash"; "-c"; sprintf "exit %d" n] in
-    [
+    List.concat [
       exits 0 (Exec ["ls"]);
       exits 18 Construct.(
           ~$ (exec ["ls"])
@@ -183,6 +235,36 @@ module Script = struct
               begin
                 exit 1
               end;
+          ]);
+      exits 1 Construct.(
+          let stdout = "/tmp/p1_out" in
+          let stderr = "/tmp/p1_err" in
+          let return_value = "/tmp/p1_ret" in
+          seq [
+            exec ["rm"; "-f"; stdout; stderr; return_value];
+            write_output
+              ~stdout ~stderr ~return_value
+              (seq [
+                  echo "out1";
+                  echo "out2";
+                  exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
+                  return 11;
+                ]);
+            if_then_else (
+              output_as_string (exec ["cat"; stdout]) =$= string "out1\nout2"
+            )
+              (
+                if_then_else
+                  (output_as_string (exec ["cat"; stderr]) <$> string "err")
+                  (
+                    if_then_else
+                      (output_as_string (exec ["cat"; return_value]) =$= string "11")
+                      (return 1)
+                      (return 22)
+                  )
+                  (return 23)
+              )
+              (return 24);
           ]);
     ]
 end
