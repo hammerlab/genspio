@@ -12,7 +12,9 @@ module Test = struct
   open Pvem_lwt_unix.Deferred_result
 
   let check_command s ~verifies =
-    Pvem_lwt_unix.System.Shell.execute s
+    Pvem_lwt_unix.System.Shell.execute
+      (List.map ~f:Filename.quote ["bash"; "-x"; "-c"; s]
+       |> String.concat ~sep:" ")
     >>= fun (out, err, exit_status) ->
     List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
         prev_m >>= fun prev ->
@@ -23,7 +25,7 @@ module Test = struct
             then (true, "exited well") :: prev
             else (
               false,
-              sprintf "%s: %S %S"
+              sprintf "%s:\nout:\n%s\nerr:\n%s"
                 (Pvem_lwt_unix.System.Shell.status_to_string exit_status)
                 out
                 err
@@ -42,7 +44,7 @@ module Test = struct
         >>= begin function
         | [] -> return (sprintf "Test OK: %s\n" s)
         | failures ->
-          return (sprintf "Command:\n    %s\nFailures:\n%S\n" s
+          return (sprintf "Command:\n    %s\nFailures:\n%s\n" s
                     (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
                      |> String.concat ~sep:"\n"))
         end)
