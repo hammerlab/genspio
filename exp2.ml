@@ -62,7 +62,12 @@ module Script = struct
     | Noop: 'a t
     | If: bool t * 'a t * 'a t -> 'a t
     | Seq: unit t list -> unit t
-    | Write_output: { expr: unit t; path: string} -> unit t
+    | Write_output: {
+        expr: unit t;
+        stdout: string option;
+        stderr: string option;
+        return_value: string option;
+      } -> unit t
 
   module Construct = struct
     let exec l = Exec l
@@ -88,7 +93,10 @@ module Script = struct
         List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
             if_then_else x body prev)
 
-    let write_stdout ~path expr = Write_output {expr; path}
+    let write_output ?stdout ?stderr ?return_value expr =
+      Write_output {expr; stdout; stderr; return_value}
+
+    let write_stdout ~path expr = write_output expr ~stdout:path
   end
 
   let rec to_one_liner: type a. a t -> string =
@@ -111,8 +119,15 @@ module Script = struct
         String.concat (List.map l ~f:to_one_liner) ~sep:" ; "
       | Not t ->
         sprintf "! { %s }" (to_one_liner t)
-      | Write_output { expr; path } ->
-        sprintf " ( %s ) > %s" (to_one_liner expr) path
+      | Write_output { expr; stdout; stderr; return_value } ->
+        sprintf " ( %s %s ) %s %s"
+          (to_one_liner expr)
+          (Option.value_map return_value ~default:"" ~f:(fun path ->
+               sprintf "echo \"$?\" > %s" path))
+          (Option.value_map stdout ~default:"" ~f:(fun path ->
+               sprintf " > %s" path))
+          (Option.value_map return_value ~default:"" ~f:(fun path ->
+               sprintf "2> %s" path))
 
   let exits n c =
     Test.command (to_one_liner c) [`Exits_with n]
