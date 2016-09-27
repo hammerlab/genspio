@@ -13,7 +13,7 @@ module Test = struct
 
   let check_command s ~verifies =
     Pvem_lwt_unix.System.Shell.execute
-      (List.map ~f:Filename.quote ["bash"; "-x"; "-c"; s]
+      (List.map ~f:Filename.quote ["dash"; "-x"; "-c"; s]
        |> String.concat ~sep:" ")
     >>= fun (out, err, exit_status) ->
     List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
