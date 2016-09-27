@@ -68,7 +68,18 @@ module Script = struct
     let to_shell: type a. a t -> string =
       function
       | Int i -> sprintf "%d" i
-      | String s -> Filename.quote s
+      | String s ->
+        let b = Buffer.create 42 in
+        let str = Buffer.add_string b in
+        str "\"$(printf '";
+        String.iter s ~f:(function
+          | '\n' -> str "\\n"
+          | '\r' -> str "\\r"
+          | '\t' -> str "\\t" (* TODO: do even better *)
+          | c -> Buffer.add_char b c
+          );
+        str "')\"";
+        Buffer.contents b
       | Bool true -> "0"
       | Bool false -> "1"
   end
@@ -255,7 +266,7 @@ module Script = struct
                   return 11;
                 ]);
             if_then_else (
-              output_as_string (exec ["cat"; stdout]) =$= string "out1\nout2"
+              output_as_string (exec ["cat"; stdout]) =$= string "out1\nout2\n"
             )
               (
                 if_then_else
@@ -270,6 +281,14 @@ module Script = struct
               )
               (return 24);
           ]);
+      exits 11 Construct.( (* This should return 12, we haven't found yet how
+                              to impelement that with a CRAZIX shell *)
+          if_then_else (
+            string "some" =$= string "some\n"
+          )
+            (return 11)
+            (return 12)
+        );
     ]
 end
 
