@@ -42,7 +42,11 @@ module Test = struct
       | `Command (s, verifies) ->
         check_command s ~verifies
         >>= begin function
-        | [] -> return (sprintf "Test OK: %s\n" s)
+        | [] ->
+          let lines = String.split ~on:(`Character '\n') s in
+          return (sprintf "Test OK: %s%s\n"
+                    (List.hd_exn lines)
+                    (if List.length lines > 1 then "  ..." else ""))
         | failures ->
           return (sprintf "Command:\n    %s\nFailures:\n%s\n" s
                     (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
