@@ -7,6 +7,11 @@ module String = Sosa.Native_string
 
 *)
 
+let with_buffer ?(size = 42) f =
+  let b = Buffer.create 42 in
+  let str = Buffer.add_string b in
+  f str;
+  Buffer.contents b
 
 module Test = struct
   open Pvem_lwt_unix.Deferred_result
@@ -69,14 +74,13 @@ module Script = struct
       function
       | Int i -> sprintf "%d" i
       | String s ->
-        let b = Buffer.create 42 in
-        let str = Buffer.add_string b in
-        str "'";
-        String.iter s ~f:(fun c ->
-            Char.code c |> sprintf "%03o" |> str
-          );
-        str "'";
-        Buffer.contents b
+        with_buffer begin fun str ->
+            str "'";
+            String.iter s ~f:(fun c ->
+                Char.code c |> sprintf "%03o" |> str
+              );
+            str "'"
+        end
       | Bool true -> "0"
       | Bool false -> "1"
   end
@@ -148,8 +152,49 @@ module Script = struct
     fun params e ->
       let continue e = to_shell params e in
       let seq l = String.concat  ~sep:params.statement_separator l in
+      let expand_octal s =
+        sprintf
+          {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
+          s in
+      (* let expand_output_to_string = *)
+      (*   sprintf "\"$(%s)\"" in *)
       match e with
-      | Exec l -> List.map l ~f:Filename.quote |> String.concat ~sep:" "
+      | Exec l ->
+        let easy_to_escape =
+          function
+          | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
+          | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!'
+          | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
+          | '{' | '}' 
+          | '(' | ')'
+          | '[' | ']'
+            -> true
+          | other -> false in
+        let impossible_to_escape = String.exists ~f:((=) '\x00') in
+        let variables = ref [] in
+        let args =
+          List.mapi l ~f:(fun index -> function
+            | arg when String.for_all arg ~f:easy_to_escape ->
+              Filename.quote arg
+            | arg when impossible_to_escape arg ->
+              ksprintf failwith "to_shell: sorry %S is impossible to escape as \
+                                 `exec` argument" arg
+            | arg ->
+              let var =
+                with_buffer begin fun str ->
+                  ksprintf str "argument_%d=$(printf '" index;
+                  String.iter arg ~f:(fun c ->
+                      Char.code c |> sprintf "\\%03o" |> str
+                    );
+                  str "'; printf 'x') ; "
+                end in
+              variables := var :: !variables;
+              sprintf "\"${argument_%d%%?}\"" index
+              (* Literal.(to_shell (String arg)) |> expand_octal *)
+              (* |> expand_output_to_string *)
+            )
+        in
+        (List.rev !variables) @ args |> String.concat ~sep:" "
       | Succeed {expr; exit_with} ->
         seq [
           (continue expr);
@@ -191,8 +236,8 @@ module Script = struct
       | Output_as_string e ->
         sprintf "\"$( %s  | od -t o1 -w10000000 -An -v | tr -d \" \" )\"" (continue e)
       | Feed (string, e) ->
-        sprintf {sh|  printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" | %s  |sh}
-          (continue string) (continue e)
+        sprintf {sh|  %s | %s  |sh}
+          (continue string |> expand_octal) (continue e)
 
   let rec to_one_liner: type a. a t -> string = fun e ->
     to_shell {statement_separator = " ; "} e
@@ -255,7 +300,7 @@ module Script = struct
                 exit 1
               end;
           ]);
-      exits 1 Construct.(
+      exits 11 Construct.(
           let stdout = "/tmp/p1_out" in
           let stderr = "/tmp/p1_err" in
           let return_value = "/tmp/p1_ret" in
@@ -264,13 +309,13 @@ module Script = struct
             write_output
               ~stdout ~stderr ~return_value
               (seq [
-                  printf "out1\n";
+                  printf "o\nut1\n";
                   printf "out2\n";
                   exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
                   return 11;
                 ]);
             if_then_else (
-              output_as_string (exec ["cat"; stdout]) =$= string "out1\nout2\n"
+              output_as_string (exec ["cat"; stdout]) =$= string "o\nut1\nout2\n"
             )
               (
                 if_then_else
@@ -278,7 +323,7 @@ module Script = struct
                   (
                     if_then_else
                       (output_as_string (exec ["cat"; return_value]) =$= string "11\n")
-                      (return 1)
+                      (return 11)
                       (return 22)
                   )
                   (return 23)
