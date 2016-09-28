@@ -165,7 +165,7 @@ module Script = struct
         let easy_to_escape =
           function
           | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
-          | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!'
+          | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
           | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
           | '{' | '}' 
           | '(' | ')'
@@ -306,18 +306,23 @@ module Script = struct
           let stdout = "/tmp/p1_out" in
           let stderr = "/tmp/p1_err" in
           let return_value = "/tmp/p1_ret" in
+          let will_be_escaped =
+            "newline:\n tab: \t \x42\b" in
+          let will_not_be_escaped =
+            "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
           seq [
             exec ["rm"; "-f"; stdout; stderr; return_value];
             write_output
               ~stdout ~stderr ~return_value
               (seq [
-                  printf "o\nut1\n";
-                  printf "out2\n";
+                  printf "%s" will_be_escaped;
+                  printf "%s" will_not_be_escaped;
                   exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
                   return 11;
                 ]);
             if_then_else (
-              output_as_string (exec ["cat"; stdout]) =$= string "o\nut1\nout2\n"
+              output_as_string (exec ["cat"; stdout])
+              =$= string (will_be_escaped ^ will_not_be_escaped)
             )
               (
                 if_then_else
