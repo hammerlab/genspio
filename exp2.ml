@@ -104,6 +104,7 @@ module Script = struct
         return_value: string option;
       } -> unit t
     | Feed: string t * unit t -> unit t
+    | While: {condition: bool t; body: unit t} -> unit t
 
   module Construct = struct
     let exec l = Exec l
@@ -145,6 +146,8 @@ module Script = struct
 
     let feed ~string e = Feed (string, e)
     let (>>) string e = feed ~string e
+
+    let loop_while condition ~body = While {condition; body}
   end
 
   type output_parameters = {
@@ -220,6 +223,12 @@ module Script = struct
           sprintf "then %s" (continue t);
           sprintf "else %s" (continue e);
           "fi";
+        ]
+      | While {condition; body} ->
+        seq [
+          sprintf "while { %s ; }" (continue condition);
+          sprintf "do %s" (continue body);
+          "done"
         ]
       | Seq l -> seq (List.map l ~f:continue)
       | Not t ->
@@ -367,6 +376,22 @@ module Script = struct
             )
             (return 10)
             (return 11)
+        );
+      exits 10 Construct.(
+          let tmp = "/tmp/test_loop_while" in
+          let cat_potentially_empty =
+            if_then_else (exec ["cat"; tmp] |> succeed)
+              nop
+              (printf "") in
+          seq [
+            exec ["rm"; "-f"; tmp];
+            loop_while
+              (cat_potentially_empty |> output_as_string <$> string "nnnn")
+              ~body:begin
+                exec ["bash"; "-c"; sprintf "printf n >> %s" tmp];
+              end;
+            return 10;
+          ];
         );
     ]
 end
