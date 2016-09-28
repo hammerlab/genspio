@@ -73,7 +73,7 @@ module Script = struct
         let str = Buffer.add_string b in
         str "'";
         String.iter s ~f:(fun c ->
-            Char.code c |> sprintf "%02x" |> str
+            Char.code c |> sprintf "%03o" |> str
           );
         str "'";
         Buffer.contents b
@@ -97,6 +97,7 @@ module Script = struct
         stderr: string option;
         return_value: string option;
       } -> unit t
+    | Feed: string t * unit t -> unit t
 
   module Construct = struct
     let exec l = Exec l
@@ -135,6 +136,9 @@ module Script = struct
     let bool = Literal.Bool true |> literal
 
     let output_as_string e = Output_as_string e
+
+    let feed ~string e = Feed (string, e)
+    let (>>) string e = feed ~string e
   end
 
   type output_parameters = {
@@ -185,7 +189,10 @@ module Script = struct
       | Literal lit ->
         Literal.to_shell lit
       | Output_as_string e ->
-        sprintf "\"$( %s  | od -t x1 -w10000000 -An -v | tr -d \" \" )\"" (continue e)
+        sprintf "\"$( %s  | od -t o1 -w10000000 -An -v | tr -d \" \" )\"" (continue e)
+      | Feed (string, e) ->
+        sprintf {sh|  printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" | %s  |sh}
+          (continue string) (continue e)
 
   let rec to_one_liner: type a. a t -> string = fun e ->
     to_shell {statement_separator = " ; "} e
@@ -298,6 +305,16 @@ module Script = struct
           )
             (return 0)
             (return 12)
+        );
+      exits 10 Construct.(
+          if_then_else
+            (
+              (string "bouh\nbah\n" >> exec ["cat"] |> output_as_string)
+              =$=
+              string "bouh\nbah\n"
+            )
+            (return 10)
+            (return 11)
         );
     ]
 end
