@@ -71,14 +71,11 @@ module Script = struct
       | String s ->
         let b = Buffer.create 42 in
         let str = Buffer.add_string b in
-        str "\"$(printf '";
-        String.iter s ~f:(function
-          | '\n' -> str "\\n"
-          | '\r' -> str "\\r"
-          | '\t' -> str "\\t" (* TODO: do even better *)
-          | c -> Buffer.add_char b c
+        str "'";
+        String.iter s ~f:(fun c ->
+            Char.code c |> sprintf "%02x" |> str
           );
-        str "')\"";
+        str "'";
         Buffer.contents b
       | Bool true -> "0"
       | Bool false -> "1"
@@ -116,8 +113,8 @@ module Script = struct
 
     let not t = Not t
 
-    let echo fmt =
-      ksprintf (fun s -> exec ["echo"; s]) fmt
+    let printf fmt =
+      ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
 
     let file_exists p =
       exec ["test"; "-f"; p] |> succeed
@@ -188,7 +185,7 @@ module Script = struct
       | Literal lit ->
         Literal.to_shell lit
       | Output_as_string e ->
-        sprintf "\"$( %s )\"" (continue e)
+        sprintf "\"$( %s  | od -t x1 -w10000000 -An -v | tr -d \" \" )\"" (continue e)
 
   let rec to_one_liner: type a. a t -> string = fun e ->
     to_shell {statement_separator = " ; "} e
@@ -243,7 +240,7 @@ module Script = struct
                 exec ["rm"; "-f"; path]
               end;
             write_stdout ~path (seq [
-                echo "bouh";
+                printf "bouh";
                 exec ["ls"; "-la"];
               ]);
             if_then (file_exists path |> not)
@@ -260,8 +257,8 @@ module Script = struct
             write_output
               ~stdout ~stderr ~return_value
               (seq [
-                  echo "out1";
-                  echo "out2";
+                  printf "out1\n";
+                  printf "out2\n";
                   exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
                   return 11;
                 ]);
@@ -273,7 +270,7 @@ module Script = struct
                   (output_as_string (exec ["cat"; stderr]) <$> string "err")
                   (
                     if_then_else
-                      (output_as_string (exec ["cat"; return_value]) =$= string "11")
+                      (output_as_string (exec ["cat"; return_value]) =$= string "11\n")
                       (return 1)
                       (return 22)
                   )
@@ -281,8 +278,9 @@ module Script = struct
               )
               (return 24);
           ]);
-      exits 11 Construct.( (* This should return 12, we haven't found yet how
-                              to impelement that with a CRAZIX shell *)
+      exits 12 Construct.( (* This looks dumb but finding an encoding of
+                              strings that makes this work was pretty hard
+                              a CRAZIX shell *)
           if_then_else (
             string "some" =$= string "some\n"
           )
