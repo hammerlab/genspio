@@ -356,9 +356,9 @@ module Script = struct
       exits 10 Construct.(
           if_then_else
             (
-              (string "bouh\nbah\n" >> exec ["cat"] |> output_as_string)
+              (string "b\x00ouh\nbah\n" >> exec ["cat"] |> output_as_string)
               =$=
-              string "bouh\nbah\n"
+              string "b\x00ouh\nbah\n"
             )
             (return 10)
             (return 11)
