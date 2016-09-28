@@ -152,6 +152,7 @@ module Script = struct
 
   type output_parameters = {
     statement_separator: string;
+    die_command: string
   }
   let rec to_shell: type a. _ -> a t -> string =
     fun params e ->
@@ -245,15 +246,35 @@ module Script = struct
       | Literal lit ->
         Literal.to_shell lit
       | Output_as_string e ->
-        sprintf "\"$( %s  | od -t o1 -w10000000 -An -v | tr -d \" \" )\"" (continue e)
+        sprintf "\"$( { %s || %s ; }  | od -t o1 -w10000000 -An -v | tr -d \" \" )\""
+          (continue e) params.die_command
       | Feed (string, e) ->
         sprintf {sh|  %s | %s  |sh}
           (continue string |> expand_octal) (continue e)
 
+  (* 
+     POSIX does not have ["set -o pipefail"].
+     We implement it by killing the toplevel process with SIGUSR1, then we use
+     ["trap"] to choose the exit status.
+  *)
+  let with_trap ~statement_separator ~exit_with script =
+    let variable_name = "very_long_name_that_we_should_not_reuse" in
+    String.concat ~sep:statement_separator [
+      sprintf "export %s=$$" variable_name;
+      sprintf "trap 'echo Script-failed-using-signal ; exit %d' USR1" exit_with;
+      script ~die:(sprintf "kill -s USR1 ${%s}" variable_name);
+    ]
+
+
   let rec to_one_liner: type a. a t -> string = fun e ->
-    to_shell {statement_separator = " ; "} e
+    let statement_separator = " ; " in
+    with_trap ~statement_separator ~exit_with:77
+      (fun ~die -> to_shell {statement_separator; die_command = die} e)
+
   let rec to_many_lines: type a. a t -> string = fun e ->
-    to_shell {statement_separator = "\n"} e
+    let statement_separator = " \n " in
+    with_trap ~statement_separator ~exit_with:77
+      (fun ~die -> to_shell {statement_separator; die_command = die} e)
 
   let exits n c = [
       Test.command (to_one_liner c) [`Exits_with n];
@@ -391,6 +412,20 @@ module Script = struct
                 exec ["bash"; "-c"; sprintf "printf n >> %s" tmp];
               end;
             return 10;
+          ];
+        );
+      exits 77 Construct.( (* 77 Is the value of ~exit_with in the call
+                              to with_trap *)
+          let tmp = "/tmp/test_trapping" in
+          let cat_tmp = exec ["cat"; tmp] in
+          seq [
+            exec ["rm"; "-f"; tmp];
+            if_then_else
+              (* cat <absent-file> |> to_string should abort the script: *)
+              (cat_tmp |> output_as_string <$> string "nnnn")
+              (return 11)
+              (return 12);
+            return 13;
           ];
         );
     ]
