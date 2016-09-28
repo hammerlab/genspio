@@ -17,6 +17,10 @@ Opengroup specs:
   (and
   [format strings](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap05.html#tag_05))
 - [od](http://pubs.opengroup.org/onlinepubs/9699919799/utilities/od.html)
+- [trap](http://pubs.opengroup.org/onlinepubs/000095399/utilities/trap.html),
+  [kill](http://pubs.opengroup.org/onlinepubs/000095399/utilities/kill.html),
+  and
+  [`signal.h`](http://pubs.opengroup.org/onlinepubs/000095399/basedefs/signal.h.html)
 
 
 One should not count on printf hexadecimal literals (`printf '\x42'`):
