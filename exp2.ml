@@ -87,7 +87,7 @@ module Script = struct
     | Not: bool t -> bool t
     | Succeed: { expr: 'a t; exit_with: int} -> bool t
     | Noop: 'a t
-    | If: bool t * 'a t * 'a t -> 'a t
+    | If: bool t * unit t * unit t -> unit t
     | Seq: unit t list -> unit t
     | Literal: 'a Literal.t -> 'a t
     | Output_as_string: unit t -> string t
@@ -119,7 +119,7 @@ module Script = struct
     let file_exists p =
       exec ["test"; "-f"; p] |> succeed
 
-    let switch: type a. (bool t * a t) list -> default: a t -> a t =
+    let switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
       fun conds ~default ->
         List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
             if_then_else x body prev)
@@ -285,6 +285,18 @@ module Script = struct
             string "some" =$= string "some\n"
           )
             (return 11)
+            (return 12)
+        );
+      exits 0 Construct.(
+          if_then_else (
+            string "some" =$= 
+            (output_as_string (
+                (if_then_else (string "bouh\n" =$= string "bouh")
+                   (printf "nnnooo")
+                   (printf "some"))
+              ))
+          )
+            (return 0)
             (return 12)
         );
     ]
