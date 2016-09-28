@@ -48,18 +48,20 @@ module Test = struct
         check_command s ~verifies
         >>= begin function
         | [] ->
-          let lines = String.split ~on:(`Character '\n') s in
-          return (sprintf "Test OK: %s%s\n"
-                    (List.hd_exn lines)
-                    (if List.length lines > 1 then "  ..." else ""))
+          return None
         | failures ->
-          return (sprintf "Command:\n    %s\nFailures:\n%s\n" s
-                    (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
-                     |> String.concat ~sep:"\n"))
+          return (Some (
+              (sprintf "Command:\n    %s\nFailures:\n%s\n" s
+                 (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
+                  |> String.concat ~sep:"\n"))))
         end)
     >>= fun l ->
-    List.iter l ~f:(printf "%s");
+    let failures = List.filter_opt l in
+    List.iter failures ~f:(printf "%s");
     printf "\n%!";
+    printf "End of tests: %d / %d failures\n%!"
+      (List.length failures)
+      (List.length l);
     return ()
 end
 
