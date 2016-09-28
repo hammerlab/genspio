@@ -92,7 +92,7 @@ module Script = struct
     | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
     | Not: bool t -> bool t
     | Succeed: { expr: 'a t; exit_with: int} -> bool t
-    | Noop: 'a t
+    | No_op: unit t
     | If: bool t * unit t * unit t -> unit t
     | Seq: unit t list -> unit t
     | Literal: 'a Literal.t -> 'a t
@@ -113,7 +113,7 @@ module Script = struct
     let (<$>) a b = String_operator (a, `Neq, b)
     let succeed ?(exit_with = 2) expr = Succeed {expr; exit_with}
     let (~$) x = succeed x
-    let nop = Noop
+    let nop = No_op
     let if_then_else a b c = If (a, b, c)
     let if_then a b = if_then_else a b nop
     let seq l = Seq l
@@ -213,7 +213,7 @@ module Script = struct
           (continue a)
           (match op with `Eq -> "=" | `Neq -> "!=")
           (continue b)
-      | Noop -> "printf ''"
+      | No_op -> "printf ''"
       | If (c, t, e) ->
         seq [
           sprintf "if { %s ; }" (continue c);
