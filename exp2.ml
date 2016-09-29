@@ -3,7 +3,7 @@ open Nonstd
 module String = Sosa.Native_string
 (*
 
-   ocamlbuild -use-ocamlfind -package sosa,nonstd,pvem_lwt_unix exp2.byte && ./exp2.byte
+   ocamlbuild -use-ocamlfind -package sosa,nonstd,pvem_lwt_unix,ppx_deriving.std exp2.byte && ./exp2.byte
 
 *)
 
@@ -17,9 +17,7 @@ module Test = struct
   open Pvem_lwt_unix.Deferred_result
 
   let check_command s ~verifies =
-    Pvem_lwt_unix.System.Shell.execute
-      (List.map ~f:Filename.quote ["dash"; "-x"; "-c"; s]
-       |> String.concat ~sep:" ")
+    Pvem_lwt_unix.System.Shell.execute s
     >>= fun (out, err, exit_status) ->
     List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
         prev_m >>= fun prev ->
@@ -42,10 +40,10 @@ module Test = struct
 
   let command s ~verifies = `Command (s, verifies)
 
-  let run l =
+  let run_with_shell ~shell l =
     Pvem_lwt_unix.Deferred_list.while_sequential l ~f:(function
       | `Command (s, verifies) ->
-        check_command s ~verifies
+        check_command (shell s) ~verifies
         >>= begin function
         | [] ->
           return None
@@ -57,11 +55,96 @@ module Test = struct
         end)
     >>= fun l ->
     let failures = List.filter_opt l in
-    List.iter failures ~f:(printf "%s");
+    return (`Total (List.length l), `Failures failures)
+
+  type shell = {
+    executable: string [@main ];
+    command: string -> string;
+    get_version: string;
+  } [@@deriving make]
+
+  let avaialable_shells () =
+    let exec l =
+      List.map ~f:Filename.quote l |> String.concat ~sep:" " in
+    let dash_like bin ~get_version =
+      make_shell bin
+        ~command:(fun s -> exec [bin; "-x"; "-c"; s])
+        ~get_version
+    in
+    let busybox =
+      make_shell "busybox"
+        ~command:(fun s -> exec ["busybox"; "ash"; "-x"; "-c"; s])
+        ~get_version:"busybox | head -n 1"
+    in
+    let package_version package =
+      (* for when there is no `--version`, `-V`, etc. we go the “debian” way *)
+      sprintf "dpkg -s %s | grep ^Version" package in
+    let candidates = [
+      dash_like "dash" ~get_version:(package_version "dash");
+      dash_like "bash" ~get_version:"bash --version | head -n 1";
+      busybox;
+      dash_like "ksh" ~get_version:"ksh --version 2>&1";
+      dash_like "mksh" ~get_version:(package_version "mksh");
+      dash_like "posh" ~get_version:(package_version "posh");
+      dash_like "zsh" ~get_version:"zsh --version";
+    ] in
+    let forgotten = ref [] in
+    Pvem_lwt_unix.Deferred_list.while_sequential candidates ~f:(fun sh ->
+        Pvem_lwt_unix.System.Shell.execute (sprintf "which %s" sh.executable)
+        >>= function
+        | (_, _, `Exited 0) ->
+          Pvem_lwt_unix.System.Shell.execute sh.get_version
+          >>= fun (version, _, _) ->
+          return (Some (sh, String.strip version))
+        | _ -> forgotten := sh.executable :: !forgotten; return None)
+    >>| List.filter_opt
+    >>= fun l ->
+    return (l, !forgotten)
+
+  let run l =
+    avaialable_shells ()
+    >>= fun (shells, forgotten) ->
+    Pvem_lwt_unix.Deferred_list.while_sequential shells
+      ~f:begin fun (shell, version) ->
+        let start = Unix.gettimeofday () in
+        run_with_shell ~shell:shell.command l
+        >>= fun (`Total total, `Failures failures) ->
+        let finish = Unix.gettimeofday () in
+        return (`Shell shell, `Version version,
+                `Total total, `Failures failures, `Time (finish -. start))
+      end
+    >>= fun test_results ->
+    printf "\n%s\n" (String.make 80 '-');
+    printf "\n\n### All Tests\n\nSummary:\n\n%!";
+    Pvem_lwt_unix.Deferred_list.while_sequential test_results
+      ~f:begin fun (`Shell sh, `Version v, `Total t, `Failures fl, `Time dur) ->
+        printf "* Test %S (%s):\n    - %d / %d failures\n%!"
+          sh.executable (sh.command "<command>")
+          (List.length fl) t;
+        printf "    - time: %0.2f s.\n%!" dur;
+        printf "    - version: `%S`.\n%!" v;
+        begin match fl with
+        | [] -> return ()
+        | more ->
+          let content = String.concat fl ~sep:"\n\n\n" in
+          let path =
+            sprintf "/tmp/genspio-test-%s-failures.txt" sh.executable in
+          Pvem_lwt_unix.IO.write_file path ~content
+          >>= fun () ->
+          printf "    - Cf. `%s`.\n%!" path;
+          return ()
+        end
+      end
+    >>= fun _ ->
+    begin match forgotten with
+    | [] ->
+      printf "\nAll “known” shells were tested ☺\n%!"
+    | more ->
+      printf "\nSome shells were not found hence not tested: %s.\n%!"
+        (String.concat ~sep:", " more)
+    end;
     printf "\n%!";
-    printf "End of tests: %d / %d failures\n%!"
-      (List.length failures)
-      (List.length l);
+    printf "\n%s\n\n" (String.make 80 '-');
     return ()
 end
 
@@ -445,7 +528,10 @@ let () =
   in
   begin match Lwt_main.run (Test.run tests) with
   | `Ok () -> printf "Done.\n%!"
+  | `Error (`IO _ as e) ->
+    eprintf "IO-ERROR:\n  %s\n%!" (Pvem_lwt_unix.IO.error_to_string e);
+    exit 2
   | `Error (`Shell (s, `Exn e)) ->
     eprintf "SHELL-ERROR:\n  %s\n  %s\n%!" s (Printexc.to_string e);
-    exit 2
+    exit 3
   end
