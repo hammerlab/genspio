@@ -3,8 +3,8 @@ open Nonstd
 module String = Sosa.Native_string
 module Test = Tests.Test_lib
 
-module Compile = Genspio.Common.Script
-module Construct = Genspio.Common.Script.Construct
+module Compile = Genspio.Language
+module Construct = Genspio.EDSL
 
 let exits ?args n c = [
   Test.command ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
