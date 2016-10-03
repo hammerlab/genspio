@@ -1,6 +1,19 @@
 
 open Nonstd
 module String = Sosa.Native_string
+
+module Unique_name = struct
+
+  let x = ref 0
+  let create prefix =
+    incr x;
+    let now = Unix.gettimeofday () in
+    sprintf "%s_%s_%d"
+      prefix
+      (truncate (1000. *. now) |> Int.to_string)
+      !x
+
+end
 (*
 
    ocamlbuild -use-ocamlfind -package sosa,nonstd,pvem_lwt_unix,ppx_deriving.std exp2.byte && ./exp2.byte
@@ -10,8 +23,8 @@ module String = Sosa.Native_string
 let with_buffer ?(size = 42) f =
   let b = Buffer.create 42 in
   let str = Buffer.add_string b in
-  f str;
-  Buffer.contents b
+  let res = f str in
+  Buffer.contents b, res
 
 module Test = struct
   open Pvem_lwt_unix.Deferred_result
@@ -38,18 +51,19 @@ module Test = struct
     >>= fun results ->
     List.filter ~f:(fun (t, _) -> t = false) results |> return
 
-  let command s ~verifies = `Command (s, verifies)
+  let command ?(args = []) s ~verifies = `Command (s, args, verifies)
 
   let run_with_shell ~shell l =
     Pvem_lwt_unix.Deferred_list.while_sequential l ~f:(function
-      | `Command (s, verifies) ->
-        check_command (shell s) ~verifies
+      | `Command (s, args, verifies) ->
+        check_command (shell s args) ~verifies
         >>= begin function
         | [] ->
           return None
         | failures ->
           return (Some (
-              (sprintf "Command:\n    %s\nFailures:\n%s\n" s
+              (sprintf "#### Command:\n%s\n#### Args: %s\n#### Failures:\n%s\n" s
+                 (String.concat ~sep:" " args)
                  (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
                   |> String.concat ~sep:"\n"))))
         end)
@@ -59,7 +73,7 @@ module Test = struct
 
   type shell = {
     executable: string [@main ];
-    command: string -> string;
+    command: string -> string list -> string;
     get_version: string;
   } [@@deriving make]
 
@@ -68,12 +82,12 @@ module Test = struct
       List.map ~f:Filename.quote l |> String.concat ~sep:" " in
     let dash_like bin ~get_version =
       make_shell bin
-        ~command:(fun s -> exec [bin; "-x"; "-c"; s])
+        ~command:(fun s args -> exec ([bin; "-x"; "-c"; s; "--"] @ args))
         ~get_version
     in
     let busybox =
       make_shell "busybox"
-        ~command:(fun s -> exec ["busybox"; "ash"; "-x"; "-c"; s])
+        ~command:(fun s args -> exec (["busybox"; "ash"; "-x"; "-c"; s; "--"] @ args))
         ~get_version:"busybox | head -n 1"
     in
     let package_version package =
@@ -82,6 +96,7 @@ module Test = struct
     let candidates = [
       dash_like "dash" ~get_version:(package_version "dash");
       dash_like "bash" ~get_version:"bash --version | head -n 1";
+      dash_like "sh" ~get_version:(package_version "sh");
       busybox;
       dash_like "ksh" ~get_version:"ksh --version 2>&1";
       dash_like "mksh" ~get_version:(package_version "mksh");
@@ -119,7 +134,7 @@ module Test = struct
     Pvem_lwt_unix.Deferred_list.while_sequential test_results
       ~f:begin fun (`Shell sh, `Version v, `Total t, `Failures fl, `Time dur) ->
         printf "* Test %S (%s):\n    - %d / %d failures\n%!"
-          sh.executable (sh.command "<command>")
+          sh.executable (sh.command "<command>" ["<arg1>"; "<arg2>"; "<arg-n>"])
           (List.length fl) t;
         printf "    - time: %0.2f s.\n%!" dur;
         printf "    - version: `%S`.\n%!" v;
@@ -160,17 +175,29 @@ module Script = struct
       | Int i -> sprintf "%d" i
       | String s ->
         with_buffer begin fun str ->
-            str "'";
-            String.iter s ~f:(fun c ->
-                Char.code c |> sprintf "%03o" |> str
-              );
-            str "'"
-        end
+          str "'";
+          String.iter s ~f:(fun c ->
+              Char.code c |> sprintf "%03o" |> str
+            );
+          str "'"
+        end |> fst
       | Bool true -> "0"
       | Bool false -> "1"
   end
-  type _ t =
+
+  type cli_option = {
+    switch: char;
+    doc: string;
+  } [@@deriving make]
+  type _ option_spec =
+    | Opt_flag: cli_option -> bool t option_spec
+    | Opt_string: cli_option -> string t option_spec
+  and (_, _) cli_options =
+    | Opt_end: string -> ('a, 'a) cli_options
+    | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+  and _ t =
     | Exec: string list -> unit t
+    | Raw_cmd: string -> unit t
     | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
     | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
     | Not: bool t -> bool t
@@ -188,6 +215,10 @@ module Script = struct
       } -> unit t
     | Feed: string t * unit t -> unit t
     | While: {condition: bool t; body: unit t} -> unit t
+    | Parse_command_line: {
+        options: ('a, unit t) cli_options;
+        action: 'a;
+      } -> unit t
 
   module Construct = struct
     let exec l = Exec l
@@ -231,6 +262,20 @@ module Script = struct
     let (>>) string e = feed ~string e
 
     let loop_while condition ~body = While {condition; body}
+
+    module Option_list = struct
+      let string ~doc switch  = Opt_string (make_cli_option ~switch ~doc)
+      let flag ~doc switch = Opt_flag (make_cli_option ~switch ~doc)
+
+      let (&) x y = Opt_cons (x, y)
+      let usage s = Opt_end s
+
+    end
+
+    let parse_command_line options action =
+      Parse_command_line {options; action}
+
+
   end
 
   type output_parameters = {
@@ -254,10 +299,7 @@ module Script = struct
           | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
           | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
           | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
-          | '{' | '}' 
-          | '(' | ')'
-          | '[' | ']'
-            -> true
+          | '{' | '}' | '(' | ')' | '[' | ']' -> true
           | other -> false in
         let impossible_to_escape = String.exists ~f:((=) '\x00') in
         let variables = ref [] in
@@ -269,7 +311,7 @@ module Script = struct
               ksprintf failwith "to_shell: sorry %S is impossible to escape as \
                                  `exec` argument" arg
             | arg ->
-              let var =
+              let var, () =
                 with_buffer begin fun str ->
                   ksprintf str "argument_%d=$(printf '" index;
                   String.iter arg ~f:(fun c ->
@@ -284,6 +326,7 @@ module Script = struct
             )
         in
         (List.rev !variables) @ args |> String.concat ~sep:" "
+      | Raw_cmd s -> s 
       | Succeed {expr; exit_with} ->
         seq [
           (continue expr);
@@ -300,7 +343,7 @@ module Script = struct
           (continue a)
           (match op with `Eq -> "=" | `Neq -> "!=")
           (continue b)
-      | No_op -> "printf ''"
+      | No_op -> ":"
       | If (c, t, e) ->
         seq [
           sprintf "if { %s ; }" (continue c);
@@ -334,18 +377,118 @@ module Script = struct
       | Feed (string, e) ->
         sprintf {sh|  %s | %s  |sh}
           (continue string |> expand_octal) (continue e)
+      | Parse_command_line { options; action } ->
+        let prefix = Unique_name.create "getopts" in
+        let variable {switch; doc;} =
+          sprintf "%s_%c" prefix switch in
+        let inits = ref [] in
+        let to_init s = inits := s :: !inits in
+        let cases = ref [] in
+        let to_case s = cases := s :: !cases in
+        let help_intro = ref "" in
+        let help = ref [] in
+        let to_help s = help := s :: !help in
+        let string_of_var var =
+          Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
+        let bool_of_var var =
+          Construct.succeed (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
+        let unit_t =
+          let rec loop
+            : type a b.
+              a -> (a, b) cli_options -> b =
+            fun f -> function
+            | Opt_end doc ->
+              help_intro := doc;
+              f
+            | Opt_cons (Opt_string x, more) ->
+              let var = variable x in
+              to_init (sprintf "export %s= " var);
+              to_case (sprintf "-%c) %s ;;"
+                         x.switch
+                         (seq [
+                             "if [ -n \"$2\" ]";
+                             sprintf "then export %s=\"$2\" " var;
+                             sprintf "else printf \"ERROR -%c requires an argument\\n\" \
+                                      >&2" x.switch;
+                             params.die_command;
+                             "fi";
+                             "shift";
+                             "shift";
+                           ]));
+              ksprintf to_help "* `-%c <string>`: %s" x.switch x.doc;
+              loop (f (string_of_var var)) more
+            | Opt_cons (Opt_flag x, more) ->
+              let var = variable x in
+              to_init (sprintf "export %s=1 " var);
+              to_case (
+                sprintf "-%c) %s ;;"
+                  x.switch (seq [
+                      sprintf "export %s=0" var;
+                      "shift";
+                    ])
+              );
+              ksprintf to_help "* `-%c`: %s" x.switch x.doc;
+              loop (f (bool_of_var var)) more
+          in
+          loop action options
+        in
+        let help_msg =
+          sprintf "%s\n\nOptions:\n\n%s\n"
+            !help_intro (String.concat ~sep:"\n" (List.rev !help))
+        in
+        let while_loop =
+          let sep = if params.statement_separator = " \n " then "\n" else " " in
+          String.concat ~sep (
+            [
+              "while :;"; " do case $1 in";
+              "-h|-help|--help) ";
+              sprintf "export %s_help=0 ; " prefix;
+              sprintf "%s ;"
+                (continue Construct.(string help_msg
+                                     >>  exec ["cat"]));
+              " break ;;"
+            ]
+            @ List.rev !cases
+            @ [
+              "--) shift ; break ;;";
+              "-?*)";
+              "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
+              params.die_command;
+              ";;";
+              "*) if [ $# -eq 0 ] ; ";
+              "then echo \" $1 $# \" ; break ;";
+              sprintf
+                " else export %s_args=\"${%s_args} %s\" ; shift ; "
+                prefix prefix
+                (continue (Output_as_string (Raw_cmd "printf \"$1\""))) ;
+              "fi ;; ";
+              "esac;";
+              "done"]
+          )
+        in
+        seq (
+          sprintf "export %s_args=" prefix
+          :: sprintf "export %s_help=1" prefix
+          :: List.rev !inits @ [
+            while_loop;
+            continue Construct.(
+                if_then_else (bool_of_var (sprintf "%s_help" prefix))
+                  (nop)
+                  unit_t);
+          ])
 
   (* 
      POSIX does not have ["set -o pipefail"].
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
   *)
-  let with_trap ~statement_separator ~exit_with script =
+  let with_trap ?with_timeout ~statement_separator ~exit_with script =
     let variable_name = "very_long_name_that_we_should_not_reuse" in
+    let die = sprintf "kill -s USR1 ${%s}" variable_name in
     String.concat ~sep:statement_separator [
       sprintf "export %s=$$" variable_name;
       sprintf "trap 'echo Script-failed-using-signal ; exit %d' USR1" exit_with;
-      script ~die:(sprintf "kill -s USR1 ${%s}" variable_name);
+      script ~die;
     ]
 
 
@@ -359,9 +502,9 @@ module Script = struct
     with_trap ~statement_separator ~exit_with:77
       (fun ~die -> to_shell {statement_separator; die_command = die} e)
 
-  let exits n c = [
-      Test.command (to_one_liner c) [`Exits_with n];
-      Test.command (to_many_lines c) [`Exits_with n];
+  let exits ?args n c = [
+      Test.command ?args (to_one_liner c) ~verifies:[`Exits_with n];
+      Test.command ?args (to_many_lines c) ~verifies:[`Exits_with n];
     ]
 
   let tests =
@@ -511,6 +654,46 @@ module Script = struct
             return 13;
           ];
         );
+      begin
+        let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
+        let make ret minus_g single =
+          exits ret
+            ~args:["-f"; minus_f; single; "-g"; minus_g ]
+            Construct.(
+              parse_command_line
+                Option_list.(
+                  string ~doc:"String one" 'f'
+                  & string ~doc:"String two" 'g'
+                  & flag ~doc:"Bool one" 'v'
+                  & usage "Usage string\nwith bunch of lines to\nexplain stuff")
+                begin fun one two bone ->
+                  if_then_else
+                    ((one =$= two) ||| bone)
+                    (return 11)
+                    (if_then_else
+                      (one =$= string minus_f) (* Should be always true *)
+                      (return 12) (* i.e. we're testing that weird characters have good escaping *)
+                      (return 44))
+                end
+            ) in
+        List.concat [
+          make 11 minus_f "";
+          make 12 "not-one" "";
+          make 11 "not-one" "-v";
+          make 12 minus_f "--"; (* the `--` should prevent the `-g one` from being parsed *)
+          make 77 "not-one" "-x"; (* option does not exist, script uses `die` *)
+          make 77 "not-one" "--v";
+          make 77 "not-one" "-v j";
+          make 11 "not \\ di $bouh one" "-v";
+          make 12 "not \\ di $bouh one" " -- -v";
+          make 12 "one \nwith spaces and \ttabs -dashes -- " "";
+          make 12 "one \nwith  spaces and \ttabs -dashes -- " "";
+          make 12 "one with \\ spaces and \ttabs -dashes -- " "";
+          make 0 "not-one" "--help";
+          make 0 "not-one" "-help";
+          make 0 "not-one" "-h";
+        ]
+      end
     ]
 end
 
