@@ -654,7 +654,7 @@ module Script = struct
             return 13;
           ];
         );
-      List.concat begin
+      begin
         let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
         let make ret minus_g single =
           exits ret
@@ -676,7 +676,7 @@ module Script = struct
                       (return 44))
                 end
             ) in
-        [
+        List.concat [
           make 11 minus_f "";
           make 12 "not-one" "";
           make 11 "not-one" "-v";
