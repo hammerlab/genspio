@@ -1,0 +1,31 @@
+opam-version: "1.2"
+version: "master"
+maintainer: "Seb Mondet <seb@mondet.org>"
+authors: "Seb Mondet <seb@mondet.org>"
+homepage: "https://github.com/hammerlab/genspio"
+bug-reports: "https://github.com/hammerlab/genspio/issues"
+dev-repo: "https://github.com/hammerlab/genspio"
+license: "Apache 2.0"
+
+build: [
+  [make "byte"]
+  [make "native"]
+]
+
+install: [
+  [make "META"]
+  [make "genspio.install"]
+]
+
+remove: []
+
+depends: [
+  "ocamlfind" {build}
+  "ocamlbuild" {build}
+  "solvuu-build" {build}
+  "nonstd"
+  "sosa"
+]
+available: [
+  ocaml-version >= "4.03.0"
+]
