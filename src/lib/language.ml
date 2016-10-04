@@ -37,6 +37,7 @@ and _ t =
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
   | Not: bool t -> bool t
+  | Returns: {expr: 'a t; value: int} -> bool t
   | Succeed: { expr: 'a t; exit_with: int} -> bool t
   | No_op: unit t
   | If: bool t * unit t * unit t -> unit t
@@ -63,7 +64,10 @@ module Construct = struct
   let (|||) a b = Bool_operator (a, `Or, b)
   let (=$=) a b = String_operator (a, `Eq, b)
   let (<$>) a b = String_operator (a, `Neq, b)
+
   let succeed ?(exit_with = 2) expr = Succeed {expr; exit_with}
+  let returns expr ~value = Returns {expr; value}
+
   let (~$) x = succeed x
   let nop = No_op
   let if_then_else a b c = If (a, b, c)
@@ -160,12 +164,12 @@ let rec to_shell: type a. _ -> a t -> string =
               end in
             variables := var :: !variables;
             sprintf "\"${argument_%d%%?}\"" index
-            (* Literal.(to_shell (String arg)) |> expand_octal *)
-            (* |> expand_output_to_string *)
           )
       in
       (List.rev !variables) @ args |> String.concat ~sep:" "
     | Raw_cmd s -> s 
+    | Returns {expr; value} ->
+      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
     | Succeed {expr; exit_with} ->
       seq [
         (continue expr);

@@ -12,6 +12,10 @@ val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val ( =$= ) : string t -> string t -> bool t
 val ( <$> ) : string t -> string t -> bool t
+
+val returns: 'a t -> value: int -> bool t
+(** Check the return value of a command/expression/script. *)
+    
 val succeed : ?exit_with:int -> 'a t -> bool t
 val ( ~$ ) : 'a t -> bool t
 val nop : unit t

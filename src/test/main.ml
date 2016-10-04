@@ -232,6 +232,39 @@ let tests =
           return 23;
         ]
       );
+    begin
+      let gives = 11 in
+      let does_not_give = 12 in
+      let t cmd yn value =
+        let name =
+          sprintf "%s %s %d" cmd
+            (if yn = gives then "returns" else "does not return") value in
+        exits ~name yn Construct.(
+            if_then_else
+              (exec ["sh"; "-c"; cmd] |> returns ~value)
+              (return gives)
+              (return does_not_give)
+          ) in
+      List.concat [
+        t "ls" gives 0;
+        t "ls /deijdsljidisjeidje" does_not_give 0;
+        t "ls /deijdsljidisjeidje" does_not_give 42;
+        t "exit 2" gives 2;
+        exits 21 ~name:"More complex return check" Construct.(
+            if_then_else
+              (seq [
+                  printf "I aaam so complex!\n";
+                  if_then_else (string "djsleidjs" =$=
+                                output_as_string (printf "diejliejjj"))
+                    (return 41)
+                    (return 42);
+                ]
+               |> returns ~value:42)
+              (return 21)
+              (return 22)
+          );
+      ]
+    end
   ]
 
 
