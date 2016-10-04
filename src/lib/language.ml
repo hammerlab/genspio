@@ -38,7 +38,6 @@ and _ t =
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
   | Not: bool t -> bool t
   | Returns: {expr: 'a t; value: int} -> bool t
-  | Succeed: { expr: 'a t; exit_with: int} -> bool t
   | No_op: unit t
   | If: bool t * unit t * unit t -> unit t
   | Seq: unit t list -> unit t
@@ -65,10 +64,10 @@ module Construct = struct
   let (=$=) a b = String_operator (a, `Eq, b)
   let (<$>) a b = String_operator (a, `Neq, b)
 
-  let succeed ?(exit_with = 2) expr = Succeed {expr; exit_with}
   let returns expr ~value = Returns {expr; value}
 
-  let (~$) x = succeed x
+  let succeeds expr = returns expr ~value:0
+
   let nop = No_op
   let if_then_else a b c = If (a, b, c)
   let if_then a b = if_then_else a b nop
@@ -80,7 +79,7 @@ module Construct = struct
     ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
 
   let file_exists p =
-    exec ["test"; "-f"; p] |> succeed
+    exec ["test"; "-f"; p] |> succeeds
 
   let fail = Fail
 
@@ -170,12 +169,6 @@ let rec to_shell: type a. _ -> a t -> string =
     | Raw_cmd s -> s 
     | Returns {expr; value} ->
       sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
-    | Succeed {expr; exit_with} ->
-      seq [
-        (continue expr);
-        sprintf "( if [ $? -ne 0 ] ; then exit %d ; else exit 0 ; fi )"
-          exit_with;
-      ]
     | Bool_operator (a, op, b) ->
       sprintf "{ %s %s %s ; }"
         (continue a)
@@ -236,7 +229,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let string_of_var var =
         Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
       let bool_of_var var =
-        Construct.succeed (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
+        Construct.succeeds (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
       let unit_t =
         let rec loop
           : type a b.

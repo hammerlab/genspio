@@ -19,11 +19,11 @@ let tests =
     Construct.exec ["bash"; "-c"; sprintf "exit %d" n] in
   List.concat [
     exits 0 (Compile.Exec ["ls"]);
-    exits 18 Construct.(
-        ~$ (exec ["ls"])
-        &&& succeed ~exit_with:18 (seq [
+    exits 0 Construct.(
+        succeeds (exec ["ls"])
+        &&& returns ~value:18 (seq [
             exec ["ls"];
-            exec ["bash"; "-c"; "exit 2"]])
+            exec ["bash"; "-c"; "exit 18"]])
       );
     exits 23 Construct.(
         seq [
@@ -135,7 +135,7 @@ let tests =
     exits 10 Construct.(
         let tmp = "/tmp/test_loop_while" in
         let cat_potentially_empty =
-          if_then_else (exec ["cat"; tmp] |> succeed)
+          if_then_else (exec ["cat"; tmp] |> succeeds)
             nop
             (printf "") in
         seq [

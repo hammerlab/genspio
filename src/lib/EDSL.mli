@@ -16,8 +16,9 @@ val ( <$> ) : string t -> string t -> bool t
 val returns: 'a t -> value: int -> bool t
 (** Check the return value of a command/expression/script. *)
     
-val succeed : ?exit_with:int -> 'a t -> bool t
-val ( ~$ ) : 'a t -> bool t
+val succeeds : 'a t -> bool t
+(** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
+
 val nop : unit t
 val if_then_else :
   bool t -> unit t -> unit t -> unit t
