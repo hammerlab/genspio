@@ -6,9 +6,11 @@ module Test = Tests.Test_lib
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL
 
-let exits ?args n c = [
-  Test.command ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
-  Test.command ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
+let exits ?name ?args n c = [
+  Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
+    ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
+  Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
+    ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
 ]
 
 let tests =
