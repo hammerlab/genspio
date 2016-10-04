@@ -10,7 +10,6 @@ let build_tests =
 let lib_deps = [
   "nonstd";
   "sosa";
-  "unix";
 ]
 
 let test_deps = [
