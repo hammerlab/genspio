@@ -38,7 +38,9 @@ and
     ./genspio-test.byte
     
 The test should output a markdown report potentially mentioning other files
-containing details about the failures (Here it is on Ubuntu Xenial):
+containing details about the failures (Here it is on Ubuntu Xenial, some
+failures are expected with not-really-POSIX or buggy shells like
+[KSH93](https://en.wikipedia.org/wiki/Korn_shell)):
 
 ```markdown
 --------------------------------------------------------------------------------
