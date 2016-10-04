@@ -47,8 +47,8 @@ let run_with_shell ~shell l =
 
 type shell = {
   executable: string [@main ];
-        command: string -> string list -> string;
-        get_version: string;
+  command: string -> string list -> string;
+  get_version: string;
 } [@@deriving make]
 
 let avaialable_shells () =
