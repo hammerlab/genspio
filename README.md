@@ -29,7 +29,9 @@ You need OCaml ≥ 4.03.0 together with
 
 To run the tests
 also need
-[`pvem_lwt_unix`](http://www.hammerlab.org/docs/pvem_lwt_unix/master/index.html):
+[`pvem_lwt_unix`](http://www.hammerlab.org/docs/pvem_lwt_unix/master/index.html)
+and
+[`ppx_deriving`](https://github.com/whitequark/ppx_deriving):
 
     export WITH_TESTS=true
     make 
