@@ -3,6 +3,10 @@ type cli_option = Language.cli_option
 type 'a option_spec = 'a Language.option_spec
 type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 
+
+val fail: unit t
+(** Abort the script/command immediately. *)
+
 val exec : string list -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t

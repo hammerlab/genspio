@@ -55,6 +55,7 @@ and _ t =
       options: ('a, unit t) cli_options;
       action: 'a;
     } -> unit t
+  | Fail: unit t
 
 module Construct = struct
   let exec l = Exec l
@@ -76,6 +77,8 @@ module Construct = struct
 
   let file_exists p =
     exec ["test"; "-f"; p] |> succeed
+
+  let fail = Fail
 
   let switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
@@ -213,6 +216,8 @@ let rec to_shell: type a. _ -> a t -> string =
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
+    | Fail ->
+      params.die_command
     | Parse_command_line { options; action } ->
       let prefix = Unique_name.create "getopts" in
       let variable {switch; doc;} =
@@ -318,7 +323,7 @@ let rec to_shell: type a. _ -> a t -> string =
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
   *)
-let with_trap ?with_timeout ~statement_separator ~exit_with script =
+let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
   let die = sprintf "kill -s USR1 ${%s}" variable_name in
   String.concat ~sep:statement_separator [
