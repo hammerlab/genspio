@@ -10,12 +10,11 @@ let build_tests =
 let lib_deps = [
   "nonstd";
   "sosa";
-  "ppx_deriving.std";
-  "unix";
 ]
 
 let test_deps = [
   "pvem_lwt_unix";
+  "ppx_deriving.std";
 ]
 
 let lib : Project.item =
@@ -51,7 +50,7 @@ let test : Project.item list =
     []
 
 let ocamlinit_postfix = [
-  sprintf "open %s" (String.capitalize project_name);
+  sprintf "open %s" (String.capitalize_ascii project_name);
 ]
 
 let () =

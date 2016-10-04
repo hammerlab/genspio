@@ -7,11 +7,10 @@ module Unique_name = struct
   let x = ref 0
   let create prefix =
     incr x;
-    let now = Unix.gettimeofday () in
-    sprintf "%s_%s_%d"
+    sprintf "%s_%d_%d"
       prefix
-      (truncate (1000. *. now) |> Int.to_string)
       !x
+      (Random.int 100_000)
 
 end
 

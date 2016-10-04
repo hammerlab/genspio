@@ -47,8 +47,8 @@ let run_with_shell ~shell l =
 
 type shell = {
   executable: string [@main ];
-        command: string -> string list -> string;
-        get_version: string;
+  command: string -> string list -> string;
+  get_version: string;
 } [@@deriving make]
 
 let avaialable_shells () =
@@ -107,7 +107,7 @@ let run l =
   printf "\n\n### All Tests\n\nSummary:\n\n%!";
   Pvem_lwt_unix.Deferred_list.while_sequential test_results
     ~f:begin fun (`Shell sh, `Version v, `Total t, `Failures fl, `Time dur) ->
-      printf "* Test %S (%s):\n    - %d / %d failures\n%!"
+      printf "* Test %S (`%s`):\n    - %d / %d failures\n%!"
         sh.executable (sh.command "<command>" ["<arg1>"; "<arg2>"; "<arg-n>"])
         (List.length fl) t;
       printf "    - time: %0.2f s.\n%!" dur;

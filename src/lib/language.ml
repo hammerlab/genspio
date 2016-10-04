@@ -24,7 +24,7 @@ end
 type cli_option = {
   switch: char;
   doc: string;
-} [@@deriving make]
+}
 type _ option_spec =
   | Opt_flag: cli_option -> bool t option_spec
   | Opt_string: cli_option -> string t option_spec
@@ -100,8 +100,8 @@ module Construct = struct
   let loop_while condition ~body = While {condition; body}
 
   module Option_list = struct
-    let string ~doc switch  = Opt_string (make_cli_option ~switch ~doc)
-    let flag ~doc switch = Opt_flag (make_cli_option ~switch ~doc)
+    let string ~doc switch  = Opt_string {switch; doc}
+    let flag ~doc switch = Opt_flag {switch; doc}
 
     let (&) x y = Opt_cons (x, y)
     let usage s = Opt_end s
