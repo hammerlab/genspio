@@ -51,7 +51,7 @@ let test : Project.item list =
     []
 
 let ocamlinit_postfix = [
-  sprintf "open %s" (String.capitalize project_name);
+  sprintf "open %s" (String.capitalize_ascii project_name);
 ]
 
 let () =
