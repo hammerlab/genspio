@@ -67,20 +67,21 @@ let tests =
     exits 11 Construct.(
         let stdout = "/tmp/p1_out" in
         let stderr = "/tmp/p1_err" in
-        let return_value = "/tmp/p1_ret" in
+        let return_value_path = "/tmp/p1_ret" in
+        let return_value_value = 31 in
         let will_be_escaped =
           "newline:\n tab: \t \x42\b" in
         let will_not_be_escaped =
           "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
         seq [
-          exec ["rm"; "-f"; stdout; stderr; return_value];
+          exec ["rm"; "-f"; stdout; stderr; return_value_path];
           write_output
-            ~stdout ~stderr ~return_value
+            ~stdout ~stderr ~return_value:return_value_path
             (seq [
                 printf "%s" will_be_escaped;
                 printf "%s" will_not_be_escaped;
                 exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
-                return 11;
+                return return_value_value;
               ]);
           if_then_else (
             output_as_string (exec ["cat"; stdout])
@@ -91,7 +92,8 @@ let tests =
                 (output_as_string (exec ["cat"; stderr]) <$> string "err")
                 (
                   if_then_else
-                    (output_as_string (exec ["cat"; return_value]) =$= string "11\n")
+                    (output_as_string (exec ["cat"; return_value_path])
+                     =$= ksprintf string "%d\n" return_value_value)
                     (return 11)
                     (return 22)
                 )
@@ -108,7 +110,7 @@ let tests =
           (return 11)
           (return 12)
       );
-    exits 0 Construct.(
+    exits 11 Construct.(
         if_then_else (
           string "some" =$= 
           (output_as_string (
@@ -117,7 +119,7 @@ let tests =
                  (printf "some"))
             ))
         )
-          (return 0)
+          (return 11)
           (return 12)
       );
     exits 10 Construct.(
