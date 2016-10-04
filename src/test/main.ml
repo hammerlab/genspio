@@ -201,7 +201,37 @@ let tests =
         make 0 "not-one" "-help";
         make 0 "not-one" "-h";
       ]
-    end
+    end;
+    exits 77 ~name:"die in a sequence" Construct.(
+        seq [
+          printf "Going to die";
+          fail;
+          return 42;
+        ]
+      );
+    exits 77 ~name:"cannot capture death itself" Construct.(
+        seq [
+          write_output
+            ~return_value:"/tmp/dieretval"
+            (seq [
+                printf "Going to die\n";
+                fail;
+                return 42;
+              ]);
+          return 23;
+        ]
+      );
+    exits 77 ~name:"cannot poison death either" Construct.(
+        seq [
+          string "dj ijdedej j42 ijde - '' "
+          >> seq [
+            printf "Going to die\n";
+            fail;
+            return 42;
+          ];
+          return 23;
+        ]
+      );
   ]
 
 
