@@ -6,9 +6,11 @@ module Test = Tests.Test_lib
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL
 
-let exits ?args n c = [
-  Test.command ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
-  Test.command ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
+let exits ?name ?args n c = [
+  Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
+    ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
+  Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
+    ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
 ]
 
 let tests =
@@ -17,11 +19,11 @@ let tests =
     Construct.exec ["bash"; "-c"; sprintf "exit %d" n] in
   List.concat [
     exits 0 (Compile.Exec ["ls"]);
-    exits 18 Construct.(
-        ~$ (exec ["ls"])
-        &&& succeed ~exit_with:18 (seq [
+    exits 0 Construct.(
+        succeeds (exec ["ls"])
+        &&& returns ~value:18 (seq [
             exec ["ls"];
-            exec ["bash"; "-c"; "exit 2"]])
+            exec ["bash"; "-c"; "exit 18"]])
       );
     exits 23 Construct.(
         seq [
@@ -65,20 +67,21 @@ let tests =
     exits 11 Construct.(
         let stdout = "/tmp/p1_out" in
         let stderr = "/tmp/p1_err" in
-        let return_value = "/tmp/p1_ret" in
+        let return_value_path = "/tmp/p1_ret" in
+        let return_value_value = 31 in
         let will_be_escaped =
           "newline:\n tab: \t \x42\b" in
         let will_not_be_escaped =
           "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
         seq [
-          exec ["rm"; "-f"; stdout; stderr; return_value];
+          exec ["rm"; "-f"; stdout; stderr; return_value_path];
           write_output
-            ~stdout ~stderr ~return_value
+            ~stdout ~stderr ~return_value:return_value_path
             (seq [
                 printf "%s" will_be_escaped;
                 printf "%s" will_not_be_escaped;
                 exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
-                return 11;
+                return return_value_value;
               ]);
           if_then_else (
             output_as_string (exec ["cat"; stdout])
@@ -89,7 +92,8 @@ let tests =
                 (output_as_string (exec ["cat"; stderr]) <$> string "err")
                 (
                   if_then_else
-                    (output_as_string (exec ["cat"; return_value]) =$= string "11\n")
+                    (output_as_string (exec ["cat"; return_value_path])
+                     =$= ksprintf string "%d\n" return_value_value)
                     (return 11)
                     (return 22)
                 )
@@ -106,7 +110,7 @@ let tests =
           (return 11)
           (return 12)
       );
-    exits 0 Construct.(
+    exits 11 Construct.(
         if_then_else (
           string "some" =$= 
           (output_as_string (
@@ -115,7 +119,7 @@ let tests =
                  (printf "some"))
             ))
         )
-          (return 0)
+          (return 11)
           (return 12)
       );
     exits 10 Construct.(
@@ -131,7 +135,7 @@ let tests =
     exits 10 Construct.(
         let tmp = "/tmp/test_loop_while" in
         let cat_potentially_empty =
-          if_then_else (exec ["cat"; tmp] |> succeed)
+          if_then_else (exec ["cat"; tmp] |> succeeds)
             nop
             (printf "") in
         seq [
@@ -196,6 +200,69 @@ let tests =
         make 0 "not-one" "--help";
         make 0 "not-one" "-help";
         make 0 "not-one" "-h";
+      ]
+    end;
+    exits 77 ~name:"die in a sequence" Construct.(
+        seq [
+          printf "Going to die";
+          fail;
+          return 42;
+        ]
+      );
+    exits 77 ~name:"cannot capture death itself" Construct.(
+        seq [
+          write_output
+            ~return_value:"/tmp/dieretval"
+            (seq [
+                printf "Going to die\n";
+                fail;
+                return 42;
+              ]);
+          return 23;
+        ]
+      );
+    exits 77 ~name:"cannot poison death either" Construct.(
+        seq [
+          string "dj ijdedej j42 ijde - '' "
+          >> seq [
+            printf "Going to die\n";
+            fail;
+            return 42;
+          ];
+          return 23;
+        ]
+      );
+    begin
+      let gives = 11 in
+      let does_not_give = 12 in
+      let t cmd yn value =
+        let name =
+          sprintf "%s %s %d" cmd
+            (if yn = gives then "returns" else "does not return") value in
+        exits ~name yn Construct.(
+            if_then_else
+              (exec ["sh"; "-c"; cmd] |> returns ~value)
+              (return gives)
+              (return does_not_give)
+          ) in
+      List.concat [
+        t "ls" gives 0;
+        t "ls /deijdsljidisjeidje" does_not_give 0;
+        t "ls /deijdsljidisjeidje" does_not_give 42;
+        t "exit 2" gives 2;
+        exits 21 ~name:"More complex return check" Construct.(
+            if_then_else
+              (seq [
+                  printf "I aaam so complex!\n";
+                  if_then_else (string "djsleidjs" =$=
+                                output_as_string (printf "diejliejjj"))
+                    (return 41)
+                    (return 42);
+                ]
+               |> returns ~value:42)
+              (return 21)
+              (return 22)
+          );
       ]
     end
   ]

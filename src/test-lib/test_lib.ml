@@ -25,18 +25,20 @@ let check_command s ~verifies =
   >>= fun results ->
   List.filter ~f:(fun (t, _) -> t = false) results |> return
 
-let command ?(args = []) s ~verifies = `Command (s, args, verifies)
+let command ?name ?(args = []) s ~verifies = `Command (name, s, args, verifies)
 
 let run_with_shell ~shell l =
   Pvem_lwt_unix.Deferred_list.while_sequential l ~f:(function
-    | `Command (s, args, verifies) ->
+    | `Command (name, s, args, verifies) ->
       check_command (shell s args) ~verifies
       >>= begin function
       | [] ->
         return None
       | failures ->
         return (Some (
-            (sprintf "#### Command:\n%s\n#### Args: %s\n#### Failures:\n%s\n" s
+            (sprintf "#### Command%s:\n%s\n#### Args: %s\n#### Failures:\n%s\n"
+               (Option.value_map name ~default:"" ~f:(sprintf " “%s”"))
+               s
                (String.concat ~sep:" " args)
                (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
                 |> String.concat ~sep:"\n"))))

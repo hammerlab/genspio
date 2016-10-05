@@ -37,7 +37,7 @@ and _ t =
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
   | Not: bool t -> bool t
-  | Succeed: { expr: 'a t; exit_with: int} -> bool t
+  | Returns: {expr: 'a t; value: int} -> bool t
   | No_op: unit t
   | If: bool t * unit t * unit t -> unit t
   | Seq: unit t list -> unit t
@@ -55,6 +55,7 @@ and _ t =
       options: ('a, unit t) cli_options;
       action: 'a;
     } -> unit t
+  | Fail: unit t
 
 module Construct = struct
   let exec l = Exec l
@@ -62,8 +63,11 @@ module Construct = struct
   let (|||) a b = Bool_operator (a, `Or, b)
   let (=$=) a b = String_operator (a, `Eq, b)
   let (<$>) a b = String_operator (a, `Neq, b)
-  let succeed ?(exit_with = 2) expr = Succeed {expr; exit_with}
-  let (~$) x = succeed x
+
+  let returns expr ~value = Returns {expr; value}
+
+  let succeeds expr = returns expr ~value:0
+
   let nop = No_op
   let if_then_else a b c = If (a, b, c)
   let if_then a b = if_then_else a b nop
@@ -75,7 +79,9 @@ module Construct = struct
     ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
 
   let file_exists p =
-    exec ["test"; "-f"; p] |> succeed
+    exec ["test"; "-f"; p] |> succeeds
+
+  let fail = Fail
 
   let switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
@@ -157,18 +163,12 @@ let rec to_shell: type a. _ -> a t -> string =
               end in
             variables := var :: !variables;
             sprintf "\"${argument_%d%%?}\"" index
-            (* Literal.(to_shell (String arg)) |> expand_octal *)
-            (* |> expand_output_to_string *)
           )
       in
       (List.rev !variables) @ args |> String.concat ~sep:" "
     | Raw_cmd s -> s 
-    | Succeed {expr; exit_with} ->
-      seq [
-        (continue expr);
-        sprintf "( if [ $? -ne 0 ] ; then exit %d ; else exit 0 ; fi )"
-          exit_with;
-      ]
+    | Returns {expr; value} ->
+      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
     | Bool_operator (a, op, b) ->
       sprintf "{ %s %s %s ; }"
         (continue a)
@@ -213,6 +213,8 @@ let rec to_shell: type a. _ -> a t -> string =
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
+    | Fail ->
+      params.die_command
     | Parse_command_line { options; action } ->
       let prefix = Unique_name.create "getopts" in
       let variable {switch; doc;} =
@@ -227,7 +229,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let string_of_var var =
         Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
       let bool_of_var var =
-        Construct.succeed (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
+        Construct.succeeds (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
       let unit_t =
         let rec loop
           : type a b.
@@ -318,7 +320,7 @@ let rec to_shell: type a. _ -> a t -> string =
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
   *)
-let with_trap ?with_timeout ~statement_separator ~exit_with script =
+let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
   let die = sprintf "kill -s USR1 ${%s}" variable_name in
   String.concat ~sep:statement_separator [

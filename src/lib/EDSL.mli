@@ -3,13 +3,22 @@ type cli_option = Language.cli_option
 type 'a option_spec = 'a Language.option_spec
 type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 
+
+val fail: unit t
+(** Abort the script/command immediately. *)
+
 val exec : string list -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val ( =$= ) : string t -> string t -> bool t
 val ( <$> ) : string t -> string t -> bool t
-val succeed : ?exit_with:int -> 'a t -> bool t
-val ( ~$ ) : 'a t -> bool t
+
+val returns: 'a t -> value: int -> bool t
+(** Check the return value of a command/expression/script. *)
+    
+val succeeds : 'a t -> bool t
+(** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
+
 val nop : unit t
 val if_then_else :
   bool t -> unit t -> unit t -> unit t
