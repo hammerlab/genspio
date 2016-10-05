@@ -280,7 +280,8 @@ let () =
     @ tests
   in
   begin match Lwt_main.run (Test.run tests) with
-  | `Ok () -> printf "Done.\n%!"
+  | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
+  | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5
   | `Error (`IO _ as e) ->
     eprintf "IO-ERROR:\n  %s\n%!" (Pvem_lwt_unix.IO.error_to_string e);
     exit 2

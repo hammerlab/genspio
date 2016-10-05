@@ -93,6 +93,7 @@ let avaialable_shells () =
   return (l, !forgotten)
 
 let run l =
+  let important_shells = ["bash"; "dash"; "busybox"] in
   avaialable_shells ()
   >>= fun (shells, forgotten) ->
   Pvem_lwt_unix.Deferred_list.while_sequential shells
@@ -136,4 +137,13 @@ let run l =
   end;
   printf "\n%!";
   printf "\n%s\n\n" (String.make 80 '-');
-  return ()
+  let actuall_success =
+    if List.exists important_shells (List.mem ~set:forgotten)
+    then `Failed "Some important shells were not found"
+    else if List.exists test_results ~f:(function
+      | `Shell sh, _, _, `Failures fl, `Time _ ->
+        List.mem sh.executable ~set:important_shells && fl <> [])
+    then `Failed "Some important shells had failed tests" 
+    else `Succeeded
+  in
+  return actuall_success
