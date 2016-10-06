@@ -3,7 +3,17 @@ open Nonstd
 module String = Sosa.Native_string
 open Pvem_lwt_unix.Deferred_result
 
+let verbose =
+  try Sys.getenv "verbose_tests" = "true" with _ -> false
+
+let babble fmt =
+  ksprintf (fun s ->
+      if verbose
+      then eprintf "%s\n%!" s
+      else ()) fmt
+
 let check_command s ~verifies =
+  babble "check_command\n  %s\n%!" (String.sub s ~index:0 ~length:100 |> Option.value ~default:s);
   Pvem_lwt_unix.System.Shell.execute s
   >>= fun (out, err, exit_status) ->
   List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
