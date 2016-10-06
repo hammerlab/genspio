@@ -137,7 +137,7 @@ let run l =
   end;
   printf "\n%!";
   printf "\n%s\n\n" (String.make 80 '-');
-  let actuall_success =
+  let actual_success =
     if List.exists important_shells (List.mem ~set:forgotten)
     then `Failed "Some important shells were not found"
     else if List.exists test_results ~f:(function
@@ -146,4 +146,4 @@ let run l =
     then `Failed "Some important shells had failed tests" 
     else `Succeeded
   in
-  return actuall_success
+  return actual_success
