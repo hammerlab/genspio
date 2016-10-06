@@ -93,7 +93,7 @@ let avaialable_shells () =
   return (l, !forgotten)
 
 let run l =
-  let important_shells = ["bash"; "dash"; "busybox"] in
+  let important_shells = ["bash"; "dash"] in
   avaialable_shells ()
   >>= fun (shells, forgotten) ->
   Pvem_lwt_unix.Deferred_list.while_sequential shells
