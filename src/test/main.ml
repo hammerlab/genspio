@@ -16,14 +16,14 @@ let exits ?name ?args n c = [
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
   let return n =
-    Construct.exec ["bash"; "-c"; sprintf "exit %d" n] in
+    Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   List.concat [
     exits 0 (Compile.Exec ["ls"]);
     exits 0 Construct.(
         succeeds (exec ["ls"])
         &&& returns ~value:18 (seq [
             exec ["ls"];
-            exec ["bash"; "-c"; "exit 18"]])
+            exec ["sh"; "-c"; "exit 18"]])
       );
     exits 23 Construct.(
         seq [
@@ -80,7 +80,7 @@ let tests =
             (seq [
                 printf "%s" will_be_escaped;
                 printf "%s" will_not_be_escaped;
-                exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
+                exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"];
                 return return_value_value;
               ]);
           if_then_else (
@@ -143,7 +143,7 @@ let tests =
           loop_while
             (cat_potentially_empty |> output_as_string <$> string "nnnn")
             ~body:begin
-              exec ["bash"; "-c"; sprintf "printf n >> %s" tmp];
+              exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
             end;
           return 10;
         ];
