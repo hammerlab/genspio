@@ -1,0 +1,8 @@
+language: c
+sudo: true
+script: bash -e ./tools/travis_ci_test.sh
+os:
+- linux
+- osx
+env:
+  - OCAML_VERSION=4.03.0 OPAM_VERSION=1.2.1
