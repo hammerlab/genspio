@@ -279,7 +279,10 @@ let () =
     posix_sh_tests
     @ tests
   in
-  begin match Lwt_main.run (Test.run tests) with
+  let important_shells =
+    try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
+    with _ -> ["bash"; "dash"] in
+  begin match Lwt_main.run (Test.run ~important_shells tests) with
   | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
   | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5
   | `Error (`IO _ as e) ->
