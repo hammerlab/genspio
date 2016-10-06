@@ -21,6 +21,10 @@ travis_install_on_osx () {
     brew update
     brew install opam
     export opam_init_options="--comp=$OCAML_VERSION"
+
+    # Get a POSIX shell
+    brew install dash
+
 }
 
 
