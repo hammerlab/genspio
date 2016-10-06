@@ -25,10 +25,11 @@ let check_command s ~verifies =
           then (true, "exited well") :: prev
           else (
             false,
-            sprintf "%s:\nout:\n%s\nerr:\n%s"
+            sprintf "%s:\nout:\n%s\nerr:\n%s\ncall:\n%s\n"
               (Pvem_lwt_unix.System.Shell.status_to_string exit_status)
               out
               err
+              s
           ) :: prev
         in
         return l)
