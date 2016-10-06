@@ -293,11 +293,17 @@ let () =
           | name :: "escape" :: cmd_arg :: cmd_format :: [] ->
             Test.make_shell name
               ~command:(fun c args ->
+                  let fun_name = "askjdeidjiedjjjdjekjdeijjjidejdejlksi" in
                   let sep =
-                    List.map ~f:Filename.quote (c :: args)
-                    |> String.concat ~sep:" " in
+                    String.concat ~sep:" " (
+                      [fun_name; "() {"; c ; " ; } ; "; fun_name ]
+                      @ List.map ~f:Filename.quote args
+                    )
+                    |> Filename.quote
+                  in
                   String.split cmd_format ~on:(`String cmd_arg)
-                  |> String.concat ~sep)
+                  |> String.concat ~sep
+                )
               ~get_version:"", "Command-line"
           | other ->
             failwith "Nope"
