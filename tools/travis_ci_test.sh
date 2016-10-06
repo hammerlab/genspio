@@ -25,6 +25,9 @@ travis_install_on_osx () {
     # Get a POSIX shell
     brew install dash
 
+    # the tests require more than the default limit
+    ulimit -n 2048
+
 }
 
 
