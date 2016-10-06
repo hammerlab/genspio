@@ -282,7 +282,33 @@ let () =
   let important_shells =
     try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
     with _ -> ["bash"; "dash"] in
-  begin match Lwt_main.run (Test.run ~important_shells tests) with
+  let additional_shells =
+    begin try
+      Sys.getenv "add_shells"  |> String.split ~on:(`String "++")
+      |> List.map ~f:(fun spec ->
+          match
+            String.split spec ~on:(`Character ',')
+            |> List.map ~f:String.strip
+          with
+          | name :: "escape" :: cmd_arg :: cmd_format :: [] ->
+            Test.make_shell name
+              ~command:(fun c args ->
+                  let sep =
+                    List.map ~f:Filename.quote (c :: args)
+                    |> String.concat ~sep:" " in
+                  String.split cmd_format ~on:(`String cmd_arg)
+                  |> String.concat ~sep)
+              ~get_version:"", "Command-line"
+          | other ->
+            failwith "Nope"
+        )
+    with
+      _ -> []
+    end
+  in
+  begin match
+    Lwt_main.run (Test.run ~important_shells ~additional_shells tests)
+  with
   | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
   | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5
   | `Error (`IO _ as e) ->

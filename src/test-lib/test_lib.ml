@@ -102,10 +102,10 @@ let avaialable_shells () =
   >>= fun l ->
   return (l, !forgotten)
 
-let run ~important_shells l =
+let run ~important_shells ~additional_shells l =
   avaialable_shells ()
   >>= fun (shells, forgotten) ->
-  Pvem_lwt_unix.Deferred_list.while_sequential shells
+  Pvem_lwt_unix.Deferred_list.while_sequential (shells @ additional_shells)
     ~f:begin fun (shell, version) ->
       let start = Unix.gettimeofday () in
       run_with_shell ~shell:shell.command l
