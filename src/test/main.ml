@@ -16,14 +16,14 @@ let exits ?name ?args n c = [
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
   let return n =
-    Construct.exec ["bash"; "-c"; sprintf "exit %d" n] in
+    Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   List.concat [
     exits 0 (Compile.Exec ["ls"]);
     exits 0 Construct.(
         succeeds (exec ["ls"])
         &&& returns ~value:18 (seq [
             exec ["ls"];
-            exec ["bash"; "-c"; "exit 18"]])
+            exec ["sh"; "-c"; "exit 18"]])
       );
     exits 23 Construct.(
         seq [
@@ -80,7 +80,7 @@ let tests =
             (seq [
                 printf "%s" will_be_escaped;
                 printf "%s" will_not_be_escaped;
-                exec ["bash"; "-c"; "printf \"err\\t\\n\" 1>&2"];
+                exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"];
                 return return_value_value;
               ]);
           if_then_else (
@@ -143,7 +143,7 @@ let tests =
           loop_while
             (cat_potentially_empty |> output_as_string <$> string "nnnn")
             ~body:begin
-              exec ["bash"; "-c"; sprintf "printf n >> %s" tmp];
+              exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
             end;
           return 10;
         ];
@@ -279,7 +279,42 @@ let () =
     posix_sh_tests
     @ tests
   in
-  begin match Lwt_main.run (Test.run tests) with
+  let important_shells =
+    try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
+    with _ -> ["bash"; "dash"] in
+  let additional_shells =
+    begin try
+      Sys.getenv "add_shells"  |> String.split ~on:(`String "++")
+      |> List.map ~f:(fun spec ->
+          match
+            String.split spec ~on:(`Character ',')
+            |> List.map ~f:String.strip
+          with
+          | name :: "escape" :: cmd_arg :: cmd_format :: [] ->
+            Test.make_shell name
+              ~command:(fun c args ->
+                  let fun_name = "askjdeidjiedjjjdjekjdeijjjidejdejlksi" in
+                  let sep =
+                    String.concat ~sep:" " (
+                      [fun_name; "() {"; c ; " ; } ; "; fun_name ]
+                      @ List.map ~f:Filename.quote args
+                    )
+                    |> Filename.quote
+                  in
+                  String.split cmd_format ~on:(`String cmd_arg)
+                  |> String.concat ~sep
+                )
+              ~get_version:"", "Command-line"
+          | other ->
+            failwith "Nope"
+        )
+    with
+      _ -> []
+    end
+  in
+  begin match
+    Lwt_main.run (Test.run ~important_shells ~additional_shells tests)
+  with
   | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
   | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5
   | `Error (`IO _ as e) ->

@@ -11,6 +11,8 @@ travis_install_on_linux () {
 
     export opam_init_options="--comp=$OCAML_VERSION"
     sudo apt-get install -qq  opam time git
+
+    export important_shells=bash,dash,busybox
 }
 
 travis_install_on_osx () {
@@ -28,6 +30,7 @@ travis_install_on_osx () {
     # the tests require more than the default limit
     ulimit -n 2048
 
+    export important_shells=bash,dash
 }
 
 
