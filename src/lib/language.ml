@@ -208,8 +208,7 @@ let rec to_shell: type a. _ -> a t -> string =
     | Literal lit ->
       Literal.to_shell lit
     | Output_as_string e ->
-      sprintf "\"$( { %s || %s ; }  | od -t o1 -An -v | tr -d ' \\n' )\""
-        (continue e) params.die_command
+      sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)

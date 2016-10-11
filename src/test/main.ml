@@ -148,20 +148,6 @@ let tests =
           return 10;
         ];
       );
-    exits 77 Construct.( (* 77 Is the value of ~exit_with in the call
-                            to with_trap *)
-        let tmp = "/tmp/test_trapping" in
-        let cat_tmp = exec ["cat"; tmp] in
-        seq [
-          exec ["rm"; "-f"; tmp];
-          if_then_else
-            (* cat <absent-file> |> to_string should abort the script: *)
-            (cat_tmp |> output_as_string <$> string "nnnn")
-            (return 11)
-            (return 12);
-          return 13;
-        ];
-      );
     begin
       let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
       let make ret minus_g single =
@@ -264,7 +250,49 @@ let tests =
               (return 22)
           );
       ]
-    end
+    end;
+    exits 11 Construct.(
+        let tmp = "/tmp/test_error_in_output_as_string" in
+        let cat_tmp = exec ["cat"; tmp] in
+        seq [
+          exec ["rm"; "-f"; tmp];
+          if_then_else
+            (* cat <absent-file> |> to_string does not abort the script: *)
+            (cat_tmp |> output_as_string =$= string "")
+            (return 11)
+            (return 12);
+        ];
+      );
+    exits 11 Construct.(
+        let tmp = "/tmp/test_error_in_output_as_string" in
+        let cat_tmp = exec ["cat"; tmp] in
+        seq [
+          exec ["rm"; "-f"; tmp];
+          if_then_else
+            (seq [printf "aaa"; cat_tmp] |> output_as_string =$= string "aaa")
+            (return 11)
+            (return 12);
+        ];
+      );
+    exits 77 Construct.(
+        let tmp = "/tmp/test_error_in_output_as_string" in
+        let cat_tmp = exec ["cat"; tmp] in
+        let succeed_or_die ut =
+          if_then_else (succeeds ut)
+            nop
+            (seq [
+                printf "Failure !";
+                fail;
+              ]) in
+        seq [
+          exec ["rm"; "-f"; tmp];
+          if_then_else
+            (seq [printf "aaa"; cat_tmp] |> succeed_or_die
+             |> output_as_string =$= string "aaa")
+            (return 11)
+            (return 12);
+        ];
+      );
   ]
 
 
