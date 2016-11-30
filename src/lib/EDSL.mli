@@ -1,7 +1,4 @@
 type 'a t = 'a Language.t
-type cli_option = Language.cli_option
-type 'a option_spec = 'a Language.option_spec
-type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 
 
 val fail: unit t
@@ -45,18 +42,29 @@ val write_output :
   ?return_value:string -> unit t -> unit t
 val write_stdout : path:string -> unit t -> unit t
 
+(** {3 Literals } *)
+
 val string : string -> string t
 val int : int -> int t
-val bool : bool t
+val bool : bool -> bool t
+
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
 val loop_while : bool t -> body:unit t -> unit t
 
+type 'a cli_option = 'a Language.cli_option
+type 'a option_spec = 'a Language.option_spec
+type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 module Option_list : sig
   val string :
-    doc:string -> char -> string t option_spec
-  val flag : doc:string -> char -> bool t option_spec
+    ?default: string t ->
+    doc:string -> char ->
+    string t option_spec
+  val flag :
+    ?default: bool t ->
+    doc:string -> char ->
+    bool t option_spec
   val ( & ) :
     'a option_spec ->
     ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options

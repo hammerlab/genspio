@@ -34,13 +34,14 @@ module Literal = struct
 
 end
 
-type cli_option = {
+type 'a cli_option = {
   switch: char;
   doc: string;
+  default: 'a;
 }
 type _ option_spec =
-  | Opt_flag: cli_option -> bool t option_spec
-  | Opt_string: cli_option -> string t option_spec
+  | Opt_flag:   bool t cli_option -> bool t option_spec
+  | Opt_string: string t cli_option -> string t option_spec
 and (_, _) cli_options =
   | Opt_end: string -> ('a, 'a) cli_options
   | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
@@ -110,7 +111,7 @@ module Construct = struct
   let literal l = Literal l
   let string s = Literal.String s |> literal
   let int s = Literal.Int s |> literal
-  let bool = Literal.Bool true |> literal
+  let bool t = Literal.Bool t |> literal
 
   let output_as_string e = Output_as_string e
 
@@ -120,8 +121,10 @@ module Construct = struct
   let loop_while condition ~body = While {condition; body}
 
   module Option_list = struct
-    let string ~doc switch  = Opt_string {switch; doc}
-    let flag ~doc switch = Opt_flag {switch; doc}
+    let string ?(default = string "") ~doc switch =
+      Opt_string {switch; doc; default}
+    let flag ?(default = bool false) ~doc switch =
+      Opt_flag {switch; doc; default}
 
     let (&) x y = Opt_cons (x, y)
     let usage s = Opt_end s
@@ -242,7 +245,8 @@ let rec to_shell: type a. _ -> a t -> string =
             f
           | Opt_cons (Opt_string x, more) ->
             let var = variable x in
-            to_init (sprintf "export %s= " var);
+            to_init (sprintf "export %s=$(%s)"
+                       var (continue x.default |> expand_octal));
             to_case (sprintf "-%c) %s ;;"
                        x.switch
                        (seq [
@@ -259,7 +263,9 @@ let rec to_shell: type a. _ -> a t -> string =
             loop (f (string_of_var var)) more
           | Opt_cons (Opt_flag x, more) ->
             let var = variable x in
-            to_init (sprintf "export %s=1 " var);
+            to_init (sprintf
+                       "export %s=$(if %s then printf '0' else printf '1')" var
+                       (continue x.default));
             to_case (
               sprintf "-%c) %s ;;"
                 x.switch (seq [
