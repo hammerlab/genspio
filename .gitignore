@@ -1,2 +1,6 @@
 /_build/
 /genspio.byte
+/.merlin
+/.ocamlinit
+/genspio-examples.byte
+/genspio-test.byte
