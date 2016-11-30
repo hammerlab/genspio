@@ -44,7 +44,11 @@ let test : Project.item list =
       Project.app (project_name ^ "-test")
         ~thread:()
         ~file:"src/test/main.ml"
-        ~internal_deps:[lib; test_lib]
+        ~internal_deps:[lib; test_lib];
+      Project.app (project_name ^ "-examples")
+        ~thread:()
+        ~file:"src/test/examples.ml"
+        ~internal_deps:[lib; test_lib];
     ]
   else
     []
