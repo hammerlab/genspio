@@ -4,17 +4,23 @@ module String = Sosa.Native_string
 
 let downloader () =
   let open Genspio.EDSL in
-  let sayf ?(strings = []) fmt =
-    ksprintf (fun s ->
-        let say ?(prompt = false) s =
-          let prompt =
-            if prompt then "downloader: " else "            " in
-          call (string "printf"
-                :: string (prompt ^ "%s\\n")
-                :: s :: []) in
-        seq (say ~prompt:true (string s) :: List.map strings ~f:say)
-      ) fmt in
-  let failf fmt = ksprintf (fun s -> seq [sayf "ERROR: %s" s; fail]) fmt in
+  let say strings =
+    let sayone ?(prompt = false) s =
+      let prompt =
+        if prompt then "downloader: " else "" in
+      call (string "printf" :: string (prompt ^ "%s") :: s :: []) in
+    match strings with
+    | [] -> nop
+    | s :: more ->
+      seq (
+        sayone ~prompt:true s :: List.map more ~f:sayone @ [
+          sayone (string "\n");
+        ]
+      )
+  in
+  let sayf fmt = ksprintf (fun s -> say [string s]) fmt in
+  let fail l = seq [say (string "ERROR: " :: l); fail] in
+  let failf fmt = ksprintf (fun s -> fail [string s]) fmt in
   let (//) = Filename.concat in
   let silence ~name unit =
     let stdout = "/tmp" // sprintf "output-of-%s-%s" name "-out" in
@@ -49,26 +55,37 @@ let downloader () =
   let string_concat sl =
     let out s = call [string "printf"; string "%s"; s] in
     seq (List.map sl ~f:out) |> output_as_string in
+  let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   parse_command_line
     Option_list.(
-      string ~doc:"The URL to the stuff" 'u'
+      string
+        ~doc:"The URL to the stuff" 'u'
+        ~default:no_value
       & usage "$0 -u URL"
     )
     begin fun url ->
       let filename =
-        url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"] |> output_as_string in
+        url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"]
+        |> output_as_string in
       let tmpdir = "/tmp/genspio-downloader" in
       let output_of_download =
         string_concat [string tmpdir; string "/"; filename] in
       seq [
         exec ["mkdir"; "-p"; tmpdir];
+        if_then (url =$= no_value)
+          (failf "Argument URL is mandatory");
         if_then_else
           (string_matches_any url ["^http://"; "^https://"; "^ftp://"])
           (seq [
               download ~url ~output:output_of_download;
-              sayf "Downloaded " ~strings:[output_of_download];
+              say [string "Downloaded "; output_of_download];
             ])
-          (failf "URL not in Http(s) or FTP: NOT IMPLEMENTED")
+          (seq [
+              fail [
+                string "URL: "; url;
+                string " -> not HTTP(s) or FTP: NOT IMPLEMENTED";
+              ]
+            ])
       ]
     end
 
