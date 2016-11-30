@@ -18,7 +18,6 @@ let tests =
   let return n =
     Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   List.concat [
-    exits 0 (Compile.Exec ["ls"]);
     exits 0 Construct.(
         succeeds (exec ["ls"])
         &&& returns ~value:18 (seq [
@@ -132,7 +131,7 @@ let tests =
           (return 10)
           (return 11)
       );
-    exits 10 Construct.(
+    exits 13 Construct.(
         let tmp = "/tmp/test_loop_while" in
         let cat_potentially_empty =
           if_then_else (exec ["cat"; tmp] |> succeeds)
@@ -140,12 +139,13 @@ let tests =
             (printf "") in
         seq [
           exec ["rm"; "-f"; tmp];
+          exec ["rm"; "-f"; tmp];
           loop_while
             (cat_potentially_empty |> output_as_string <$> string "nnnn")
             ~body:begin
               exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
             end;
-          return 10;
+          return 13;
         ];
       );
     begin
@@ -292,6 +292,14 @@ let tests =
             (return 11)
             (return 12);
         ];
+      );
+    (* Use of the `call` constructor: *)
+    exits 28 Construct.(
+        if_then_else
+          (call [string "cat"; output_as_string (printf "/does not exist")]
+           |> succeeds)
+            (return 11)
+            (return 28);
       );
   ]
 

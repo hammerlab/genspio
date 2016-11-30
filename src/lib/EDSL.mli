@@ -7,7 +7,16 @@ type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 val fail: unit t
 (** Abort the script/command immediately. *)
 
+val call : string t list -> unit t
+(** Call a command from its list of “arguments” (including the first
+    argument being the actual command). *)
+
 val exec : string list -> unit t
+(** Like {!call} but with string literals; i.e. [exec ["a"; "b"]] is
+    actually [call [string "a"; string "b"]] which is the usual shell command
+    ["a b"] (with proper escaping). *)
+
+
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val ( =$= ) : string t -> string t -> bool t

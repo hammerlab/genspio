@@ -19,6 +19,19 @@ module Literal = struct
       end |> fst
     | Bool true -> "0"
     | Bool false -> "1"
+
+  module String = struct
+    let easy_to_escape s =
+      String.for_all s
+        ~f:(function
+          | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
+          | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
+          | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
+          | '{' | '}' | '(' | ')' | '[' | ']' -> true
+          | other -> false)
+    let impossible_to_escape_for_variable = String.exists ~f:((=) '\x00')
+  end
+
 end
 
 type cli_option = {
@@ -32,7 +45,7 @@ and (_, _) cli_options =
   | Opt_end: string -> ('a, 'a) cli_options
   | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
 and _ t =
-  | Exec: string list -> unit t
+  | Exec: string t list -> unit t
   | Raw_cmd: string -> unit t
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
@@ -58,7 +71,8 @@ and _ t =
   | Fail: unit t
 
 module Construct = struct
-  let exec l = Exec l
+  let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
+  let call l = Exec l
   let (&&&) a b = Bool_operator (a, `And, b)
   let (|||) a b = Bool_operator (a, `Or, b)
   let (=$=) a b = String_operator (a, `Eq, b)
@@ -132,40 +146,29 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
-    (* let expand_output_to_string = *)
-    (*   sprintf "\"$(%s)\"" in *)
     match e with
     | Exec l ->
-      let easy_to_escape =
-        function
-        | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
-        | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
-        | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
-        | '{' | '}' | '(' | ')' | '[' | ']' -> true
-        | other -> false in
-      let impossible_to_escape = String.exists ~f:((=) '\x00') in
       let variables = ref [] in
       let args =
         List.mapi l ~f:(fun index -> function
-          | arg when String.for_all arg ~f:easy_to_escape ->
-            Filename.quote arg
-          | arg when impossible_to_escape arg ->
-            ksprintf failwith "to_shell: sorry %S is impossible to escape as \
-                               `exec` argument" arg
-          | arg ->
-            let var, () =
-              with_buffer begin fun str ->
-                ksprintf str "argument_%d=$(printf '" index;
-                String.iter arg ~f:(fun c ->
-                    Char.code c |> sprintf "\\%03o" |> str
-                  );
-                str "'; printf 'x') ; "
-              end in
+          | Literal (Literal.String s) when Literal.String.easy_to_escape s ->
+            Filename.quote s
+          | Literal (Literal.String s) when
+              Literal.String.impossible_to_escape_for_variable s ->
+            ksprintf failwith "to_shell: sorry literal %S is impossible to \
+                               escape as `exec` argument" s
+          | v ->
+            let var =
+              sprintf "argument_%d=$(%s; printf 'x') ; "
+                index (continue v |> expand_octal);
+            in
             variables := var :: !variables;
             sprintf "\"${argument_%d%%?}\"" index
           )
       in
-      (List.rev !variables) @ args |> String.concat ~sep:" "
+      (List.rev !variables) @ args
+      |> String.concat ~sep:" "
+      |> sprintf " { %s ; } "
     | Raw_cmd s -> s 
     | Returns {expr; value} ->
       sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
