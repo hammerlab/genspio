@@ -264,7 +264,7 @@ let rec to_shell: type a. _ -> a t -> string =
           | Opt_cons (Opt_flag x, more) ->
             let var = variable x in
             to_init (sprintf
-                       "export %s=$(if %s then printf '0' else printf '1')" var
+                       "export %s=$(if %s ; then printf '0' ; else printf '1' ; fi)" var
                        (continue x.default));
             to_case (
               sprintf "-%c) %s ;;"
