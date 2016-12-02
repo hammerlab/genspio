@@ -41,7 +41,7 @@ let tests =
         ]
       );
     exits 20 Construct.(
-        switch ~default:(return 18) [
+        make_switch ~default:(return 18) [
           file_exists "/djlsjdseij", return 19;
           file_exists "/etc/passwd", return 20;
           file_exists "/djlsjdseij", return 21;

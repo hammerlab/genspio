@@ -41,9 +41,32 @@ val seq : unit t list -> unit t
 val not : bool t -> bool t
 val printf : ('a, unit, string, unit t) format4 -> 'a
 val file_exists : string -> bool t
+
+(** {3 Switch Statements } *)
+
 val switch :
-  (bool t * unit t) list ->
-  default:unit t -> unit t
+  [ `Case of bool t * unit t | `Default of unit t ] list -> unit t
+(** Create a switch statement from a list of {!case} and optionally a
+    {!default} (the function raises an exception if there are more
+    than one default cases). *)
+
+val case :
+  bool t ->
+  unit t list ->
+  [> `Case of bool t * unit t ]
+(** Create a normal case for a {!switch} statement. *)
+
+val default : unit t list -> [> `Default of unit t ]
+(** Create the default case for a {!switch} statement. *)
+
+
+(**/**)
+val make_switch :
+  (bool Language.t * unit Language.t) list ->
+  default:unit Language.t -> unit Language.t
+(**/**)
+
+
 val write_output :
   ?stdout:string ->
   ?stderr:string ->

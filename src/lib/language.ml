@@ -98,7 +98,7 @@ module Construct = struct
 
   let fail = Fail
 
-  let switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
+  let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
       List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
           if_then_else x body prev)

@@ -22,20 +22,6 @@ let downloader () =
   let fail l = seq [say (string "ERROR: " :: l); fail] in
   let failf fmt = ksprintf (fun s -> fail [string s]) fmt in
   let (//) = Filename.concat in
-  let module Switch = struct
-    let case condition body = `Case (condition, seq body)
-    let default d = `Default d
-    let switch l =
-      let default = ref None in
-      let cases =
-        List.filter_map l ~f:(function
-          | `Default d when !default <> None ->
-            failwith "Cannot build switch with >1 defaults"
-          | `Default d -> default := (Some (seq d)); None
-          | `Case t -> Some t)
-      in
-      switch ~default:(Option.value ~default:nop !default) cases
-  end in
   let module If = struct
     let make ~t ?e c =
       match e with
@@ -76,15 +62,13 @@ let downloader () =
         call (string exec :: args);
       ]
     ] in
-    Switch.(
-      switch [
-        case (try_help "wget")
-          (do_call "wget" [url; string "--output-document"; output]);
-        case (try_help "curl")
-          (do_call "wget" [url; string "--output-document"; output]);
-        default [failf "Can't find a downloading application"];
-      ]
-    )
+    switch [
+      case (try_help "wget")
+        (do_call "wget" [url; string "--output-document"; output]);
+      case (try_help "curl")
+        (do_call "wget" [url; string "--output-document"; output]);
+      default [failf "Can't find a downloading application"];
+    ]
   in
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
@@ -139,8 +123,8 @@ let downloader () =
                 (string_matches_any current_name#get [".gpg$"; ".tgz$"; ".tar$"; ".gz$"])
                 ~body:begin
                   let make_case ~ext ~verb commands =
-                    Switch.case (string_matches_any
-                                   current_name#get [sprintf ".%s$" ext]) [
+                    case (string_matches_any
+                            current_name#get [sprintf ".%s$" ext]) [
                       say [ksprintf string "%s: " verb; current_name#get];
                       succeed_in_silence_or_fail
                         ~name:(sprintf "%s-%s" verb ext) commands;
@@ -149,30 +133,29 @@ let downloader () =
                     ] in
                   seq [
                     say [string "Extract loop: "; current_name#get];
-                    Switch.(switch [
-                        make_case ~ext:"gz" ~verb:"Gunzipping" [
-                          call [string "gunzip"; current_name#get];
-                        ];
-                        make_case ~ext:"tar" ~verb:"Untarring" [
-                          call [string "tar"; string "xf"; current_name#get];
-                        ];
-                        make_case ~ext:"tgz" ~verb:"Untar-gzip-ing" [
-                          call [string "tar"; string "zxf"; current_name#get];
-                        ];
-                        make_case ~ext:"gpg" ~verb:"Decyphering" [
-                          call [string "gpg";
-                                string "--output";
-                                (remove_suffix current_name#get "\\.gpg");
-                                string "-d"; current_name#get;];
-                        ];
-                        default [
-                          fail [
-                            string "File: "; current_name#get;
-                            string " didn't match any option???"
-                          ];
+                    switch [
+                      make_case ~ext:"gz" ~verb:"Gunzipping" [
+                        call [string "gunzip"; current_name#get];
+                      ];
+                      make_case ~ext:"tar" ~verb:"Untarring" [
+                        call [string "tar"; string "xf"; current_name#get];
+                      ];
+                      make_case ~ext:"tgz" ~verb:"Untar-gzip-ing" [
+                        call [string "tar"; string "zxf"; current_name#get];
+                      ];
+                      make_case ~ext:"gpg" ~verb:"Decyphering" [
+                        call [string "gpg";
+                              string "--output";
+                              (remove_suffix current_name#get "\\.gpg");
+                              string "-d"; current_name#get;];
+                      ];
+                      default [
+                        fail [
+                          string "File: "; current_name#get;
+                          string " didn't match any option???"
                         ];
                       ];
-                      );
+                    ];
                   ]
                 end
             ])
