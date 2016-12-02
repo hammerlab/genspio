@@ -40,7 +40,8 @@ val if_then : bool t -> unit t -> unit t
 val seq : unit t list -> unit t
 val not : bool t -> bool t
 val printf : ('a, unit, string, unit t) format4 -> 'a
-val file_exists : string -> bool t
+
+val file_exists : string t -> bool t
 
 (** {3 Switch Statements } *)
 
@@ -68,10 +69,11 @@ val make_switch :
 
 
 val write_output :
-  ?stdout:string ->
-  ?stderr:string ->
-  ?return_value:string -> unit t -> unit t
-val write_stdout : path:string -> unit t -> unit t
+  ?stdout:string t ->
+  ?stderr:string t ->
+  ?return_value:string t -> unit t -> unit t
+
+val write_stdout : path: string t -> unit t -> unit t
 
 (** {3 Literals } *)
 

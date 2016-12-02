@@ -26,7 +26,7 @@ let tests =
       );
     exits 23 Construct.(
         seq [
-          if_then_else (file_exists "/etc/passwd")
+          if_then_else (file_exists (string "/etc/passwd"))
             (exit 23)
             (exit 1);
           exit 2;
@@ -34,7 +34,7 @@ let tests =
       );
     exits 23 Construct.(
         seq [
-          if_then_else (file_exists "/etc/passwd" |> not)
+          if_then_else (file_exists (string "/etc/passwd") |> not)
             (exit 1)
             (exit 23);
           exit 2;
@@ -42,17 +42,17 @@ let tests =
       );
     exits 20 Construct.(
         make_switch ~default:(return 18) [
-          file_exists "/djlsjdseij", return 19;
-          file_exists "/etc/passwd", return 20;
-          file_exists "/djlsjdseij", return 21;
+          file_exists @@ string "/djlsjdseij", return 19;
+          file_exists @@ string "/etc/passwd", return 20;
+          file_exists @@ string "/djlsjdseij", return 21;
         ]
       );
     exits 0 Construct.(
-        let path = "/tmp/bouh" in
+        let path = string "/tmp/bouh" in
         seq [
           if_then (file_exists path)
             begin
-              exec ["rm"; "-f"; path]
+              call [string "rm"; string "-f"; path]
             end;
           write_stdout ~path (seq [
               printf "bouh";
@@ -64,16 +64,16 @@ let tests =
             end;
         ]);
     exits 11 Construct.(
-        let stdout = "/tmp/p1_out" in
-        let stderr = "/tmp/p1_err" in
-        let return_value_path = "/tmp/p1_ret" in
+        let stdout = string "/tmp/p1_out" in
+        let stderr = string "/tmp/p1_err" in
+        let return_value_path = string "/tmp/p1_ret" in
         let return_value_value = 31 in
         let will_be_escaped =
           "newline:\n tab: \t \x42\b" in
         let will_not_be_escaped =
           "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
         seq [
-          exec ["rm"; "-f"; stdout; stderr; return_value_path];
+          call [string "rm"; string "-f"; stdout; stderr; return_value_path];
           write_output
             ~stdout ~stderr ~return_value:return_value_path
             (seq [
@@ -83,15 +83,15 @@ let tests =
                 return return_value_value;
               ]);
           if_then_else (
-            output_as_string (exec ["cat"; stdout])
+            output_as_string (call [string "cat"; stdout])
             =$= string (will_be_escaped ^ will_not_be_escaped)
           )
             (
               if_then_else
-                (output_as_string (exec ["cat"; stderr]) <$> string "err")
+                (output_as_string (call [string "cat"; stderr]) <$> string "err")
                 (
                   if_then_else
-                    (output_as_string (exec ["cat"; return_value_path])
+                    (output_as_string (call [string "cat"; return_value_path])
                      =$= ksprintf string "%d\n" return_value_value)
                     (return 11)
                     (return 22)
@@ -198,7 +198,7 @@ let tests =
     exits 77 ~name:"cannot capture death itself" Construct.(
         seq [
           write_output
-            ~return_value:"/tmp/dieretval"
+            ~return_value:(string "/tmp/dieretval")
             (seq [
                 printf "Going to die\n";
                 fail;

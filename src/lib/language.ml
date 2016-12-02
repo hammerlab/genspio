@@ -59,9 +59,9 @@ and _ t =
   | Output_as_string: unit t -> string t
   | Write_output: {
       expr: unit t;
-      stdout: string option;
-      stderr: string option;
-      return_value: string option;
+      stdout: string t option;
+      stderr: string t option;
+      return_value: string t option;
     } -> unit t
   | Feed: string t * unit t -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
@@ -93,9 +93,6 @@ module Construct = struct
   let printf fmt =
     ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
 
-  let file_exists p =
-    exec ["test"; "-f"; p] |> succeeds
-
   let fail = Fail
 
   let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
@@ -112,6 +109,9 @@ module Construct = struct
   let string s = Literal.String s |> literal
   let int s = Literal.Int s |> literal
   let bool t = Literal.Bool t |> literal
+
+  let file_exists p =
+    call [string "test"; string "-f"; p] |> succeeds
 
   let output_as_string e = Output_as_string e
 
@@ -149,26 +149,32 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
+    let to_argument varname =
+      function
+      | Literal (Literal.String s) when Literal.String.easy_to_escape s ->
+        None, Filename.quote s
+      | Literal (Literal.String s) when
+          Literal.String.impossible_to_escape_for_variable s ->
+        ksprintf failwith "to_shell: sorry literal %S is impossible to \
+                           escape as `exec` argument" s
+      | v ->
+        let var =
+          sprintf "%s=$(%s; printf 'x')"
+            varname (continue v |> expand_octal)
+        in
+        Some var, sprintf "\"${%s%%?}\"" varname
+    in
     match e with
     | Exec l ->
       let variables = ref [] in
       let args =
-        List.mapi l ~f:(fun index -> function
-          | Literal (Literal.String s) when Literal.String.easy_to_escape s ->
-            Filename.quote s
-          | Literal (Literal.String s) when
-              Literal.String.impossible_to_escape_for_variable s ->
-            ksprintf failwith "to_shell: sorry literal %S is impossible to \
-                               escape as `exec` argument" s
-          | v ->
-            let var =
-              sprintf "argument_%d=$(%s; printf 'x') ; "
-                index (continue v |> expand_octal);
-            in
-            variables := var :: !variables;
-            sprintf "\"${argument_%d%%?}\"" index
-          )
-      in
+        List.mapi l ~f:(fun index v ->
+            let varname = sprintf "argument_%d" index in
+            match to_argument varname v with
+            | None, v -> v
+            | Some vardef, v ->
+              variables := sprintf "%s ; " vardef :: !variables;
+              v) in
       (List.rev !variables) @ args
       |> String.concat ~sep:" "
       |> sprintf " { %s ; } "
@@ -203,13 +209,25 @@ let rec to_shell: type a. _ -> a t -> string =
     | Not t ->
       sprintf "! { %s ; }" (continue t)
     | Write_output { expr; stdout; stderr; return_value } ->
-      sprintf " ( %s %s ) %s %s"
+      let make_argument name option =
+        Option.value_map ~default:(None, None) option ~f:(fun v ->
+            let v, e = to_argument name v in
+            v, Some e) in
+      let varstdout, exprstdout = make_argument "stdoutfile" stdout in
+      let varstderr, exprstderr = make_argument "stderrfile" stderr in
+      let varret, exprret = make_argument "retfile" return_value in
+      let vars =
+        List.filter_map [varstdout; varstderr; varret]
+          ~f:(Option.map ~f:(sprintf "export %s"))
+        |> String.concat ~sep:" ; " in
+      sprintf "%s ( %s %s ) %s %s"
+        vars
         (continue expr)
-        (Option.value_map return_value ~default:"" ~f:(fun path ->
+        (Option.value_map exprret ~default:"" ~f:(fun path ->
              sprintf "; echo \"$?\" > %s" path))
-        (Option.value_map stdout ~default:"" ~f:(fun path ->
+        (Option.value_map exprstdout ~default:"" ~f:(fun path ->
              sprintf " > %s" path))
-        (Option.value_map stderr ~default:"" ~f:(fun path ->
+        (Option.value_map exprstderr ~default:"" ~f:(fun path ->
              sprintf "2> %s" path))
     | Literal lit ->
       Literal.to_shell lit

@@ -30,8 +30,8 @@ let downloader () =
   end in
   let silent ~name unit =
     object (self)
-      method stdout = "/tmp" // sprintf "output-of-%s-%s" name "-out"
-      method stderr = "/tmp" // sprintf "output-of-%s-%s" name "-err"
+      method stdout = "/tmp" // sprintf "output-of-%s-%s" name "-out" |> string
+      method stderr = "/tmp" // sprintf "output-of-%s-%s" name "-err" |> string
       method exec =
         seq [
           (* sayf "Silent %s (%s, %s)" name self#stdout self#stderr; *)
@@ -43,7 +43,7 @@ let downloader () =
               ~t:[sayf "%s: Success" name]
               ~e:[
                 sayf "Expression %s failed!" name;
-                exec ["cat"; self#stderr];
+                call [string "cat"; self#stderr];
                 failf "Fatal failure of %s" name;
               ])
     end in
@@ -95,13 +95,13 @@ let downloader () =
         string_concat [string tmpdir; string "/"; filename] in
       let current_name =
         let path = tmpdir // "current-name" in
-        let tmp = path ^ "-tmp" in
+        let tmp = path ^ "-tmp" |> string in
         object
           method get = output_as_string (exec ["cat"; path])
           method set v =
             seq [
               v >> exec ["cat"] |> write_output ~stdout:tmp;
-              exec ["mv"; "-f"; tmp; path];
+              call [string "mv"; string "-f"; tmp; string path];
             ]
         end in
       let remove_suffix v suf =
