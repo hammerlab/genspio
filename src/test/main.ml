@@ -298,8 +298,18 @@ let tests =
         if_then_else
           (call [string "cat"; output_as_string (printf "/does not exist")]
            |> succeeds)
-            (return 11)
-            (return 28);
+          (return 11)
+          (return 28);
+      );
+    exits 17 Construct.(
+        if_then_else (bool true) (return 17) (return 16)
+      );
+    exits 16 Construct.(
+        if_then_else (bool true &&& bool false) (return 17) (return 16)
+      );
+    exits 16 Construct.(
+        if_then_else
+          (bool true &&& not (bool false)) (return 16) (return 17)
       );
   ]
 

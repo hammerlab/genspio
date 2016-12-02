@@ -17,8 +17,8 @@ module Literal = struct
           );
         str "'"
       end |> fst
-    | Bool true -> "0"
-    | Bool false -> "1"
+    | Bool true -> "true"
+    | Bool false -> "false"
 
   module String = struct
     let easy_to_escape s =
@@ -264,7 +264,7 @@ let rec to_shell: type a. _ -> a t -> string =
           | Opt_cons (Opt_flag x, more) ->
             let var = variable x in
             to_init (sprintf
-                       "export %s=$(if %s ; then printf '0' ; else printf '1' ; fi)" var
+                       "export %s=$(if %s ; then printf 'true' ; else printf 'false' ; fi)" var
                        (continue x.default));
             to_case (
               sprintf "-%c) %s ;;"
