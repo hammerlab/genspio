@@ -84,15 +84,13 @@ let downloader () =
         ~doc:"The URL to the stuff" 'u'
         ~default:no_value
       & flag 'c' ~doc:"Do everything in the temp-dir"
+      & string 'f'
+        ~doc:"Override the downloaded file-name"
+        ~default:no_value
       & usage "$0 -u URL [-c]"
     )
-    begin fun url all_in_tmp ->
-      let filename =
-        url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"]
-        |> output_as_string in
+    begin fun url all_in_tmp filename_ov ->
       let tmpdir = "/tmp/genspio-downloader" in
-      let output_of_download =
-        string_concat [string tmpdir; string "/"; filename] in
       let current_name =
         let path = tmpdir // "current-name" in
         let tmp = path ^ "-tmp" |> string in
@@ -104,6 +102,23 @@ let downloader () =
               call [string "mv"; string "-f"; tmp; string path];
             ]
         end in
+      let set_output_of_download () =
+        If.make (filename_ov =$= no_value)
+          ~t:begin
+            let filename =
+              url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"]
+              |> output_as_string
+            in
+            let output_path =
+              string_concat [string tmpdir; string "/"; filename] in
+            [current_name#set output_path]
+          end
+          ~e:begin
+            let output_path =
+              string_concat [string tmpdir; string "/"; filename_ov] in
+            [current_name#set output_path]
+          end
+      in
       let remove_suffix v suf =
         v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
         |> output_as_string in
@@ -116,9 +131,9 @@ let downloader () =
         if_then_else
           (string_matches_any url ["^http://"; "^https://"; "^ftp://"])
           (seq [
-              download ~url ~output:output_of_download;
-              say [string "Downloaded "; output_of_download];
-              current_name#set output_of_download;
+              set_output_of_download ();
+              download ~url ~output:current_name#get;
+              say [string "Downloaded "; current_name#get];
               loop_while 
                 (string_matches_any current_name#get [".gpg$"; ".tgz$"; ".tar$"; ".gz$"])
                 ~body:begin
