@@ -90,18 +90,8 @@ let downloader () =
       & usage "$0 -u URL [-c]"
     )
     begin fun url all_in_tmp filename_ov ->
-      let tmpdir = "/tmp/genspio-downloader" in
-      let current_name =
-        let path = tmpdir // "current-name" in
-        let tmp = path ^ "-tmp" |> string in
-        object
-          method get = output_as_string (exec ["cat"; path])
-          method set v =
-            seq [
-              v >> exec ["cat"] |> write_output ~stdout:tmp;
-              call [string "mv"; string "-f"; tmp; string path];
-            ]
-        end in
+      let tmp_dir = "/tmp/genspio-downloader" in
+      let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         If.make (filename_ov =$= no_value)
           ~t:begin
@@ -110,12 +100,12 @@ let downloader () =
               |> output_as_string
             in
             let output_path =
-              string_concat [string tmpdir; string "/"; filename] in
+              string_concat [string tmp_dir; string "/"; filename] in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              string_concat [string tmpdir; string "/"; filename_ov] in
+              string_concat [string tmp_dir; string "/"; filename_ov] in
             [current_name#set output_path]
           end
       in
@@ -123,9 +113,9 @@ let downloader () =
         v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
         |> output_as_string in
       seq [
-        exec ["mkdir"; "-p"; tmpdir];
+        exec ["mkdir"; "-p"; tmp_dir];
         if_then all_in_tmp
-          (seq [sayf "Going to the tmpdir"; call [string "cd"; string tmpdir]]);
+          (seq [sayf "Going to the tmpdir"; call [string "cd"; string tmp_dir]]);
         if_then (url =$= no_value)
           (failf "Argument URL is mandatory");
         if_then_else
