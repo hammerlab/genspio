@@ -106,3 +106,13 @@ end
 
 val parse_command_line :
   ('a, unit t) cli_options -> 'a -> unit t
+
+val tmp_file:
+  ?tmp_dir:string ->
+  string ->
+  <
+    get : string Language.t;
+    set : string Language.t -> unit Language.t;
+  >
+(** Create a temporary file that may contain arbitrary strings (can be
+    used as variable containing [string t] values). *)
