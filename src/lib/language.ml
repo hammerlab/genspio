@@ -252,7 +252,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let string_of_var var =
         Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
       let bool_of_var var =
-        Construct.succeeds (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
+        Construct.succeeds (Raw_cmd (sprintf "{ ${%s} ; } " var)) in
       let unit_t =
         let rec loop
           : type a b.
@@ -287,7 +287,7 @@ let rec to_shell: type a. _ -> a t -> string =
             to_case (
               sprintf "-%c) %s ;;"
                 x.switch (seq [
-                    sprintf "export %s=0" var;
+                    sprintf "export %s=true" var;
                     "shift";
                   ])
             );
@@ -306,7 +306,7 @@ let rec to_shell: type a. _ -> a t -> string =
           [
             "while :;"; " do case $1 in";
             "-h|-help|--help) ";
-            sprintf "export %s_help=0 ; " prefix;
+            sprintf "export %s_help=true ; " prefix;
             sprintf "%s ;"
               (continue Construct.(string help_msg
                                    >>  exec ["cat"]));
@@ -332,7 +332,7 @@ let rec to_shell: type a. _ -> a t -> string =
       in
       seq (
         sprintf "export %s_args=" prefix
-        :: sprintf "export %s_help=1" prefix
+        :: sprintf "export %s_help=false" prefix
         :: List.rev !inits @ [
           while_loop;
           continue Construct.(
