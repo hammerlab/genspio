@@ -218,8 +218,8 @@ let rec to_shell: type a. _ -> a t -> string =
       let varret, exprret = make_argument "retfile" return_value in
       let vars =
         List.filter_map [varstdout; varstderr; varret]
-          ~f:(Option.map ~f:(sprintf "export %s"))
-        |> String.concat ~sep:" ; " in
+          ~f:(Option.map ~f:(sprintf "export %s ; "))
+        |> String.concat ~sep:" " in
       sprintf "%s ( %s %s ) %s %s"
         vars
         (continue expr)

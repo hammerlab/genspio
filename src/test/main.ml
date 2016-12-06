@@ -63,6 +63,48 @@ let tests =
               exit 1
             end;
         ]);
+    exits 42 Construct.(
+        (* Many variation on `write_output` *)
+        let stdout = string "/tmp/p1_out" in
+        let stderr = string "/tmp/p1_err" in
+        let return_value = string "/tmp/p1_ret" in
+        seq [
+          write_output
+            ~stdout ~stderr ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            ~stderr ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output ~stdout
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          return 42;
+        ]
+      );
     exits 11 Construct.(
         let stdout = string "/tmp/p1_out" in
         let stderr = string "/tmp/p1_err" in
