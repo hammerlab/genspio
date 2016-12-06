@@ -22,21 +22,32 @@ let switch l =
   in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
+let string_concat sl =
+  (* This is a pretty unefficient implementation: *)
+  let out s = call [string "printf"; string "%s"; s] in
+  seq (List.map sl ~f:out) |> output_as_string
 
-let tmp_file ?(tmp_dir = "/tmp") name =
+let tmp_file ?(tmp_dir = string "/tmp") name =
   let path =
     let clean =
       String.map name ~f:(function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' as c -> c
         | other -> '_') in
-    tmp_dir
-    // sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex) in
-  let tmp = path ^ "-tmp" |> string in
+    string_concat [
+      tmp_dir;
+      string "/";
+      string
+        (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
+    ]
+  in
+  let tmp = string_concat [path; string "-tmp"] in
   object
-    method get = output_as_string (exec ["cat"; path])
+    method get = output_as_string (call [string "cat"; path])
     method set v =
       seq [
+        call [string "echo"; string "Setting"];
+        call [string "echo"; tmp];
         v >> exec ["cat"] |> write_output ~stdout:tmp;
-        call [string "mv"; string "-f"; tmp; string path];
+        call [string "mv"; string "-f"; tmp; path];
       ]
   end

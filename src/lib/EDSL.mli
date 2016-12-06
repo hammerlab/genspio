@@ -107,8 +107,10 @@ end
 val parse_command_line :
   ('a, unit t) cli_options -> 'a -> unit t
 
+val string_concat: string t list -> string t
+
 val tmp_file:
-  ?tmp_dir:string ->
+  ?tmp_dir: string t ->
   string ->
   <
     get : string Language.t;

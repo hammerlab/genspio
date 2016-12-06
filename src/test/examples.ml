@@ -30,11 +30,11 @@ let downloader () =
   end in
   let silent ~name unit =
     object (self)
-      method stdout = "/tmp" // sprintf "output-of-%s-%s" name "-out" |> string
-      method stderr = "/tmp" // sprintf "output-of-%s-%s" name "-err" |> string
+      method stdout = "/tmp" // sprintf "output-of-%s-%s" name "out" |> string
+      method stderr = "/tmp" // sprintf "output-of-%s-%s" name "err" |> string
       method exec =
         seq [
-          (* sayf "Silent %s (%s, %s)" name self#stdout self#stderr; *)
+          (* say [string "Silent "; string name; self#stdout; self#stderr;]; *)
           write_output (seq unit) ~stdout:self#stdout ~stderr:self#stderr;
         ]
       method succeed_or_fail =
@@ -74,9 +74,6 @@ let downloader () =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
     string >> exec (["grep"; "-q"] @ options) |> succeeds in
-  let string_concat sl =
-    let out s = call [string "printf"; string "%s"; s] in
-    seq (List.map sl ~f:out) |> output_as_string in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   parse_command_line
     Option_list.(
@@ -87,10 +84,12 @@ let downloader () =
       & string 'f'
         ~doc:"Override the downloaded file-name"
         ~default:no_value
+      & string 't'
+        ~doc:"Use <dir> as temp-dir"
+        ~default:(Genspio.EDSL.string "/tmp/genspio-downloader-tmpdir")
       & usage "$0 -u URL [-c]"
     )
-    begin fun url all_in_tmp filename_ov ->
-      let tmp_dir = "/tmp/genspio-downloader" in
+    begin fun url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         If.make (filename_ov =$= no_value)
@@ -100,12 +99,12 @@ let downloader () =
               |> output_as_string
             in
             let output_path =
-              string_concat [string tmp_dir; string "/"; filename] in
+              string_concat [tmp_dir; string "/"; filename] in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              string_concat [string tmp_dir; string "/"; filename_ov] in
+              string_concat [tmp_dir; string "/"; filename_ov] in
             [current_name#set output_path]
           end
       in
@@ -113,9 +112,9 @@ let downloader () =
         v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
         |> output_as_string in
       seq [
-        exec ["mkdir"; "-p"; tmp_dir];
+        call [string "mkdir"; string "-p"; tmp_dir];
         if_then all_in_tmp
-          (seq [sayf "Going to the tmpdir"; call [string "cd"; string tmp_dir]]);
+          (seq [sayf "Going to the tmpdir"; call [string "cd"; tmp_dir]]);
         if_then (url =$= no_value)
           (failf "Argument URL is mandatory");
         if_then_else
@@ -140,7 +139,7 @@ let downloader () =
                     say [string "Extract loop: "; current_name#get];
                     switch [
                       make_case ~ext:"gz" ~verb:"Gunzipping" [
-                        call [string "gunzip"; current_name#get];
+                        call [string "gunzip"; string "-f"; current_name#get];
                       ];
                       make_case ~ext:"tar" ~verb:"Untarring" [
                         call [string "tar"; string "xf"; current_name#get];
