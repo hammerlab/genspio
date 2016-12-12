@@ -67,6 +67,71 @@ let downloader () =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
     string >> exec (["grep"; "-q"] @ options) |> succeeds in
+
+  let module Unwrapper = struct
+
+    type cmd = unit t
+    type t = {
+      extension: string;
+      verb: string;
+      commands: string_variable -> cmd list;
+    }
+    let make ~ext ~verb commands =
+      {extension = ext; verb; commands}
+
+    let remove_suffix v suf =
+      v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
+      |> output_as_string
+
+    let to_switch name_variable t_list =
+      let make_case t =
+        case (string_matches_any
+                name_variable#get [sprintf "\\.%s$" t.extension]) [
+          say [ksprintf string "%s: " t.verb; name_variable#get];
+          succeed_in_silence_or_fail
+            ~name:(sprintf "%s-%s" t.verb t.extension)
+            (t.commands name_variable);
+          name_variable#set
+            (remove_suffix name_variable#get (sprintf "\\.%s" t.extension));
+        ] in
+      seq [
+        say [string "Extract loop: "; name_variable#get];
+        switch (List.map t_list ~f:make_case)
+      ]
+
+    let to_loop name_variable t_list =
+      loop_while
+        (string_matches_any name_variable#get
+           (List.map t_list (fun t -> sprintf "\\.%s$" t.extension)))
+        ~body:(to_switch name_variable t_list)
+
+    let all = [
+      make ~ext:"gz" ~verb:"Gunzipping" (fun current_name -> [
+            call [string "gunzip"; string "-f"; current_name#get];
+          ]);
+      make ~ext:"bz2" ~verb:"Bunzip2-ing" (fun current_name -> [
+            call [string "bunzip2"; string "-f"; current_name#get];
+          ]);
+      make ~ext:"zip" ~verb:"Unzipping" (fun current_name -> [
+            call [string "unzip"; current_name#get];
+          ]);
+      make ~ext:"tar" ~verb:"Untarring" (fun current_name -> [
+            call [string "tar"; string "xf"; current_name#get];
+          ]);
+      make ~ext:"tgz" ~verb:"Untar-gzip-ing" (fun name -> [
+            call [string "tar"; string "zxf"; name#get];
+          ]);
+      make ~ext:"tbz2" ~verb:"Untar-bzip2-ing" (fun name -> [
+            call [string "tar"; string "xfj"; name#get];
+          ]);
+      make ~ext:"gpg" ~verb:"Decyphering" (fun name -> [
+            call [string "gpg";
+                  string "--output";
+                  (remove_suffix name#get "\\.gpg");
+                  string "-d"; name#get;];
+          ]);
+    ]
+  end in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   parse_command_line
     Option_list.(
@@ -101,9 +166,6 @@ let downloader () =
             [current_name#set output_path]
           end
       in
-      let remove_suffix v suf =
-        v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
-        |> output_as_string in
       seq [
         call [string "mkdir"; string "-p"; tmp_dir];
         if_then all_in_tmp
@@ -116,46 +178,7 @@ let downloader () =
               set_output_of_download ();
               download ~url ~output:current_name#get;
               say [string "Downloaded "; current_name#get];
-              loop_while
-                (string_matches_any current_name#get
-                   ["\\.gpg$"; "\\.tgz$"; "\\.tar$"; "\\.gz$"])
-                ~body:begin
-                  let make_case ~ext ~verb commands =
-                    case (string_matches_any
-                            current_name#get [sprintf "\\.%s$" ext]) [
-                      say [ksprintf string "%s: " verb; current_name#get];
-                      succeed_in_silence_or_fail
-                        ~name:(sprintf "%s-%s" verb ext) commands;
-                      current_name#set
-                        (remove_suffix current_name#get (sprintf "\\.%s" ext));
-                    ] in
-                  seq [
-                    say [string "Extract loop: "; current_name#get];
-                    switch [
-                      make_case ~ext:"gz" ~verb:"Gunzipping" [
-                        call [string "gunzip"; string "-f"; current_name#get];
-                      ];
-                      make_case ~ext:"tar" ~verb:"Untarring" [
-                        call [string "tar"; string "xf"; current_name#get];
-                      ];
-                      make_case ~ext:"tgz" ~verb:"Untar-gzip-ing" [
-                        call [string "tar"; string "zxf"; current_name#get];
-                      ];
-                      make_case ~ext:"gpg" ~verb:"Decyphering" [
-                        call [string "gpg";
-                              string "--output";
-                              (remove_suffix current_name#get "\\.gpg");
-                              string "-d"; current_name#get;];
-                      ];
-                      default [
-                        fail [
-                          string "File: "; current_name#get;
-                          string " didn't match any option???"
-                        ];
-                      ];
-                    ];
-                  ]
-                end
+              Unwrapper.to_loop current_name Unwrapper.all
             ])
           (seq [
               fail [
