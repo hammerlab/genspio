@@ -51,3 +51,8 @@ let tmp_file ?(tmp_dir = string "/tmp") name =
         call [string "mv"; string "-f"; tmp; path];
       ]
   end
+
+let if_seq ~t ?e c =
+  match e with
+  | None -> if_then c (seq t)
+  | Some f -> if_then_else c (seq t) (seq f) 

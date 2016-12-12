@@ -37,6 +37,16 @@ val nop : unit t
 val if_then_else :
   bool t -> unit t -> unit t -> unit t
 val if_then : bool t -> unit t -> unit t
+
+val if_seq:
+  t:unit t list ->
+  ?e:unit t list ->
+  bool t ->
+  unit t
+(** [condition c ~t ~e] is an alternate API for {!if_then_else} (when
+    [?e] is provided) or {!if_then} (otherwise) that assumes “then”
+    and “else” bodies to be lists for {!seq} construct. *)
+
 val seq : unit t list -> unit t
 val not : bool t -> bool t
 val printf : ('a, unit, string, unit t) format4 -> 'a
