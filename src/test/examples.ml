@@ -22,12 +22,6 @@ let downloader () =
   let fail l = seq [say (string "ERROR: " :: l); fail] in
   let failf fmt = ksprintf (fun s -> fail [string s]) fmt in
   let (//) = Filename.concat in
-  let module If = struct
-    let make ~t ?e c =
-      match e with
-      | None -> if_then c (seq t)
-      | Some f -> if_then_else c (seq t) (seq f) 
-  end in
   let silent ~name unit =
     object (self)
       method stdout = "/tmp" // sprintf "output-of-%s-%s" name "out" |> string
@@ -38,14 +32,13 @@ let downloader () =
           write_output (seq unit) ~stdout:self#stdout ~stderr:self#stderr;
         ]
       method succeed_or_fail =
-        If.(make
-              (self#exec|> succeeds)
-              ~t:[sayf "%s: Success" name]
-              ~e:[
-                sayf "Expression %s failed!" name;
-                call [string "cat"; self#stderr];
-                failf "Fatal failure of %s" name;
-              ])
+        if_seq (self#exec|> succeeds)
+          ~t:[sayf "%s: Success" name]
+          ~e:[
+            sayf "Expression %s failed!" name;
+            call [string "cat"; self#stderr];
+            failf "Fatal failure of %s" name;
+          ]
     end in
   let silence ~name unit =
     let s = silent ~name [unit] in
@@ -92,7 +85,7 @@ let downloader () =
     begin fun url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
-        If.make (filename_ov =$= no_value)
+        if_seq (filename_ov =$= no_value)
           ~t:begin
             let filename =
               url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"]
