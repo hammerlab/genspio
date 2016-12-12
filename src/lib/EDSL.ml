@@ -27,7 +27,11 @@ let string_concat sl =
   let out s = call [string "printf"; string "%s"; s] in
   seq (List.map sl ~f:out) |> output_as_string
 
-let tmp_file ?(tmp_dir = string "/tmp") name =
+type string_variable = <
+    get : string Language.t;
+    set : string Language.t -> unit Language.t;
+  >
+let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
   let path =
     let clean =
       String.map name ~f:(function

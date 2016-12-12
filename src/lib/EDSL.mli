@@ -119,12 +119,13 @@ val parse_command_line :
 
 val string_concat: string t list -> string t
 
-val tmp_file:
-  ?tmp_dir: string t ->
-  string ->
-  <
+type string_variable = <
     get : string Language.t;
     set : string Language.t -> unit Language.t;
   >
+val tmp_file:
+  ?tmp_dir: string t ->
+  string ->
+  string_variable
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values). *)
