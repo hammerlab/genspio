@@ -123,12 +123,13 @@ let downloader () =
               set_output_of_download ();
               download ~url ~output:current_name#get;
               say [string "Downloaded "; current_name#get];
-              loop_while 
-                (string_matches_any current_name#get [".gpg$"; ".tgz$"; ".tar$"; ".gz$"])
+              loop_while
+                (string_matches_any current_name#get
+                   ["\\.gpg$"; "\\.tgz$"; "\\.tar$"; "\\.gz$"])
                 ~body:begin
                   let make_case ~ext ~verb commands =
                     case (string_matches_any
-                            current_name#get [sprintf ".%s$" ext]) [
+                            current_name#get [sprintf "\\.%s$" ext]) [
                       say [ksprintf string "%s: " verb; current_name#get];
                       succeed_in_silence_or_fail
                         ~name:(sprintf "%s-%s" verb ext) commands;
