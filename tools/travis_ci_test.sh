@@ -66,4 +66,9 @@ export WITH_TESTS=true
 make byte
 make native
 
-./genspio-test.byte
+gennspio_test=_build/src/test/genspio-test.byte
+genspio_examples=_build/src/test/genspio-examples.byte
+
+$genspio_test
+
+$genspio_examples dl -
