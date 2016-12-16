@@ -49,7 +49,6 @@ val if_seq:
 
 val seq : unit t list -> unit t
 val not : bool t -> bool t
-val printf : ('a, unit, string, unit t) format4 -> 'a
 
 val file_exists : string t -> bool t
 

@@ -90,9 +90,6 @@ module Construct = struct
 
   let not t = Not t
 
-  let printf fmt =
-    ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
-
   let fail = Fail
 
   let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =

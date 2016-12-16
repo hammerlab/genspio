@@ -15,8 +15,8 @@ let exits ?name ?args n c = [
 
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
-  let return n =
-    Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
+  let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
+  let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
   List.concat [
     exits 0 Construct.(
         succeeds (exec ["ls"])
