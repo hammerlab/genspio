@@ -15,10 +15,9 @@ let exits ?name ?args n c = [
 
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
-  let return n =
-    Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
+  let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
+  let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
   List.concat [
-    exits 0 (Compile.Exec ["ls"]);
     exits 0 Construct.(
         succeeds (exec ["ls"])
         &&& returns ~value:18 (seq [
@@ -27,7 +26,7 @@ let tests =
       );
     exits 23 Construct.(
         seq [
-          if_then_else (file_exists "/etc/passwd")
+          if_then_else (file_exists (string "/etc/passwd"))
             (exit 23)
             (exit 1);
           exit 2;
@@ -35,25 +34,25 @@ let tests =
       );
     exits 23 Construct.(
         seq [
-          if_then_else (file_exists "/etc/passwd" |> not)
+          if_then_else (file_exists (string "/etc/passwd") |> not)
             (exit 1)
             (exit 23);
           exit 2;
         ]
       );
     exits 20 Construct.(
-        switch ~default:(return 18) [
-          file_exists "/djlsjdseij", return 19;
-          file_exists "/etc/passwd", return 20;
-          file_exists "/djlsjdseij", return 21;
+        make_switch ~default:(return 18) [
+          file_exists @@ string "/djlsjdseij", return 19;
+          file_exists @@ string "/etc/passwd", return 20;
+          file_exists @@ string "/djlsjdseij", return 21;
         ]
       );
     exits 0 Construct.(
-        let path = "/tmp/bouh" in
+        let path = string "/tmp/bouh" in
         seq [
           if_then (file_exists path)
             begin
-              exec ["rm"; "-f"; path]
+              call [string "rm"; string "-f"; path]
             end;
           write_stdout ~path (seq [
               printf "bouh";
@@ -64,17 +63,59 @@ let tests =
               exit 1
             end;
         ]);
+    exits 42 Construct.(
+        (* Many variation on `write_output` *)
+        let stdout = string "/tmp/p1_out" in
+        let stderr = string "/tmp/p1_err" in
+        let return_value = string "/tmp/p1_ret" in
+        seq [
+          write_output
+            ~stdout ~stderr ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            ~stderr ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            ~return_value
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output ~stdout
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          write_output
+            (seq [
+                printf "%s" "hello";
+                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+                return 12;
+              ]);
+          return 42;
+        ]
+      );
     exits 11 Construct.(
-        let stdout = "/tmp/p1_out" in
-        let stderr = "/tmp/p1_err" in
-        let return_value_path = "/tmp/p1_ret" in
+        let stdout = string "/tmp/p1_out" in
+        let stderr = string "/tmp/p1_err" in
+        let return_value_path = string "/tmp/p1_ret" in
         let return_value_value = 31 in
         let will_be_escaped =
           "newline:\n tab: \t \x42\b" in
         let will_not_be_escaped =
           "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
         seq [
-          exec ["rm"; "-f"; stdout; stderr; return_value_path];
+          call [string "rm"; string "-f"; stdout; stderr; return_value_path];
           write_output
             ~stdout ~stderr ~return_value:return_value_path
             (seq [
@@ -84,15 +125,15 @@ let tests =
                 return return_value_value;
               ]);
           if_then_else (
-            output_as_string (exec ["cat"; stdout])
+            output_as_string (call [string "cat"; stdout])
             =$= string (will_be_escaped ^ will_not_be_escaped)
           )
             (
               if_then_else
-                (output_as_string (exec ["cat"; stderr]) <$> string "err")
+                (output_as_string (call [string "cat"; stderr]) <$> string "err")
                 (
                   if_then_else
-                    (output_as_string (exec ["cat"; return_value_path])
+                    (output_as_string (call [string "cat"; return_value_path])
                      =$= ksprintf string "%d\n" return_value_value)
                     (return 11)
                     (return 22)
@@ -132,7 +173,7 @@ let tests =
           (return 10)
           (return 11)
       );
-    exits 10 Construct.(
+    exits 13 Construct.(
         let tmp = "/tmp/test_loop_while" in
         let cat_potentially_empty =
           if_then_else (exec ["cat"; tmp] |> succeeds)
@@ -140,12 +181,13 @@ let tests =
             (printf "") in
         seq [
           exec ["rm"; "-f"; tmp];
+          exec ["rm"; "-f"; tmp];
           loop_while
             (cat_potentially_empty |> output_as_string <$> string "nnnn")
             ~body:begin
               exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
             end;
-          return 10;
+          return 13;
         ];
       );
     begin
@@ -198,7 +240,7 @@ let tests =
     exits 77 ~name:"cannot capture death itself" Construct.(
         seq [
           write_output
-            ~return_value:"/tmp/dieretval"
+            ~return_value:(string "/tmp/dieretval")
             (seq [
                 printf "Going to die\n";
                 fail;
@@ -292,6 +334,24 @@ let tests =
             (return 11)
             (return 12);
         ];
+      );
+    (* Use of the `call` constructor: *)
+    exits 28 Construct.(
+        if_then_else
+          (call [string "cat"; output_as_string (printf "/does not exist")]
+           |> succeeds)
+          (return 11)
+          (return 28);
+      );
+    exits 17 Construct.(
+        if_then_else (bool true) (return 17) (return 16)
+      );
+    exits 16 Construct.(
+        if_then_else (bool true &&& bool false) (return 17) (return 16)
+      );
+    exits 16 Construct.(
+        if_then_else
+          (bool true &&& not (bool false)) (return 16) (return 17)
       );
   ]
 

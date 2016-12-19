@@ -17,22 +17,36 @@ module Literal = struct
           );
         str "'"
       end |> fst
-    | Bool true -> "0"
-    | Bool false -> "1"
+    | Bool true -> "true"
+    | Bool false -> "false"
+
+  module String = struct
+    let easy_to_escape s =
+      String.for_all s
+        ~f:(function
+          | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
+          | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
+          | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
+          | '{' | '}' | '(' | ')' | '[' | ']' -> true
+          | other -> false)
+    let impossible_to_escape_for_variable = String.exists ~f:((=) '\x00')
+  end
+
 end
 
-type cli_option = {
+type 'a cli_option = {
   switch: char;
   doc: string;
+  default: 'a;
 }
 type _ option_spec =
-  | Opt_flag: cli_option -> bool t option_spec
-  | Opt_string: cli_option -> string t option_spec
+  | Opt_flag:   bool t cli_option -> bool t option_spec
+  | Opt_string: string t cli_option -> string t option_spec
 and (_, _) cli_options =
   | Opt_end: string -> ('a, 'a) cli_options
   | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
 and _ t =
-  | Exec: string list -> unit t
+  | Exec: string t list -> unit t
   | Raw_cmd: string -> unit t
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
@@ -45,9 +59,9 @@ and _ t =
   | Output_as_string: unit t -> string t
   | Write_output: {
       expr: unit t;
-      stdout: string option;
-      stderr: string option;
-      return_value: string option;
+      stdout: string t option;
+      stderr: string t option;
+      return_value: string t option;
     } -> unit t
   | Feed: string t * unit t -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
@@ -58,7 +72,8 @@ and _ t =
   | Fail: unit t
 
 module Construct = struct
-  let exec l = Exec l
+  let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
+  let call l = Exec l
   let (&&&) a b = Bool_operator (a, `And, b)
   let (|||) a b = Bool_operator (a, `Or, b)
   let (=$=) a b = String_operator (a, `Eq, b)
@@ -75,15 +90,9 @@ module Construct = struct
 
   let not t = Not t
 
-  let printf fmt =
-    ksprintf (fun s -> exec ["printf"; "%s"; s]) fmt
-
-  let file_exists p =
-    exec ["test"; "-f"; p] |> succeeds
-
   let fail = Fail
 
-  let switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
+  let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
       List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
           if_then_else x body prev)
@@ -96,7 +105,10 @@ module Construct = struct
   let literal l = Literal l
   let string s = Literal.String s |> literal
   let int s = Literal.Int s |> literal
-  let bool = Literal.Bool true |> literal
+  let bool t = Literal.Bool t |> literal
+
+  let file_exists p =
+    call [string "test"; string "-f"; p] |> succeeds
 
   let output_as_string e = Output_as_string e
 
@@ -106,8 +118,10 @@ module Construct = struct
   let loop_while condition ~body = While {condition; body}
 
   module Option_list = struct
-    let string ~doc switch  = Opt_string {switch; doc}
-    let flag ~doc switch = Opt_flag {switch; doc}
+    let string ?(default = string "") ~doc switch =
+      Opt_string {switch; doc; default}
+    let flag ?(default = bool false) ~doc switch =
+      Opt_flag {switch; doc; default}
 
     let (&) x y = Opt_cons (x, y)
     let usage s = Opt_end s
@@ -132,40 +146,35 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
-    (* let expand_output_to_string = *)
-    (*   sprintf "\"$(%s)\"" in *)
+    let to_argument varname =
+      function
+      | Literal (Literal.String s) when Literal.String.easy_to_escape s ->
+        None, Filename.quote s
+      | Literal (Literal.String s) when
+          Literal.String.impossible_to_escape_for_variable s ->
+        ksprintf failwith "to_shell: sorry literal %S is impossible to \
+                           escape as `exec` argument" s
+      | v ->
+        let var =
+          sprintf "%s=$(%s; printf 'x')"
+            varname (continue v |> expand_octal)
+        in
+        Some var, sprintf "\"${%s%%?}\"" varname
+    in
     match e with
     | Exec l ->
-      let easy_to_escape =
-        function
-        | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '-' | '_' | '*' | '&' | '^'
-        | '=' | '+' | '%' | '$' | '"' | '\'' | '/' | '#' | '@' | '!' | ' '
-        | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
-        | '{' | '}' | '(' | ')' | '[' | ']' -> true
-        | other -> false in
-      let impossible_to_escape = String.exists ~f:((=) '\x00') in
       let variables = ref [] in
       let args =
-        List.mapi l ~f:(fun index -> function
-          | arg when String.for_all arg ~f:easy_to_escape ->
-            Filename.quote arg
-          | arg when impossible_to_escape arg ->
-            ksprintf failwith "to_shell: sorry %S is impossible to escape as \
-                               `exec` argument" arg
-          | arg ->
-            let var, () =
-              with_buffer begin fun str ->
-                ksprintf str "argument_%d=$(printf '" index;
-                String.iter arg ~f:(fun c ->
-                    Char.code c |> sprintf "\\%03o" |> str
-                  );
-                str "'; printf 'x') ; "
-              end in
-            variables := var :: !variables;
-            sprintf "\"${argument_%d%%?}\"" index
-          )
-      in
-      (List.rev !variables) @ args |> String.concat ~sep:" "
+        List.mapi l ~f:(fun index v ->
+            let varname = sprintf "argument_%d" index in
+            match to_argument varname v with
+            | None, v -> v
+            | Some vardef, v ->
+              variables := sprintf "%s ; " vardef :: !variables;
+              v) in
+      (List.rev !variables) @ args
+      |> String.concat ~sep:" "
+      |> sprintf " { %s ; } "
     | Raw_cmd s -> s 
     | Returns {expr; value} ->
       sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
@@ -197,13 +206,25 @@ let rec to_shell: type a. _ -> a t -> string =
     | Not t ->
       sprintf "! { %s ; }" (continue t)
     | Write_output { expr; stdout; stderr; return_value } ->
-      sprintf " ( %s %s ) %s %s"
+      let make_argument name option =
+        Option.value_map ~default:(None, None) option ~f:(fun v ->
+            let v, e = to_argument name v in
+            v, Some e) in
+      let varstdout, exprstdout = make_argument "stdoutfile" stdout in
+      let varstderr, exprstderr = make_argument "stderrfile" stderr in
+      let varret, exprret = make_argument "retfile" return_value in
+      let vars =
+        List.filter_map [varstdout; varstderr; varret]
+          ~f:(Option.map ~f:(sprintf "export %s ; "))
+        |> String.concat ~sep:" " in
+      sprintf "%s ( %s %s ) %s %s"
+        vars
         (continue expr)
-        (Option.value_map return_value ~default:"" ~f:(fun path ->
+        (Option.value_map exprret ~default:"" ~f:(fun path ->
              sprintf "; echo \"$?\" > %s" path))
-        (Option.value_map stdout ~default:"" ~f:(fun path ->
+        (Option.value_map exprstdout ~default:"" ~f:(fun path ->
              sprintf " > %s" path))
-        (Option.value_map stderr ~default:"" ~f:(fun path ->
+        (Option.value_map exprstderr ~default:"" ~f:(fun path ->
              sprintf "2> %s" path))
     | Literal lit ->
       Literal.to_shell lit
@@ -228,7 +249,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let string_of_var var =
         Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
       let bool_of_var var =
-        Construct.succeeds (Raw_cmd (sprintf "[ \"${%s}\" -eq 0 ]" var)) in
+        Construct.succeeds (Raw_cmd (sprintf "{ ${%s} ; } " var)) in
       let unit_t =
         let rec loop
           : type a b.
@@ -239,7 +260,8 @@ let rec to_shell: type a. _ -> a t -> string =
             f
           | Opt_cons (Opt_string x, more) ->
             let var = variable x in
-            to_init (sprintf "export %s= " var);
+            to_init (sprintf "export %s=$(%s)"
+                       var (continue x.default |> expand_octal));
             to_case (sprintf "-%c) %s ;;"
                        x.switch
                        (seq [
@@ -256,11 +278,13 @@ let rec to_shell: type a. _ -> a t -> string =
             loop (f (string_of_var var)) more
           | Opt_cons (Opt_flag x, more) ->
             let var = variable x in
-            to_init (sprintf "export %s=1 " var);
+            to_init (sprintf
+                       "export %s=$(if %s ; then printf 'true' ; else printf 'false' ; fi)" var
+                       (continue x.default));
             to_case (
               sprintf "-%c) %s ;;"
                 x.switch (seq [
-                    sprintf "export %s=0" var;
+                    sprintf "export %s=true" var;
                     "shift";
                   ])
             );
@@ -279,7 +303,7 @@ let rec to_shell: type a. _ -> a t -> string =
           [
             "while :;"; " do case $1 in";
             "-h|-help|--help) ";
-            sprintf "export %s_help=0 ; " prefix;
+            sprintf "export %s_help=true ; " prefix;
             sprintf "%s ;"
               (continue Construct.(string help_msg
                                    >>  exec ["cat"]));
@@ -305,7 +329,7 @@ let rec to_shell: type a. _ -> a t -> string =
       in
       seq (
         sprintf "export %s_args=" prefix
-        :: sprintf "export %s_help=1" prefix
+        :: sprintf "export %s_help=false" prefix
         :: List.rev !inits @ [
           while_loop;
           continue Construct.(

@@ -13,26 +13,38 @@ let babble fmt =
       else ()) fmt
 
 let check_command s ~verifies =
-  babble "check_command\n  %s\n%!" (String.sub s ~index:0 ~length:100 |> Option.value ~default:s);
-  Pvem_lwt_unix.System.Shell.execute s
-  >>= fun (out, err, exit_status) ->
-  List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
-      prev_m >>= fun prev ->
-      match v with
-      | `Exits_with i ->
-        let l =
-          if exit_status = `Exited i
-          then (true, "exited well") :: prev
-          else (
-            false,
-            sprintf "%s:\nout:\n%s\nerr:\n%s\ncall:\n%s\n"
-              (Pvem_lwt_unix.System.Shell.status_to_string exit_status)
-              out
-              err
-              s
-          ) :: prev
-        in
-        return l)
+  babble "check_command (%s)\n  %s\n%!"
+    (List.map ~f:(function `Exits_with n -> sprintf "exits with %d" n) verifies
+     |> String.concat ~sep:", ")
+    (String.sub s ~index:0 ~length:300 |> Option.value ~default:s);
+  begin
+    Pvem_lwt_unix.System.with_timeout 5. ~f:begin fun () ->
+      Pvem_lwt_unix.System.Shell.execute s
+    end
+    >>< begin function
+    | `Ok (out, err, exit_status) ->
+      List.fold verifies ~init:(return []) ~f:(fun prev_m v ->
+          prev_m >>= fun prev ->
+          match v with
+          | `Exits_with i ->
+            let l =
+              if exit_status = `Exited i
+              then (true, "exited well") :: prev
+              else (
+                false,
+                sprintf "%s (instead of %d):\nout:\n%s\nerr:\n%s\ncall:\n%s\n"
+                  (Pvem_lwt_unix.System.Shell.status_to_string exit_status)
+                  i out err s
+              ) :: prev
+            in
+            return l)
+    | `Error (`System (`With_timeout _, _)) -> assert false
+    | `Error (`Shell (_, `Exn e)) ->
+      return [false, sprintf "Shell EXN : %s" (Printexc.to_string e)]
+    | `Error (`Timeout _) ->
+      return [false, sprintf "Timeout !!"]
+    end
+  end
   >>= fun results ->
   List.filter ~f:(fun (t, _) -> t = false) results |> return
 
