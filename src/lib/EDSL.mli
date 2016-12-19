@@ -97,9 +97,9 @@ val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
 val loop_while : bool t -> body:unit t -> unit t
 
-type 'a cli_option = 'a Language.cli_option
-type 'a option_spec = 'a Language.option_spec
-type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
+type 'argument_type cli_option = 'argument_type Language.cli_option
+type 'argument_type option_spec = 'argument_type Language.option_spec
+type ('parse_function, 'return_type) cli_options = ('parse_function, 'return_type) Language.cli_options
 module Option_list : sig
   val string :
     ?default: string t ->
@@ -110,13 +110,14 @@ module Option_list : sig
     doc:string -> char ->
     bool t option_spec
   val ( & ) :
-    'a option_spec ->
-    ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options
-  val usage : string -> ('a, 'a) cli_options
+    'argument_type option_spec ->
+    ('parse_function, 'return_type) cli_options ->
+    ('argument_type -> 'parse_function, 'return_type) cli_options
+  val usage : string -> ('last_return_type, 'last_return_type) cli_options
 end
 
 val parse_command_line :
-  ('a, unit t) cli_options -> 'a -> unit t
+  ('parse_function, unit t) cli_options -> 'parse_function -> unit t
 
 val string_concat: string t list -> string t
 

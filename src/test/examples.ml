@@ -133,7 +133,7 @@ let downloader () =
     ]
   end in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
-  parse_command_line
+  let cli_spec =
     Option_list.(
       string
         ~doc:"The URL to the stuff" 'u'
@@ -146,7 +146,8 @@ let downloader () =
         ~doc:"Use <dir> as temp-dir"
         ~default:(Genspio.EDSL.string "/tmp/genspio-downloader-tmpdir")
       & usage "$0 -u URL [-c]"
-    )
+    ) in
+  parse_command_line cli_spec
     begin fun url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
