@@ -69,6 +69,37 @@ make native
 gennspio_test=_build/src/test/genspio-test.byte
 genspio_examples=_build/src/test/genspio-examples.byte
 
-$genspio_test
+echo "================== TEST 0 ======================================================"
+$gennspio_test
 
-$genspio_examples dl -
+# We also run the example
+# we get the script and then we test it
+
+genspio_downloader=/tmp/genspio-downloader
+$genspio_examples dl $genspio_downloader
+
+sh $genspio_downloader -h
+
+echo "================== TEST 1 ======================================================"
+sh $genspio_downloader -c -t /tmp/test1 -f k3.0.0.tar.gz -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
+ls -la /tmp/test1
+test -f /tmp/test1/k3.0.0.tar
+test -f /tmp/test1/ketrew-ketrew.3.0.0/README.md
+
+
+echo "================== TEST 2 ======================================================"
+sh $genspio_downloader -c -t /tmp/genstest2 -u https://www.dropbox.com/s/h16b8ak9smkgw3g/test.tar.gz.zip.bz2.tbz2?raw=1
+ls -la /tmp/genstest2
+test -f /tmp/genstest2/src/lib/EDSL.ml
+
+echo "================== TEST 3 ======================================================"
+# like -t /tmp/test2, without -c (which is fragile w.r.t. tar)
+mkdir -p /tmp/test3
+cd /tmp/test3
+sh $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
+ls -la /tmp/test3
+test -f /tmp/test3/ketrew-ketrew.3.0.0/README.md
+
+
+
+

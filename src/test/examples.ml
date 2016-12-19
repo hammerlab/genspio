@@ -59,7 +59,7 @@ let downloader () =
       case (try_help "wget")
         (do_call "wget" [url; string "--output-document"; output]);
       case (try_help "curl")
-        (do_call "wget" [url; string "--output-document"; output]);
+        (do_call "curl" [string "-L"; string "-o"; output; url]);
       default [failf "Can't find a downloading application"];
     ]
   in
@@ -67,6 +67,16 @@ let downloader () =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
     string >> exec (["grep"; "-q"] @ options) |> succeeds in
+
+  let no_newline_sed ~input expr =
+    let with_potential_newline =
+      string_concat [input; string "\n"]
+      >> exec ["sed"; expr]
+      |> output_as_string
+    in
+    with_potential_newline >> exec ["tr"; "-d"; "\\n"]
+    |> output_as_string
+  in
 
   let module Unwrapper = struct
 
@@ -80,8 +90,8 @@ let downloader () =
       {extension = ext; verb; commands}
 
     let remove_suffix v suf =
-      v >> exec ["sed"; sprintf "s:^\\(.*\\)%s$:\\1:" suf]
-      |> output_as_string
+      no_newline_sed ~input:v (sprintf "s:^\\(.*\\)%s$:\\1:" suf)
+
 
     let to_switch name_variable t_list =
       let make_case t =
@@ -154,9 +164,7 @@ let downloader () =
         if_seq (filename_ov =$= no_value)
           ~t:begin
             let filename =
-              url >> exec ["sed"; "s:.*/\\([^\\?\\/]*\\)\\?.*:\\1:"]
-              |> output_as_string
-            in
+              no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
             let output_path =
               string_concat [tmp_dir; string "/"; filename] in
             [current_name#set output_path]
