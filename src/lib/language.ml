@@ -267,7 +267,7 @@ let rec to_shell: type a. _ -> a t -> string =
     | String_to_int s ->
       let var = "tmpxxxxijljlijdeifh" in
       let value = sprintf "\"$%s\"" var in
-      sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf %s ; else %s ; fi ; ) "
+      sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf -- %s ; else %s ; fi ; ) "
         var
         (continue s |> expand_octal)
         value value value
