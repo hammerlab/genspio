@@ -21,6 +21,9 @@ val exec : string list -> unit t
     actually [call [string "a"; string "b"]] which is the usual shell command
     ["a b"] (with proper escaping). *)
 
+val getenv: string t -> string t
+(** Get the value of an environment variable as a string;
+    it returns the empty string is the variable is not defined. *)
 
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t

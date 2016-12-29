@@ -427,6 +427,35 @@ let tests =
         )
           (return 23) (return 13)
       );
+    exits 25 Construct.(
+        if_then_else (
+          (getenv (string "HOME") =$= string (Sys.getenv "HOME"))
+          &&&
+          (getenv (string "PATH") =$= string (Sys.getenv "PATH"))
+          &&&
+          (getenv (string_concat [string "PA"; string "TH"])
+           =$= string (Sys.getenv "PATH"))
+        )
+          (return 25) (return 13)
+      );
+    exits 29 Construct.(
+        if_then_else (
+          (getenv (string "HOMEEEEEEEE")) =$= string ""
+        )
+          (return 29) (return 27)
+      );
+    exits 27 Construct.(
+        if_then_else (  (* Explicit test of a corner case: *)
+          (getenv (string "HOME\nME")) =$= string (Sys.getenv "HOME")
+        )
+          (return 12) (return 27)
+      );
+    exits 27 Construct.(
+        if_then_else (
+          (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
+        )
+          (return 12) (return 27)
+      );
   ]
 
 
