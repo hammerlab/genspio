@@ -72,6 +72,7 @@ and _ t =
   | Fail: unit t
   | Int_to_string: int t -> string t
   | String_to_int: string t -> int t
+  | Int_bin_op: int t * [ `Plus | `Minus | `Mult | `Div ] * int t -> int t
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -122,6 +123,15 @@ module Construct = struct
   module Integer = struct
     let to_string i = Int_to_string i
     let of_string s = String_to_int s
+    let bin_op a o b = Int_bin_op (a, o, b)
+    let add a b = bin_op a `Plus b
+    let (+) = add
+    let sub a b = bin_op a `Minus b
+    let (-) = sub
+    let mul a b = bin_op a `Mult b
+    let ( * ) = mul
+    let div a b = bin_op a `Div b
+    let (/) = div
   end
 
   module Option_list = struct
@@ -247,6 +257,16 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue s |> expand_octal)
         value value value
         (continue Fail)
+    | Int_bin_op (ia, op, ib) ->
+      sprintf "$(( %s %s %s ))"
+        (continue ia)
+        begin match op with
+        | `Div -> "/"
+        | `Minus -> "-"
+        | `Mult -> "*"
+        | `Plus -> "+"
+        end
+        (continue ib)
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
