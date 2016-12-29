@@ -353,6 +353,24 @@ let tests =
         if_then_else
           (bool true &&& not (bool false)) (return 16) (return 17)
       );
+    exits 11 Construct.(
+        if_then_else (int 42 |> Integer.to_string =$= string "42")
+          (return 11)
+          (return 13)
+      );
+    exits 12 Construct.(
+        if_then_else (int 42 |> Integer.to_string
+                      |> Integer.of_string |> Integer.to_string
+                      =$= string "42")
+          (return 12)
+          (return 13)
+      );
+    exits 77 Construct.( (* It's not a string representing an integer: *)
+        if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
+                      =$= string "8877732")
+          (return 12)
+          (return 13)
+      );
   ]
 
 

@@ -92,6 +92,11 @@ val string : string -> string t
 val int : int -> int t
 val bool : bool -> bool t
 
+module Integer : sig
+  val to_string : int t -> string t
+  val of_string : string t -> int t
+end
+
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t

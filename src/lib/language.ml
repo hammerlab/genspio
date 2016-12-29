@@ -70,6 +70,8 @@ and _ t =
       action: 'a;
     } -> unit t
   | Fail: unit t
+  | Int_to_string: int t -> string t
+  | String_to_int: string t -> int t
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -116,6 +118,11 @@ module Construct = struct
   let (>>) string e = feed ~string e
 
   let loop_while condition ~body = While {condition; body}
+
+  module Integer = struct
+    let to_string i = Int_to_string i
+    let of_string s = String_to_int s
+  end
 
   module Option_list = struct
     let string ?(default = string "") ~doc switch =
@@ -230,6 +237,16 @@ let rec to_shell: type a. _ -> a t -> string =
       Literal.to_shell lit
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
+    | Int_to_string i ->
+      continue (Output_as_string (Raw_cmd (sprintf "printf '%%d' %s" (continue i))))
+    | String_to_int s ->
+      let var = "tmpxxxxijljlijdeifh" in
+      let value = sprintf "\"$%s\"" var in
+      sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf %s ; else %s ; fi ; ) "
+        var
+        (continue s |> expand_octal)
+        value value value
+        (continue Fail)
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
