@@ -77,6 +77,7 @@ and _ t =
   | Int_bin_comparison:
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: string t -> string t
+  | Setenv: string t * string t -> unit t 
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -118,6 +119,7 @@ module Construct = struct
     call [string "test"; string "-f"; p] |> succeeds
 
   let getenv v = Getenv v
+  let setenv ~var v = Setenv (var, v)
 
   let output_as_string e = Output_as_string e
 
@@ -319,6 +321,10 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "%s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\""
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
+    | Setenv (variable, value) ->
+      sprintf "export $(%s)=$(%s)"
+        (continue variable |> expand_octal)
+        (continue value |> expand_octal)
     | Fail ->
       params.die_command
     | Parse_command_line { options; action } ->
