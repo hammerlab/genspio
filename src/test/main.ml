@@ -398,6 +398,10 @@ let tests =
           trybin 0 Integer.(int 2 * (int 22 - int 20) / int 5)
           &&& 
           trybin 8 Integer.(int 42 / int 5)
+          &&& 
+          trybin 2 Integer.(int 42 mod int 5)
+          &&& 
+          trybin 0 Integer.(int 3000 mod int 3)
         )
           (return 12)
           (return 13)

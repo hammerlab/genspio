@@ -95,7 +95,7 @@ val bool : bool -> bool t
 module Integer : sig
   val to_string : int t -> string t
   val of_string : string t -> int t
-  val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus ] -> int t -> int t
+  val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus | `Mod ] -> int t -> int t
   val add : int t -> int t -> int t
   val ( + ) : int t -> int t -> int t
   val sub : int t -> int t -> int t
@@ -104,6 +104,8 @@ module Integer : sig
   val ( * ) : int t -> int t -> int t
   val div : int t -> int t -> int t
   val ( / ) : int t -> int t -> int t
+  val modulo : int t -> int t -> int t
+  val (mod) : int t -> int t -> int t
   val cmp : [ `Eq | `Ge | `Gt | `Le | `Lt | `Ne ] -> int t -> int t -> bool t
   val eq : int t -> int t -> bool t
   val ne : int t -> int t -> bool t
