@@ -104,6 +104,19 @@ module Integer : sig
   val ( * ) : int t -> int t -> int t
   val div : int t -> int t -> int t
   val ( / ) : int t -> int t -> int t
+  val cmp : [ `Eq | `Ge | `Gt | `Le | `Lt | `Ne ] -> int t -> int t -> bool t
+  val eq : int t -> int t -> bool t
+  val ne : int t -> int t -> bool t
+  val lt : int t -> int t -> bool t
+  val le : int t -> int t -> bool t
+  val ge : int t -> int t -> bool t
+  val gt : int t -> int t -> bool t
+  val ( = ) : int t -> int t -> bool t
+  val ( <> ) : int t -> int t -> bool t
+  val ( < ) : int t -> int t -> bool t
+  val ( <= ) : int t -> int t -> bool t
+  val ( >= ) : int t -> int t -> bool t
+  val ( > ) : int t -> int t -> bool t
 end
 
 val output_as_string : unit t -> string t

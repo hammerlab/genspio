@@ -73,6 +73,8 @@ and _ t =
   | Int_to_string: int t -> string t
   | String_to_int: string t -> int t
   | Int_bin_op: int t * [ `Plus | `Minus | `Mult | `Div ] * int t -> int t
+  | Int_bin_comparison:
+      int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -132,6 +134,19 @@ module Construct = struct
     let ( * ) = mul
     let div a b = bin_op a `Div b
     let (/) = div
+    let cmp op a b = Int_bin_comparison (a, op, b)
+    let eq = cmp `Eq
+    let ne = cmp `Ne
+    let lt = cmp `Lt
+    let le = cmp `Le
+    let ge = cmp `Ge
+    let gt = cmp `Gt
+    let (=) = eq
+    let (<>) = ne
+    let (<) = lt
+    let (<=) = le
+    let (>=) = ge
+    let (>) = gt
   end
 
   module Option_list = struct
@@ -265,6 +280,18 @@ let rec to_shell: type a. _ -> a t -> string =
         | `Minus -> "-"
         | `Mult -> "*"
         | `Plus -> "+"
+        end
+        (continue ib)
+    | Int_bin_comparison (ia, op, ib) ->
+      sprintf "[ %s %s %s ]"
+        (continue ia)
+        begin match op with
+        | `Eq -> "-eq"
+        | `Ge -> "-ge"
+        | `Gt -> "-gt"
+        | `Le -> "-le"
+        | `Lt -> "-lt"
+        | `Ne -> "-ne"
         end
         (continue ib)
     | Feed (string, e) ->

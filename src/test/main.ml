@@ -395,6 +395,27 @@ let tests =
           (return 12)
           (return 13)
       );
+    exits 17 Construct.(
+        if_then_else (Integer.(int 2 = int 2)) (return 17) (return 13)
+      );
+    exits 13 Construct.(
+        if_then_else (Integer.(int 2 > int 2)) (return 17) (return 13)
+      );
+    exits 13 Construct.(
+        if_then_else (Integer.(int 2 < int 2)) (return 17) (return 13)
+      );
+    exits 23 Construct.(
+        if_then_else (
+          Integer.(int 2 <= int 2)
+          &&& Integer.(int 2 >= int 2)
+          &&& Integer.(int 3 > int 2)
+          &&& Integer.(int 3 >= int 2)
+          &&& Integer.(int 3 <> int 2)
+          &&& not Integer.(int 3 = int 2)
+          &&& Integer.(int (-1) < int 2)
+        )
+          (return 23) (return 13)
+      );
   ]
 
 
