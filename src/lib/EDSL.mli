@@ -23,8 +23,8 @@ val exec : string list -> unit t
 
 val getenv: string t -> string t
 (** Get the value of an environment variable as a string;
-    it returns the empty string is the variable is not defined.
-    If the argument is not a valid variable name, behavior is kind of
+    it returns the empty string when the variable is not defined.
+    If the argument is not a valid variable name, behavior is
     undefined.
  *)
 
