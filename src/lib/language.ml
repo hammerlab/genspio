@@ -270,6 +270,9 @@ let rec to_shell: type a. _ -> a t -> string =
     | String_to_int s ->
       let var = "tmpxxxxijljlijdeifh" in
       let value = sprintf "\"$%s\"" var in
+      (* We put the result of the string expression in a variable to
+         evaluate it once; then we test that the result is an integer
+         (i.e. ["test ... -eq ...."] parses it as an integer). *)
       sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf -- %s ; else %s ; fi ; ) "
         var
         (continue s |> expand_octal)
