@@ -17,7 +17,7 @@ Build
 You can install the library though `opam pin`:
 
     opam pin add genspio https://github.com/hammerlab/genspio.git
-    
+
 You can also build locally:
 
 You need OCaml ≥ 4.03.0 together with
@@ -34,58 +34,58 @@ and
 [`ppx_deriving`](https://github.com/whitequark/ppx_deriving):
 
     export WITH_TESTS=true
-    make 
-    ./genspio-test.byte
-    
+    make
+    _build/src/test/genspio-test.byte
+
 The test should output a markdown report potentially mentioning other files
 containing details about the failures (Here it is on Ubuntu Xenial, some
 failures are expected with not-really-POSIX or buggy shells like
-[KSH93](https://en.wikipedia.org/wiki/Korn_shell)):
+[KSH93](https://en.wikipedia.org/wiki/Korn_shell), or on some corner cases
+cf. [`#35`](https://github.com/hammerlab/genspio/issues/35)):
 
 ```markdown
 --------------------------------------------------------------------------------
-
 
 ### All Tests
 
 Summary:
 
 * Test "dash" (`'dash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.49 s.
+    - 0 / 115 failures
+    - time: 0.56 s.
     - version: `"Version: 0.5.8-2.1ubuntu2"`.
 * Test "bash" (`'bash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.71 s.
+    - 0 / 115 failures
+    - time: 0.90 s.
     - version: `"GNU bash, version 4.3.46(1)-release (x86_64-pc-linux-gnu)"`.
 * Test "sh" (`'sh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.64 s.
+    - 0 / 115 failures
+    - time: 0.61 s.
     - version: `""`.
 * Test "busybox" (`'busybox' 'ash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.44 s.
+    - 0 / 115 failures
+    - time: 0.54 s.
     - version: `"BusyBox v1.22.1 (Ubuntu 1:1.22.0-15ubuntu1) multi-call binary."`.
 * Test "ksh" (`'ksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 12 / 55 failures
-    - time: 0.49 s.
+    - 20 / 115 failures
+    - time: 1.42 s.
     - version: `"version         sh (AT&T Research) 93u+ 2012-08-01"`.
     - Cf. `/tmp/genspio-test-ksh-failures.txt`.
 * Test "mksh" (`'mksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.50 s.
+    - 0 / 115 failures
+    - time: 0.75 s.
     - version: `"Version: 52c-2"`.
 * Test "posh" (`'posh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 0.54 s.
+    - 0 / 115 failures
+    - time: 0.75 s.
     - version: `"Version: 0.12.6"`.
 * Test "zsh" (`'zsh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 55 failures
-    - time: 1.76 s.
+    - 4 / 115 failures
+    - time: 0.97 s.
     - version: `"zsh 5.1.1 (x86_64-ubuntu-linux-gnu)"`.
+    - Cf. `/tmp/genspio-test-zsh-failures.txt`.
 
 All “known” shells were tested ☺
-
 
 --------------------------------------------------------------------------------
 ```
@@ -96,7 +96,7 @@ Development Notes
 About dealing with `sh` / POSIX insanity:
 
 - <http://stackoverflow.com/questions/7427262/how-to-read-a-file-into-a-variable-in-shell/22607352#22607352>
-- <http://www.etalabs.net/sh_tricks.html> 
+- <http://www.etalabs.net/sh_tricks.html>
 - <http://apenwarr.ca/log/?m=201102>
 - <http://stackoverflow.com/questions/794902/whats-the-opposite-of-od1>
 
@@ -141,5 +141,3 @@ EOOOF
 
 echo "hexa: $hexa_var"
 ```
-
-
