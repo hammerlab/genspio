@@ -353,6 +353,80 @@ let tests =
         if_then_else
           (bool true &&& not (bool false)) (return 16) (return 17)
       );
+    exits 11 Construct.(
+        if_then_else (int 42 |> Integer.to_string =$= string "42")
+          (return 11)
+          (return 13)
+      );
+    exits 12 Construct.(
+        if_then_else (int 42 |> Integer.to_string
+                      |> Integer.of_string |> Integer.to_string
+                                              =$= string "42")
+          (return 12)
+          (return 13)
+      );
+    exits 12 Construct.(
+        if_then_else (int (-42) |> Integer.to_string
+                      |> Integer.of_string |> Integer.to_string
+                                              =$= string "-42")
+          (return 12)
+          (return 13)
+      );
+    exits 77 Construct.( (* It's not a string representing an integer: *)
+        if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
+                                                              =$= string "8877732")
+          (return 12)
+          (return 13)
+      );
+    exits 12 Construct.(
+        if_then_else (Integer.(int 22 + int 20) |> Integer.to_string
+                                                   =$= string "42")
+          (return 12)
+          (return 13)
+      );
+    exits 12 Construct.(
+        if_then_else (Integer.(int 2 * (int 22 - int 20)) |> Integer.to_string
+                                                             =$= string "4")
+          (return 12)
+          (return 13)
+      );
+    exits 12 Construct.(
+        let trybin res b = b |> Integer.to_string =$= string (Int.to_string res) in
+        if_then_else (
+          trybin 1 Integer.(int 2 * (int 22 - int 20) / int 4)
+          &&& 
+          trybin 0 Integer.(int 2 * (int 22 - int 20) / int 5)
+          &&& 
+          trybin 8 Integer.(int 42 / int 5)
+          &&& 
+          trybin 2 Integer.(int 42 mod int 5)
+          &&& 
+          trybin 0 Integer.(int 3000 mod int 3)
+        )
+          (return 12)
+          (return 13)
+      );
+    exits 17 Construct.(
+        if_then_else (Integer.(int 2 = int 2)) (return 17) (return 13)
+      );
+    exits 13 Construct.(
+        if_then_else (Integer.(int 2 > int 2)) (return 17) (return 13)
+      );
+    exits 13 Construct.(
+        if_then_else (Integer.(int 2 < int 2)) (return 17) (return 13)
+      );
+    exits 23 Construct.(
+        if_then_else (
+          Integer.(int 2 <= int 2)
+          &&& Integer.(int 2 >= int 2)
+          &&& Integer.(int 3 > int 2)
+          &&& Integer.(int 3 >= int 2)
+          &&& Integer.(int 3 <> int 2)
+          &&& not Integer.(int 3 = int 2)
+          &&& Integer.(int (-1) < int 2)
+        )
+          (return 23) (return 13)
+      );
   ]
 
 

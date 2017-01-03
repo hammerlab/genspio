@@ -70,6 +70,12 @@ and _ t =
       action: 'a;
     } -> unit t
   | Fail: unit t
+  | Int_to_string: int t -> string t
+  | String_to_int: string t -> int t
+  | Int_bin_op:
+      int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
+  | Int_bin_comparison:
+      int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -116,6 +122,35 @@ module Construct = struct
   let (>>) string e = feed ~string e
 
   let loop_while condition ~body = While {condition; body}
+
+  module Integer = struct
+    let to_string i = Int_to_string i
+    let of_string s = String_to_int s
+    let bin_op a o b = Int_bin_op (a, o, b)
+    let add a b = bin_op a `Plus b
+    let (+) = add
+    let sub a b = bin_op a `Minus b
+    let (-) = sub
+    let mul a b = bin_op a `Mult b
+    let ( * ) = mul
+    let div a b = bin_op a `Div b
+    let (/) = div
+    let modulo a b = bin_op a `Mod b
+    let (mod) = modulo
+    let cmp op a b = Int_bin_comparison (a, op, b)
+    let eq = cmp `Eq
+    let ne = cmp `Ne
+    let lt = cmp `Lt
+    let le = cmp `Le
+    let ge = cmp `Ge
+    let gt = cmp `Gt
+    let (=) = eq
+    let (<>) = ne
+    let (<) = lt
+    let (<=) = le
+    let (>=) = ge
+    let (>) = gt
+  end
 
   module Option_list = struct
     let string ?(default = string "") ~doc switch =
@@ -230,6 +265,42 @@ let rec to_shell: type a. _ -> a t -> string =
       Literal.to_shell lit
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
+    | Int_to_string i ->
+      continue (Output_as_string (Raw_cmd (sprintf "printf '%%d' %s" (continue i))))
+    | String_to_int s ->
+      let var = "tmpxxxxijljlijdeifh" in
+      let value = sprintf "\"$%s\"" var in
+      (* We put the result of the string expression in a variable to
+         evaluate it once; then we test that the result is an integer
+         (i.e. ["test ... -eq ...."] parses it as an integer). *)
+      sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf -- %s ; else %s ; fi ; ) "
+        var
+        (continue s |> expand_octal)
+        value value value
+        (continue Fail)
+    | Int_bin_op (ia, op, ib) ->
+      sprintf "$(( %s %s %s ))"
+        (continue ia)
+        begin match op with
+        | `Div -> "/"
+        | `Minus -> "-"
+        | `Mult -> "*"
+        | `Plus -> "+"
+        | `Mod -> "%"
+        end
+        (continue ib)
+    | Int_bin_comparison (ia, op, ib) ->
+      sprintf "[ %s %s %s ]"
+        (continue ia)
+        begin match op with
+        | `Eq -> "-eq"
+        | `Ge -> "-ge"
+        | `Gt -> "-gt"
+        | `Le -> "-le"
+        | `Lt -> "-lt"
+        | `Ne -> "-ne"
+        end
+        (continue ib)
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)

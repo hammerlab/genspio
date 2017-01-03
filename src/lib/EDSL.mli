@@ -92,6 +92,35 @@ val string : string -> string t
 val int : int -> int t
 val bool : bool -> bool t
 
+module Integer : sig
+  val to_string : int t -> string t
+  val of_string : string t -> int t
+  val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus | `Mod ] -> int t -> int t
+  val add : int t -> int t -> int t
+  val ( + ) : int t -> int t -> int t
+  val sub : int t -> int t -> int t
+  val ( - ) : int t -> int t -> int t
+  val mul : int t -> int t -> int t
+  val ( * ) : int t -> int t -> int t
+  val div : int t -> int t -> int t
+  val ( / ) : int t -> int t -> int t
+  val modulo : int t -> int t -> int t
+  val (mod) : int t -> int t -> int t
+  val cmp : [ `Eq | `Ge | `Gt | `Le | `Lt | `Ne ] -> int t -> int t -> bool t
+  val eq : int t -> int t -> bool t
+  val ne : int t -> int t -> bool t
+  val lt : int t -> int t -> bool t
+  val le : int t -> int t -> bool t
+  val ge : int t -> int t -> bool t
+  val gt : int t -> int t -> bool t
+  val ( = ) : int t -> int t -> bool t
+  val ( <> ) : int t -> int t -> bool t
+  val ( < ) : int t -> int t -> bool t
+  val ( <= ) : int t -> int t -> bool t
+  val ( >= ) : int t -> int t -> bool t
+  val ( > ) : int t -> int t -> bool t
+end
+
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
