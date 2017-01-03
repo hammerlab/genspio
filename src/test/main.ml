@@ -427,6 +427,60 @@ let tests =
         )
           (return 23) (return 13)
       );
+    exits 25 Construct.(
+        if_then_else (
+          (getenv (string "HOME") =$= string (Sys.getenv "HOME"))
+          &&&
+          (getenv (string "PATH") =$= string (Sys.getenv "PATH"))
+          &&&
+          (getenv (string_concat [string "PA"; string "TH"])
+           =$= string (Sys.getenv "PATH"))
+        )
+          (return 25) (return 13)
+      );
+    exits 29 Construct.(
+        if_then_else (
+          (getenv (string "HOMEEEEEEEE")) =$= string ""
+        )
+          (return 29) (return 27)
+      );
+    exits 27 Construct.(
+        if_then_else (  (* Explicit test of a corner case: *)
+          (getenv (string "HOME\nME")) =$= string (Sys.getenv "HOME")
+        )
+          (return 12) (return 27)
+      );
+    exits 27 Construct.(
+        if_then_else (
+          (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
+        )
+          (return 12) (return 27)
+      );
+    exits 0 Construct.(
+        let var = string "VVVVVVV" in
+        let assert_or_return ret cond =
+          if_then_else cond nop (seq [printf "Fail: %d" ret; fail]) in
+        seq [
+          assert_or_return 27 (getenv var =$= string "");
+          setenv ~var (string "Bouh");
+          assert_or_return 28 (getenv var =$= string "Bouh");
+          (* We also “record the undefined behavior” *)
+          setenv ~var (string "Bouhh\nbah");
+          assert_or_return 29 (getenv var =$= string "Bouhh");
+          setenv ~var (string "Bouhhh\nbah\n");
+          assert_or_return 30 (getenv var =$= string "Bouhhh");
+          setenv ~var (string "Bouhoo\000bah\n");
+          assert_or_return 12 (getenv var =$= string "Bouhoobah");
+          (* We check that the environment is affected in a brutal way:
+             we mess up the $PATH:
+             /bin/sh: 1: ls: not found
+             We cannot even use `return` anymore after that: *)
+          setenv ~var:(string "PATH") (string "/nope");
+          assert_or_return 42 (
+            exec ["/bin/sh"; "-c"; "ls"] |> succeeds |> not
+          );
+        ]
+      );
   ]
 
 
