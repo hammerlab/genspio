@@ -167,6 +167,7 @@ val string_concat: string t list -> string t
 type string_variable = <
     get : string Language.t;
     set : string Language.t -> unit Language.t;
+    append : string Language.t -> unit Language.t;
   >
 val tmp_file:
   ?tmp_dir: string t ->

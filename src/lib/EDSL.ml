@@ -28,9 +28,10 @@ let string_concat sl =
   seq (List.map sl ~f:out) |> output_as_string
 
 type string_variable = <
-    get : string Language.t;
-    set : string Language.t -> unit Language.t;
-  >
+  get : string Language.t;
+  set : string Language.t -> unit Language.t;
+  append : string Language.t -> unit Language.t;
+>
 let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
   let path =
     let clean =
@@ -49,9 +50,17 @@ let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
     method get = output_as_string (call [string "cat"; path])
     method set v =
       seq [
-        call [string "echo"; string "Setting"];
-        call [string "echo"; tmp];
+        (* call [string "echo"; string "Setting"]; *)
+        (* call [string "echo"; tmp]; *)
         v >> exec ["cat"] |> write_output ~stdout:tmp;
+        call [string "mv"; string "-f"; tmp; path];
+      ]
+    method append v =
+      seq [
+        seq [
+          call [string "cat"; path];
+          v >> exec ["cat"];
+        ] |> write_output ~stdout:tmp;
         call [string "mv"; string "-f"; tmp; path];
       ]
   end
