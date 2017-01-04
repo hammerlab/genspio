@@ -481,13 +481,81 @@ let tests =
           );
         ]
       );
+    exits 32 Construct.(
+        seq [
+          with_throw
+            ~catch:(seq [printf "Caught !"; exit 32])
+            (fun throw ->
+               seq [
+                 printf "Throwing";
+                 throw;
+                 return 42;
+               ]);
+          return 28;
+        ]
+      );
+    exits 28 Construct.(
+        seq [
+          with_throw
+            ~catch:(seq [printf "Caught !"; exit 32])
+            (fun throw ->
+               seq [
+                 printf "Not Throwing";
+               ]);
+          return 28;
+        ]
+      );
+    begin
+      let open Genspio.EDSL in
+      let tmp = tmp_file "agglomeration" in
+      let make ~jump =
+        seq [
+          tmp#set (string "1");
+          printf "adding 1 !\n";
+          with_throw
+            ~catch:(seq [
+                printf "One Caught !\n";
+                printf "adding 5 !\n";
+                tmp#append (string ",5");
+              ])
+            (fun throw_one ->
+               seq [
+                 tmp#append (string ",2");
+                 printf "adding 2 !\n";
+                 with_throw
+                   ~catch:(seq [
+                       printf "Two Caught !\n";
+                       printf "adding 4 !\n";
+                       tmp#append (string ",4");
+                       throw_one;
+                     ])
+                   (fun throw_two ->
+                      seq [
+                        printf "adding 3 !\n";
+                        tmp#append (string ",3");
+                        (if jump then throw_one else throw_two);
+                      ]);
+               ]);
+          call [string "printf"; string "Agglo: %s\\n"; tmp#get;];
+          if_then_else (tmp#get
+                        =$=
+                        string (if jump then "1,2,3,5" else "1,2,3,4,5"))
+            (return 28)
+            (return 29);
+        ]
+      in
+      List.concat [
+        exits 28 (make ~jump:true);
+        exits 28 (make ~jump:false);
+      ]
+    end;
   ]
 
 
 let posix_sh_tests = [
   Test.command "ls" [`Exits_with 0];
 ]
-
+  
 
 
 let () =
