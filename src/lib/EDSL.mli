@@ -174,10 +174,11 @@ val parse_command_line :
 val string_concat: string t list -> string t
 
 type string_variable = <
-    get : string Language.t;
-    set : string Language.t -> unit Language.t;
-    append : string Language.t -> unit Language.t;
-  >
+  get : string t;
+  set : string t -> unit t;
+  append : string t -> unit t;
+  delete: unit t;
+>
 val tmp_file:
   ?tmp_dir: string t ->
   string ->

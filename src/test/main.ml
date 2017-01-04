@@ -50,6 +50,9 @@ let tests =
   let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
   let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt in
+  let assert_or_fail name cond =
+    let open Genspio.EDSL in
+    if_then_else cond nop (seq [printf "Fail: %s" name; fail]) in
   List.concat [
     exits 0 Construct.(
         succeeds (exec ["ls"])
@@ -594,6 +597,19 @@ let tests =
                 die ~message:(string "HElllooo I'm dying!!") ~return:(int 23)
               ]
             )
+        ]
+      );
+    exits ~name:"tmp#delete" 23 Genspio.EDSL.(
+        let tmp = tmp_file "test" in
+        let s1 = string "hello\000you" in
+        seq [
+          tmp#set (string "");
+          assert_or_fail "tmp#get 1" (tmp#get =$= string "");
+          tmp#set s1;
+          assert_or_fail "tmp#get 2" (tmp#get =$= s1);
+          tmp#delete;
+          assert_or_fail "tmp#get 3" (tmp#get =$= string "");
+          return 23;
         ]
       );
   ]

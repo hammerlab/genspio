@@ -28,9 +28,10 @@ let string_concat sl =
   seq (List.map sl ~f:out) |> output_as_string
 
 type string_variable = <
-  get : string Language.t;
-  set : string Language.t -> unit Language.t;
-  append : string Language.t -> unit Language.t;
+  get : string t;
+  set : string t -> unit t;
+  append : string t -> unit t;
+  delete: unit t;
 >
 let tmp_file ?tmp_dir name : string_variable =
   let default_tmp_dir = "/tmp" in
@@ -76,6 +77,8 @@ let tmp_file ?tmp_dir name : string_variable =
         ] |> write_output ~stdout:tmp;
         call [string "mv"; string "-f"; tmp; path];
       ]
+    method delete =
+      call [string "rm"; string "-f"; path; tmp]
   end
 
 let with_failwith f =
