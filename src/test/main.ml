@@ -6,12 +6,44 @@ module Test = Tests.Test_lib
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL
 
-let exits ?name ?args n c = [
-  Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
-    ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
-  Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
-    ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
-]
+
+let check_size ?(name = "") ~ret str =
+  (*
+     Got the magic number on Linux/Ubuntu 16.04.
+     See `xargs --show-limits`.
+  *)
+  if String.length str > 131071
+  then (
+    eprintf "WARNING: Command %S (ret %d) is too big for `sh -c <>`\n%!" name ret;
+    None
+  ) else
+    Some str
+
+
+let exits ?name ?args n c =
+  let one_liner =
+    Compile.to_one_liner c |> check_size ?name ~ret:n in
+  let script = Compile.to_many_lines c |> check_size ?name ~ret:n in
+  let tests =
+    [
+      Option.map one_liner ~f:(fun cmd ->
+          Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
+            ?args cmd ~verifies:[`Exits_with n];
+        );
+      Option.map script ~f:(fun cmd ->
+          Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
+            ?args cmd ~verifies:[`Exits_with n];
+        );
+    ]
+    |> List.filter_opt
+  in
+  if tests = []
+  then
+    ksprintf failwith
+      "Test %S (ret %d) got no testing at all because of size limit"
+      (Option.value ~default:"No-name" name) n
+  else
+    tests
 
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
