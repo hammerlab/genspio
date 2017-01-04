@@ -268,7 +268,7 @@ let rec to_shell: type a. _ -> a t -> string =
         List.filter_map [varstdout; varstderr; varret]
           ~f:(Option.map ~f:(sprintf "export %s ; "))
         |> String.concat ~sep:" " in
-      sprintf "%s ( %s %s ) %s %s"
+      sprintf "%s { %s %s ; } %s %s"
         vars
         (continue expr)
         (Option.value_map exprret ~default:"" ~f:(fun path ->
