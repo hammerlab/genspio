@@ -86,10 +86,14 @@ let tmp_file ?tmp_dir name : string_variable =
 let with_failwith f =
   let msg = tmp_file "msg" in
   let ret = tmp_file "ret" in
+  let varname = string "tttttt" in
   with_throw
     ~catch:(seq [
         call [string "printf"; string "FAILURE: %s"; msg#get];
-        call [string "exit"; ret#get];
+        setenv varname ret#get;
+        msg#delete;
+        ret#delete;
+        call [string "exit"; getenv varname];
       ])
     (fun throw ->
        f (fun ~message ~return ->
