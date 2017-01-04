@@ -178,6 +178,7 @@ type string_variable = <
   set : string t -> unit t;
   append : string t -> unit t;
   delete: unit t;
+  path: string t;
 >
 val tmp_file:
   ?tmp_dir: string t ->

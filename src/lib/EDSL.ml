@@ -32,6 +32,7 @@ type string_variable = <
   set : string t -> unit t;
   append : string t -> unit t;
   delete: unit t;
+  path: string t;
 >
 let tmp_file ?tmp_dir name : string_variable =
   let default_tmp_dir = "/tmp" in
@@ -61,6 +62,7 @@ let tmp_file ?tmp_dir name : string_variable =
   let tmp = string_concat [path; string "-tmp"] in
   object
     method get = output_as_string (call [string "cat"; path])
+    method path = path
     method set v =
       seq [
         (* call [string "echo"; string "Setting "; string name]; *)
