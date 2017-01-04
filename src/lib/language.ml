@@ -171,6 +171,9 @@ module Construct = struct
   let parse_command_line options action =
     Parse_command_line {options; action}
 
+  module Magic = struct
+    let unit s = Raw_cmd s
+  end
 
 end
 

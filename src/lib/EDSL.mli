@@ -174,3 +174,12 @@ val tmp_file:
   string_variable
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values). *)
+
+(** The {!Magic} module is like OCaml's {!Obj.magic} function for the
+    EDSL; it allows one to bypass typing. *)
+module Magic : sig
+  val unit: string -> unit t
+  (** Put any string as a [unit t] command inline ([Magic.unit s]
+      is different from [exec ["sh"; "-c"; s]] there is no escaping or
+      protection). *)
+end
