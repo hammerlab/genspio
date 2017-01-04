@@ -52,7 +52,7 @@ let tests =
   let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt in
   let assert_or_fail name cond =
     let open Genspio.EDSL in
-    if_then_else cond nop (seq [printf "Fail: %s" name; fail]) in
+    if_then_else cond nop (seq [printf "Fail: %s\n" name; fail]) in
   List.concat [
     exits 0 Construct.(
         succeeds (exec ["ls"])
@@ -588,17 +588,67 @@ let tests =
         exits ~name:"multijump" 28 (make ~jump:false);
       ]
     end;
-    exits 23 Genspio.EDSL.(
-        seq [
-          comment "Test with failwith";
-          with_failwith (fun die ->
-              seq [
-                comment "Test with failwith: just before dying";
-                die ~message:(string "HElllooo I'm dying!!") ~return:(int 23)
-              ]
-            )
-        ]
-      );
+    begin
+      let with_failwith_basic_test =
+        Genspio.EDSL.(
+          seq [
+            comment "Test with failwith";
+            with_failwith (fun die ->
+                seq [
+                  comment "Test with failwith: just before dying";
+                  printf "Dying now\n";
+                  die
+                    ~message:(string "HElllooo I'm dying!!\n") ~return:(int 23)
+                ]
+              );
+          ]
+        ) in
+      List.concat [
+        exits ~name:"with_failwith" 23 with_failwith_basic_test;
+        exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
+            let tmpextra = tmp_file "extratmp" in
+            let tmpdir = Filename.temp_file "genspio" "test" in
+            seq [
+              comment "Test with failwith and check that files go away";
+              exec ["rm"; "-f"; tmpdir];
+              exec ["mkdir"; "-p"; tmpdir];
+              setenv (string "TMPDIR") (string tmpdir);
+              tmpextra#set (string "");
+              assert_or_fail "tmpfile-in-tmpdir"
+                begin
+                  tmpextra#path >>
+                  call [string "grep"; string tmpdir]
+                  |> returns ~value:0
+                end;
+              write_output
+                ~return_value:tmpextra#path
+                begin
+                  seq [
+                    exec [
+                      "sh"; "-c"; (* Soooo meta *)
+                      Genspio.Language.to_one_liner with_failwith_basic_test;
+                    ]
+                  ]
+                end;
+              assert_or_fail "with_failwith:ret23"
+                (tmpextra#get |> Integer.of_string |> Integer.eq (int 23));
+              tmpextra#delete;
+              call [
+                string "echo";
+                call [string "find"; string tmpdir]
+                |> output_as_string
+              ];
+              assert_or_fail "with_failwith:no-files-in-tmpdir"
+                begin
+                  call [string "find"; string tmpdir]
+                  |> output_as_string
+                     =$= ksprintf string "%s\n" tmpdir
+                end;
+              return 37;
+            ]
+          );
+      ];
+    end;
     exits ~name:"tmp#delete" 23 Genspio.EDSL.(
         let tmp = tmp_file "test" in
         let s1 = string "hello\000you" in
@@ -613,7 +663,14 @@ let tests =
         ]
       );
   ]
-
+    (*
+  |> List.filter ~f:(function
+    | `Command (Some n,_,_,_) when
+        String.is_prefix n ~prefix:"with_failwith" -> true
+    | `Command (Some n,_,_,_) ->
+      eprintf "NAME: %S\n%!" n; false
+    | _ -> false)
+*)
 
 let posix_sh_tests = [
   Test.command "ls" [`Exits_with 0];
