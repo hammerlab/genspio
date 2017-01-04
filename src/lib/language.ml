@@ -332,7 +332,7 @@ let rec to_shell: type a. _ -> a t -> string =
            just “cuts” it, it wouldn't fail and `${HOME\nBOUH}` would be
            equal to `${HOME}`
         *)
-        sprintf "%s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\""
+        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
     | Setenv (variable, value) ->
