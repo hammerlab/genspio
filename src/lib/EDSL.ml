@@ -32,14 +32,26 @@ type string_variable = <
   set : string Language.t -> unit Language.t;
   append : string Language.t -> unit Language.t;
 >
-let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
+let tmp_file ?tmp_dir name : string_variable =
+  let default_tmp_dir = "/tmp" in
+  let get_tmp_dir =
+    Option.value tmp_dir
+      ~default:begin
+        output_as_string (
+          (* https://en.wikipedia.org/wiki/TMPDIR *)
+          if_then_else (getenv (string "TMPDIR") <$> string "")
+            (call [string "printf"; string "%s"; getenv (string "TMPDIR")])
+            (exec ["printf"; "%s"; default_tmp_dir])
+        )
+      end
+  in
   let path =
     let clean =
       String.map name ~f:(function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' as c -> c
         | other -> '_') in
     string_concat [
-      tmp_dir;
+      get_tmp_dir;
       string "/";
       string
         (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
@@ -50,7 +62,8 @@ let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
     method get = output_as_string (call [string "cat"; path])
     method set v =
       seq [
-        (* call [string "echo"; string "Setting"]; *)
+        (* call [string "echo"; string "Setting "; string name]; *)
+        (* call [string "echo"; string "Setting "; path; string " to "; v]; *)
         (* call [string "echo"; tmp]; *)
         v >> exec ["cat"] |> write_output ~stdout:tmp;
         call [string "mv"; string "-f"; tmp; path];

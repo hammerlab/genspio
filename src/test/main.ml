@@ -49,6 +49,7 @@ let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
   let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
+  let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt in
   List.concat [
     exits 0 Construct.(
         succeeds (exec ["ls"])
@@ -528,6 +529,7 @@ let tests =
       );
     exits 28 Construct.(
         seq [
+          comment "trowing once stuff";
           with_throw
             ~catch:(seq [printf "Caught !"; exit 32])
             (fun throw ->
@@ -542,6 +544,8 @@ let tests =
       let tmp = tmp_file "agglomeration" in
       let make ~jump =
         seq [
+          comment "Multi-trowing stuff: %b" jump;
+          setenv (string "TMPDIR") (string "/var/tmp/");
           tmp#set (string "1");
           printf "adding 1 !\n";
           with_throw
@@ -577,14 +581,20 @@ let tests =
         ]
       in
       List.concat [
-        exits 28 (make ~jump:true);
-        exits 28 (make ~jump:false);
+        exits ~name:"multijump" 28 (make ~jump:true);
+        exits ~name:"multijump" 28 (make ~jump:false);
       ]
     end;
     exits 23 Genspio.EDSL.(
-        with_failwith (fun die ->
-            die ~message:(string "HElllooo I'm dying!!") ~return:(int 23)
-          )
+        seq [
+          comment "Test with failwith";
+          with_failwith (fun die ->
+              seq [
+                comment "Test with failwith: just before dying";
+                die ~message:(string "HElllooo I'm dying!!") ~return:(int 23)
+              ]
+            )
+        ]
       );
   ]
 
