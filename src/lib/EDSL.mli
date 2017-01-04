@@ -185,6 +185,14 @@ val tmp_file:
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values). *)
 
+val with_failwith:
+  ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
+   unit Language.t) ->
+  unit Language.t
+(** [with_failwith f] uses !{tmp_file} and {!with_throw} to call [f]
+    with a function that exits the flow of execution and displays
+    [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
+
 (** The {!Magic} module is like OCaml's {!Obj.magic} function for the
     EDSL; it allows one to bypass typing. *)
 module Magic : sig

@@ -549,6 +549,11 @@ let tests =
         exits 28 (make ~jump:false);
       ]
     end;
+    exits 23 Genspio.EDSL.(
+        with_failwith (fun die ->
+            die ~message:(string "HElllooo I'm dying!!") ~return:(int 23)
+          )
+      );
   ]
 
 

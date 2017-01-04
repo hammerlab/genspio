@@ -65,6 +65,25 @@ let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
       ]
   end
 
+let with_failwith f =
+  let msg = tmp_file "msg" in
+  let ret = tmp_file "ret" in
+  with_throw
+    ~catch:(seq [
+        call [string "printf"; string "FAILURE: %s"; msg#get];
+        call [string "exit"; ret#get];
+      ])
+    (fun throw ->
+       f (fun ~message ~return ->
+           seq [
+             msg#set message;
+             ret#set (Integer.to_string return);
+          (* call [string "echo"; pid#get]; *)
+          (* call [string "ps"; pid#get]; *)
+             throw;
+             (* call [string "kill"; string "-s"; string "USR1"; pid#get] *)
+        ]))
+
 let if_seq ~t ?e c =
   match e with
   | None -> if_then c (seq t)
