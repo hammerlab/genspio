@@ -45,6 +45,10 @@ type _ option_spec =
 and (_, _) cli_options =
   | Opt_end: string -> ('a, 'a) cli_options
   | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+and fd_redirection = {
+  take: int t;
+  redirect_to: [ `Path of string t | `Fd of int t (* | `Input_of of unit t *) ];
+}
 and _ t =
   | Exec: string t list -> unit t
   | Raw_cmd: string -> unit t
@@ -57,6 +61,7 @@ and _ t =
   | Seq: unit t list -> unit t
   | Literal: 'a Literal.t -> 'a t
   | Output_as_string: unit t -> string t
+  | Redirect_output: unit t * fd_redirection list -> unit t
   | Write_output: {
       expr: unit t;
       stdout: string t option;
@@ -117,6 +122,11 @@ module Construct = struct
     Write_output {expr; stdout; stderr; return_value}
 
   let write_stdout ~path expr = write_output expr ~stdout:path
+
+  let to_fd take fd = { take; redirect_to = `Fd fd }
+  let to_file take file = { take; redirect_to = `Path file }
+  let with_redirections cmd l =
+    Redirect_output (cmd, l)
 
   let literal l = Literal l
   let string s = Literal.String s |> literal
@@ -205,20 +215,35 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
-    let to_argument varname =
+    let to_argument varprefix =
+      let argument ?declaration ?variable_name argument =
+        object
+          method declaration = declaration
+          method export = Option.map ~f:(sprintf "export %s ; ") declaration
+          method variable_name = variable_name
+          method argument = argument
+        end in
       function
-      | Literal (Literal.String s) when Literal.String.easy_to_escape s ->
-        None, Filename.quote s
-      | Literal (Literal.String s) when
+      | `String (Literal (Literal.String s)) when Literal.String.easy_to_escape s ->
+        argument (Filename.quote s)
+      | `String (Literal (Literal.String s)) when
           Literal.String.impossible_to_escape_for_variable s ->
         ksprintf failwith "to_shell: sorry literal %S is impossible to \
                            escape as `exec` argument" s
-      | v ->
-        let var =
+      | `String v ->
+        let variable_name = Unique_name.create varprefix in
+        let declaration =
           sprintf "%s=$(%s; printf 'x')"
-            varname (continue v |> expand_octal)
+            variable_name (continue v |> expand_octal)
         in
-        Some var, sprintf "\"${%s%%?}\"" varname
+        argument ~variable_name ~declaration
+          (sprintf "\"${%s%%?}\"" variable_name)
+      | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
+      | `Int other ->
+        let variable_name = Unique_name.create varprefix in
+        let declaration = sprintf "%s=%s" variable_name (continue other) in
+        argument ~variable_name ~declaration
+          (sprintf "\"${%s%%?}\"" variable_name) 
     in
     match e with
     | Exec l ->
@@ -226,11 +251,12 @@ let rec to_shell: type a. _ -> a t -> string =
       let args =
         List.mapi l ~f:(fun index v ->
             let varname = sprintf "argument_%d" index in
-            match to_argument varname v with
-            | None, v -> v
-            | Some vardef, v ->
+            let arg = to_argument varname (`String v) in
+            match arg#declaration with
+            | None -> arg#argument
+            | Some vardef ->
               variables := sprintf "%s ; " vardef :: !variables;
-              v) in
+              arg#argument) in
       (List.rev !variables) @ args
       |> String.concat ~sep:" "
       |> sprintf " { %s ; } "
@@ -265,27 +291,43 @@ let rec to_shell: type a. _ -> a t -> string =
     | Seq l -> seq (List.map l ~f:continue)
     | Not t ->
       sprintf "! { %s ; }" (continue t)
+    | Redirect_output (unit_t, redirections) ->
+      let variables = ref [] in
+      let make_redirection { take; redirect_to } =
+        let takearg = to_argument "redirection_take" (`Int take) in
+        let retoarg =
+          to_argument "redirection_to"
+            (match redirect_to with `Fd i -> `Int i | `Path p -> `String p) in
+        variables := takearg#export :: retoarg#export :: !variables;
+        sprintf "%s>%s%s"
+          takearg#argument
+          (match redirect_to with `Fd _ -> "&" | `Path _ -> " ")
+          retoarg#argument
+      in
+      let compiled_redirections =
+        List.rev_map redirections ~f:make_redirection in
+      let command = Construct.string (continue unit_t) in
+      sprintf "%s eval \"{ $(%s) ; } %s\" "
+        (String.concat (List.filter_opt !variables) ~sep:"")
+        (expand_octal (continue command))
+        (String.concat ~sep:" " compiled_redirections)
     | Write_output { expr; stdout; stderr; return_value } ->
-      let make_argument name option =
-        Option.value_map ~default:(None, None) option ~f:(fun v ->
-            let v, e = to_argument name v in
-            v, Some e) in
-      let varstdout, exprstdout = make_argument "stdoutfile" stdout in
-      let varstderr, exprstderr = make_argument "stderrfile" stderr in
-      let varret, exprret = make_argument "retfile" return_value in
-      let vars =
-        List.filter_map [varstdout; varstderr; varret]
-          ~f:(Option.map ~f:(sprintf "export %s ; "))
-        |> String.concat ~sep:" " in
-      sprintf "%s { %s %s ; } %s %s"
-        vars
-        (continue expr)
-        (Option.value_map exprret ~default:"" ~f:(fun path ->
-             sprintf "; echo \"$?\" > %s" path))
-        (Option.value_map exprstdout ~default:"" ~f:(fun path ->
-             sprintf " > %s" path))
-        (Option.value_map exprstderr ~default:"" ~f:(fun path ->
-             sprintf "2> %s" path))
+      let ret_arg =
+        Option.map return_value ~f:(fun v -> to_argument "retval" (`String v))
+      in
+      let var =
+        Option.((ret_arg >>= fun ra -> ra#export) |> value ~default:"") in
+      let with_potential_return =
+        sprintf "%s { %s %s ; }" var (continue expr)
+          (Option.value_map ret_arg ~default:"" ~f:(fun r ->
+               sprintf "; printf \"$?\" > %s" r#argument))
+      in
+      let redirections =
+        let make fd =
+          Option.map
+            ~f:(fun p -> {take = Construct.int fd; redirect_to = `Path p}) in
+        [make 1 stdout; make 2 stderr] |> List.filter_opt in
+      continue (Redirect_output (Raw_cmd with_potential_return, redirections))
     | Literal lit ->
       Literal.to_shell lit
     | Output_as_string e ->

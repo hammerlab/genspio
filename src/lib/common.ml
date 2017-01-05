@@ -11,6 +11,7 @@ module Unique_name = struct
       prefix
       !x
       (Random.int 100_000)
+  let variable = create
 
 end
 
