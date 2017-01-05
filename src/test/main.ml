@@ -20,10 +20,11 @@ let check_size ?(name = "") ~ret str =
     Some str
 
 
-let exits ?name ?args n c =
+let exits ?no_trap ?name ?args n c =
   let one_liner =
-    Compile.to_one_liner c |> check_size ?name ~ret:n in
-  let script = Compile.to_many_lines c |> check_size ?name ~ret:n in
+    Compile.to_one_liner ?no_trap c |> check_size ?name ~ret:n in
+  let script =
+    Compile.to_many_lines ?no_trap c |> check_size ?name ~ret:n in
   let tests =
     [
       Option.map one_liner ~f:(fun cmd ->
@@ -660,6 +661,18 @@ let tests =
           tmp#delete;
           assert_or_fail "tmp#get 3" (tmp#get =$= string "");
           return 23;
+        ]
+      );
+    exits 2 ~no_trap:true ~name:"no-trap" Genspio.EDSL.(return 2);
+    exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.(
+        seq [
+          with_failwith (fun die ->
+              seq [
+                printf "Dying now\n";
+                die
+                  ~message:(string "HElllooo I'm dying!!\n") ~return:(int 2)
+              ]
+            );
         ]
       );
   ]

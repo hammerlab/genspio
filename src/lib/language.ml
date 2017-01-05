@@ -187,12 +187,16 @@ end
 
 type output_parameters = {
   statement_separator: string;
-  die_command: string
+  die_command: string option;
 }
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
     let continue e = to_shell params e in
     let seq l = String.concat  ~sep:params.statement_separator l in
+    let die () =
+      Option.value_exn params.die_command
+        ~msg:"Die command not set: you cannot use the `fail` construct \
+              together with the `~no_trap:true` option" in
     let expand_octal s =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
@@ -355,8 +359,7 @@ let rec to_shell: type a. _ -> a t -> string =
             |> continue
           ];
         ])
-    | Fail ->
-      params.die_command
+    | Fail -> die ()
     | Parse_command_line { options; action } ->
       let prefix = Unique_name.create "getopts" in
       let variable {switch; doc;} =
@@ -391,7 +394,7 @@ let rec to_shell: type a. _ -> a t -> string =
                            sprintf "then export %s=\"$2\" " var;
                            sprintf "else printf \"ERROR -%c requires an argument\\n\" \
                                     >&2" x.switch;
-                           params.die_command;
+                           die ();
                            "fi";
                            "shift";
                            "shift";
@@ -436,7 +439,7 @@ let rec to_shell: type a. _ -> a t -> string =
             "--) shift ; break ;;";
             "-?*)";
             "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
-            params.die_command;
+            die ();
             ";;";
             "*) if [ $# -eq 0 ] ; ";
             "then echo \" $1 $# \" ; break ;";
@@ -474,13 +477,18 @@ let with_trap ~statement_separator ~exit_with script =
     script ~die;
   ]
 
+let compile ~statement_separator ?(no_trap = false) e =
+  match no_trap with
+  | false ->
+    with_trap ~statement_separator ~exit_with:77
+      (fun ~die -> to_shell {statement_separator; die_command = Some die} e)
+  | true ->
+    to_shell {statement_separator; die_command = None} e
 
-let rec to_one_liner: type a. a t -> string = fun e ->
+let to_one_liner ?no_trap e =
   let statement_separator = " ; " in
-  with_trap ~statement_separator ~exit_with:77
-    (fun ~die -> to_shell {statement_separator; die_command = die} e)
+  compile ~statement_separator ?no_trap e
 
-let rec to_many_lines: type a. a t -> string = fun e ->
+let to_many_lines ?no_trap e =
   let statement_separator = " \n " in
-  with_trap ~statement_separator ~exit_with:77
-    (fun ~die -> to_shell {statement_separator; die_command = die} e)
+  compile ~statement_separator ?no_trap e
