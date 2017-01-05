@@ -187,16 +187,20 @@ end
 
 type output_parameters = {
   statement_separator: string;
-  die_command: string option;
+  die_command: (string -> string) option;
 }
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
     let continue e = to_shell params e in
     let seq l = String.concat  ~sep:params.statement_separator l in
-    let die () =
-      Option.value_exn params.die_command
-        ~msg:"Die command not set: you cannot use the `fail` construct \
-              together with the `~no_trap:true` option" in
+    let die s =
+      match params.die_command with
+      | Some f -> f s
+      | None ->
+        ksprintf failwith
+          "Die command not set: you cannot use the `fail` construct \
+           together with the `~no_trap:true` option (error message was: %S)" s
+    in
     let expand_octal s =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
@@ -297,7 +301,7 @@ let rec to_shell: type a. _ -> a t -> string =
         var
         (continue s |> expand_octal)
         value value value
-        (continue Fail)
+        (die (sprintf "String_to_int: error, $%s is not an integer" var))
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
@@ -359,7 +363,7 @@ let rec to_shell: type a. _ -> a t -> string =
             |> continue
           ];
         ])
-    | Fail -> die ()
+    | Fail -> die "EDSL.fail called"
     | Parse_command_line { options; action } ->
       let prefix = Unique_name.create "getopts" in
       let variable {switch; doc;} =
@@ -394,7 +398,7 @@ let rec to_shell: type a. _ -> a t -> string =
                            sprintf "then export %s=\"$2\" " var;
                            sprintf "else printf \"ERROR -%c requires an argument\\n\" \
                                     >&2" x.switch;
-                           die ();
+                           die "Command line parsing error: Aborting";
                            "fi";
                            "shift";
                            "shift";
@@ -439,7 +443,7 @@ let rec to_shell: type a. _ -> a t -> string =
             "--) shift ; break ;;";
             "-?*)";
             "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
-            die ();
+            die "Command line parsing error: Aborting";
             ";;";
             "*) if [ $# -eq 0 ] ; ";
             "then echo \" $1 $# \" ; break ;";
@@ -470,10 +474,11 @@ let rec to_shell: type a. _ -> a t -> string =
   *)
 let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
-  let die = sprintf "kill -s USR1 ${%s}" variable_name in
+  let die s =
+    sprintf " { printf '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
-    sprintf "trap 'echo Script-failed-using-signal ; exit %d' USR1" exit_with;
+    sprintf "trap 'exit %d' USR1" exit_with;
     script ~die;
   ]
 

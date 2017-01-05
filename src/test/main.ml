@@ -409,9 +409,10 @@ let tests =
           (return 12)
           (return 13)
       );
-    exits 77 Construct.( (* It's not a string representing an integer: *)
+    exits ~name:"failure-of-int-of-string" 77
+      Construct.( (* It's not a string representing an integer: *)
         if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
-                                                              =$= string "8877732")
+                      =$= string "8877732")
           (return 12)
           (return 13)
       );
