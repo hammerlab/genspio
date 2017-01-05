@@ -189,7 +189,7 @@ let tests =
       );
     exits 11 Construct.(
         if_then_else (
-          string "some" =$= 
+          string "some" =$=
           (output_as_string (
               (if_then_else (string "bouh\n" =$= string "bouh")
                  (printf "nnnooo")
@@ -430,13 +430,13 @@ let tests =
         let trybin res b = b |> Integer.to_string =$= string (Int.to_string res) in
         if_then_else (
           trybin 1 Integer.(int 2 * (int 22 - int 20) / int 4)
-          &&& 
+          &&&
           trybin 0 Integer.(int 2 * (int 22 - int 20) / int 5)
-          &&& 
+          &&&
           trybin 8 Integer.(int 42 / int 5)
-          &&& 
+          &&&
           trybin 2 Integer.(int 42 mod int 5)
-          &&& 
+          &&&
           trybin 0 Integer.(int 3000 mod int 3)
         )
           (return 12)
@@ -663,19 +663,11 @@ let tests =
         ]
       );
   ]
-    (*
-  |> List.filter ~f:(function
-    | `Command (Some n,_,_,_) when
-        String.is_prefix n ~prefix:"with_failwith" -> true
-    | `Command (Some n,_,_,_) ->
-      eprintf "NAME: %S\n%!" n; false
-    | _ -> false)
-*)
 
 let posix_sh_tests = [
   Test.command "ls" [`Exits_with 0];
 ]
-  
+
 
 
 let () =
