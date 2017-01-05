@@ -27,14 +27,14 @@ let string_concat sl =
   let out s = call [string "printf"; string "%s"; s] in
   seq (List.map sl ~f:out) |> output_as_string
 
-type string_variable = <
+type file = <
   get : string t;
   set : string t -> unit t;
   append : string t -> unit t;
   delete: unit t;
   path: string t;
 >
-let tmp_file ?tmp_dir name : string_variable =
+let tmp_file ?tmp_dir name : file =
   let default_tmp_dir = "/tmp" in
   let get_tmp_dir =
     Option.value tmp_dir

@@ -173,17 +173,17 @@ val parse_command_line :
 
 val string_concat: string t list -> string t
 
-type string_variable = <
+type file = <
   get : string t;
   set : string t -> unit t;
   append : string t -> unit t;
   delete: unit t;
   path: string t;
 >
-val tmp_file:
-  ?tmp_dir: string t ->
-  string ->
-  string_variable
+(** Abstraction of a file, cf. {!tmp_file}. *)
+
+
+val tmp_file: ?tmp_dir: string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values). *)
 

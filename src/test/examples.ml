@@ -84,7 +84,7 @@ let downloader () =
     type t = {
       extension: string;
       verb: string;
-      commands: string_variable -> cmd list;
+      commands: file -> cmd list;
     }
     let make ~ext ~verb commands =
       {extension = ext; verb; commands}
