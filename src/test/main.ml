@@ -671,13 +671,23 @@ let posix_sh_tests = [
 
 
 let () =
-  let tests =
-    posix_sh_tests
-    @ tests
-  in
+  let test_filters =
+    try Sys.getenv "filter_tests" |> String.split ~on:(`Character ',')
+    with _ -> [] in
   let important_shells =
     try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
     with _ -> ["bash"; "dash"] in
+  let all_tests = posix_sh_tests @ tests in
+  let tests =
+    if test_filters = [] then all_tests else
+      all_tests |> List.filter ~f:(function
+        | `Command (Some n,_,_,_) when
+            List.exists test_filters ~f:(fun prefix ->
+                String.is_prefix n ~prefix) -> true
+        | `Command (Some n,_,_,_) ->
+          eprintf "NAME: %S filtered out\n%!" n; false
+        | _ -> false)
+  in
   let additional_shells =
     begin try
       Sys.getenv "add_shells"  |> String.split ~on:(`String "++")
