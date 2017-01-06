@@ -103,7 +103,7 @@ module Construct = struct
 
   let not t = Not t
 
-  let with_signal ?(signal_name = "USR1") ~catch run =
+  let with_signal ?(signal_name = "USR2") ~catch run =
     With_signal {signal_name; catch; run}
 
   let fail = Fail

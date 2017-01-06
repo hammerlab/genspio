@@ -6,7 +6,7 @@ val fail: unit t
 
 val with_signal:
   ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
-(** Use a UNIX signal (default ["USR1"]) to create a “jump.”
+(** Use a UNIX signal (default ["USR2"]) to create a “jump.”
 
     [with_signal ~catch (fun signal -> (* more_code *))]
     executes [(* more_code *)] but if it uses [signal], the code behaves like
