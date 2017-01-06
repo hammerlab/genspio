@@ -32,6 +32,10 @@ val with_signal:
             (tmp#get =$= string "start-signal-caught");
         ]
     ]}
+    
+    Note that by default, the compiler functions use the signal ["USR1"] and
+    having 2 calls to [trap] with the same signal in the same script
+    do not play well, so use [~signal_name:"USR1"] at your own risk.
 *)
 
 val call : string t list -> unit t
