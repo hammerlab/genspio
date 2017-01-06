@@ -521,7 +521,7 @@ let tests =
       );
     exits 32 Construct.(
         seq [
-          with_throw
+          with_signal
             ~catch:(seq [printf "Caught !"; exit 32])
             (fun throw ->
                seq [
@@ -535,7 +535,7 @@ let tests =
     exits 28 Construct.(
         seq [
           comment "trowing once stuff";
-          with_throw
+          with_signal
             ~catch:(seq [printf "Caught !"; exit 32])
             (fun throw ->
                seq [
@@ -553,7 +553,7 @@ let tests =
           setenv (string "TMPDIR") (string "/var/tmp/");
           tmp#set (string "1");
           printf "adding 1 !\n";
-          with_throw
+          with_signal
             ~catch:(seq [
                 printf "One Caught !\n";
                 printf "adding 5 !\n";
@@ -563,7 +563,7 @@ let tests =
                seq [
                  tmp#append (string ",2");
                  printf "adding 2 !\n";
-                 with_throw
+                 with_signal
                    ~catch:(seq [
                        printf "Two Caught !\n";
                        printf "adding 4 !\n";

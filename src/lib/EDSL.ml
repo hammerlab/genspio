@@ -87,7 +87,7 @@ let with_failwith f =
   let msg = tmp_file "msg" in
   let ret = tmp_file "ret" in
   let varname = string "tttttt" in
-  with_throw
+  with_signal
     ~catch:(seq [
         call [string "printf"; string "FAILURE: %s"; msg#get];
         setenv varname ret#get;

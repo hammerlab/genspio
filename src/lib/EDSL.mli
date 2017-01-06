@@ -4,11 +4,11 @@ type 'a t = 'a Language.t
 val fail: unit t
 (** Abort the script/command immediately. *)
 
-val with_throw:
-  ?using_signal:string -> catch:unit t -> (unit t -> unit t) -> unit t
+val with_signal:
+  ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
 (** Use a UNIX signal (default ["USR1"]) to create a “jump.”
 
-    [with_throw ~catch (fun throw -> (* more_code *))]
+    [with_signal ~catch (fun throw -> (* more_code *))]
     executes [(* more_code *)] but if it uses [throw], the code behaves like
     a raised exception, and the [catch] argument is executed.
  *)
@@ -191,7 +191,7 @@ val with_failwith:
   ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
    unit Language.t) ->
   unit Language.t
-(** [with_failwith f] uses !{tmp_file} and {!with_throw} to call [f]
+(** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
     with a function that exits the flow of execution and displays
     [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
 

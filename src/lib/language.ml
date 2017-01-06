@@ -78,8 +78,8 @@ and _ t =
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: string t -> string t
   | Setenv: string t * string t -> unit t 
-  | With_throw: {
-      using_signal: string;
+  | With_signal: {
+      signal_name: string;
       catch: unit t;
       run: unit t -> unit t;
     } -> unit t
@@ -103,8 +103,8 @@ module Construct = struct
 
   let not t = Not t
 
-  let with_throw ?(using_signal = "USR1") ~catch run =
-    With_throw {using_signal; catch; run}
+  let with_signal ?(signal_name = "USR1") ~catch run =
+    With_signal {signal_name; catch; run}
 
   let fail = Fail
 
@@ -347,19 +347,19 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf "export $(%s)=$(%s)"
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | With_throw {using_signal; catch; run} ->
+    | With_signal {signal_name; catch; run} ->
       let var =
         sprintf "tmpxxjljeadjeidjelidjeideijdedeiii_%d" (Random.int 4309843) in
       let value = sprintf "\"$%s\"" var in
       continue Construct.(seq [
           Raw_cmd (sprintf "export %s=$$" var);
-          exec ["trap"; continue catch; using_signal];
+          exec ["trap"; continue catch; signal_name];
           exec [
             (* We need the `sh -c ...` in order to properly create a subprocess,
-               if not we break when `With_throw` are enclosed, the kill
+               if not we break when `With_signal` are enclosed, the kill
                command does not wake up the right process. *)
             "sh"; "-c";
-            run (Raw_cmd (sprintf "kill -s %s %s" using_signal value))
+            run (Raw_cmd (sprintf "kill -s %s %s" signal_name value))
             |> continue
           ];
         ])
