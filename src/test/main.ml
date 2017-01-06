@@ -590,6 +590,24 @@ let tests =
         exits ~name:"multijump" 28 (make ~jump:false);
       ]
     end;
+    exits 0 ~name:"with_signal_example" Genspio.EDSL.(
+        let tmp = tmp_file "appender" in
+        seq [
+          tmp#set (string "start");
+          with_signal ~signal_name:"USR1" (fun signal ->
+               seq [
+                tmp#append (string "-signal");
+                signal;
+                tmp#append (string "-WRONG");
+              ])
+            ~catch:(seq [
+                tmp#append (string "-caught")
+              ]);
+          call [string "printf"; string "tmp: %s\\n"; tmp#get];
+          assert_or_fail "Timeline-of-tmp"
+            (tmp#get =$= string "start-signal-caught");
+        ]
+      );
     begin
       let with_failwith_basic_test =
         Genspio.EDSL.(
