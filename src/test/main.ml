@@ -594,7 +594,7 @@ let tests =
         let tmp = tmp_file "appender" in
         seq [
           tmp#set (string "start");
-          with_signal ~signal_name:"USR1" (fun signal ->
+          with_signal ~signal_name:"USR2" (fun signal ->
                seq [
                 tmp#append (string "-signal");
                 signal;

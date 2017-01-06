@@ -359,7 +359,7 @@ let rec to_shell: type a. _ -> a t -> string =
                if not we break when `With_signal` are enclosed, the kill
                command does not wake up the right process. *)
             "sh"; "-c";
-            run (Raw_cmd (sprintf "kill -s %s %s" signal_name value))
+            run (Raw_cmd (sprintf " kill -s %s %s ; kill $$ " signal_name value))
             |> continue
           ];
         ])
