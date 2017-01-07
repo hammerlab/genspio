@@ -6,17 +6,54 @@ module Test = Tests.Test_lib
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL
 
-let exits ?name ?args n c = [
-  Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
-    ?args (Compile.to_one_liner c) ~verifies:[`Exits_with n];
-  Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
-    ?args (Compile.to_many_lines c) ~verifies:[`Exits_with n];
-]
+
+let check_size ?(name = "") ~ret str =
+  (*
+     Got the magic number on Linux/Ubuntu 16.04.
+     See `xargs --show-limits`.
+  *)
+  if String.length str > 131071
+  then (
+    eprintf "WARNING: Command %S (ret %d) is too big for `sh -c <>`\n%!" name ret;
+    None
+  ) else
+    Some str
+
+
+let exits ?no_trap ?name ?args n c =
+  let one_liner =
+    Compile.to_one_liner ?no_trap c |> check_size ?name ~ret:n in
+  let script =
+    Compile.to_many_lines ?no_trap c |> check_size ?name ~ret:n in
+  let tests =
+    [
+      Option.map one_liner ~f:(fun cmd ->
+          Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
+            ?args cmd ~verifies:[`Exits_with n];
+        );
+      Option.map script ~f:(fun cmd ->
+          Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
+            ?args cmd ~verifies:[`Exits_with n];
+        );
+    ]
+    |> List.filter_opt
+  in
+  if tests = []
+  then
+    ksprintf failwith
+      "Test %S (ret %d) got no testing at all because of size limit"
+      (Option.value ~default:"No-name" name) n
+  else
+    tests
 
 let tests =
   let exit n = Construct.exec ["exit"; Int.to_string n] in
   let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
   let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
+  let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt in
+  let assert_or_fail name cond =
+    let open Genspio.EDSL in
+    if_then_else cond nop (seq [printf "Fail: %s\n" name; fail]) in
   List.concat [
     exits 0 Construct.(
         succeeds (exec ["ls"])
@@ -153,7 +190,7 @@ let tests =
       );
     exits 11 Construct.(
         if_then_else (
-          string "some" =$= 
+          string "some" =$=
           (output_as_string (
               (if_then_else (string "bouh\n" =$= string "bouh")
                  (printf "nnnooo")
@@ -372,9 +409,10 @@ let tests =
           (return 12)
           (return 13)
       );
-    exits 77 Construct.( (* It's not a string representing an integer: *)
+    exits ~name:"failure-of-int-of-string" 77
+      Construct.( (* It's not a string representing an integer: *)
         if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
-                                                              =$= string "8877732")
+                      =$= string "8877732")
           (return 12)
           (return 13)
       );
@@ -394,13 +432,13 @@ let tests =
         let trybin res b = b |> Integer.to_string =$= string (Int.to_string res) in
         if_then_else (
           trybin 1 Integer.(int 2 * (int 22 - int 20) / int 4)
-          &&& 
+          &&&
           trybin 0 Integer.(int 2 * (int 22 - int 20) / int 5)
-          &&& 
+          &&&
           trybin 8 Integer.(int 42 / int 5)
-          &&& 
+          &&&
           trybin 2 Integer.(int 42 mod int 5)
-          &&& 
+          &&&
           trybin 0 Integer.(int 3000 mod int 3)
         )
           (return 12)
@@ -481,8 +519,182 @@ let tests =
           );
         ]
       );
+    exits 32 Construct.(
+        seq [
+          with_signal
+            ~catch:(seq [printf "Caught !"; exit 32])
+            (fun throw ->
+               seq [
+                 printf "Throwing";
+                 throw;
+                 return 42;
+               ]);
+          return 28;
+        ]
+      );
+    exits 28 Construct.(
+        seq [
+          comment "trowing once stuff";
+          with_signal
+            ~catch:(seq [printf "Caught !"; exit 32])
+            (fun throw ->
+               seq [
+                 printf "Not Throwing";
+               ]);
+          return 28;
+        ]
+      );
+    begin
+      let open Genspio.EDSL in
+      let tmp = tmp_file "agglomeration" in
+      let make ~jump =
+        seq [
+          comment "Multi-trowing stuff: %b" jump;
+          setenv (string "TMPDIR") (string "/var/tmp/");
+          tmp#set (string "1");
+          printf "adding 1 !\n";
+          with_signal
+            ~catch:(seq [
+                printf "One Caught !\n";
+                printf "adding 5 !\n";
+                tmp#append (string ",5");
+              ])
+            (fun throw_one ->
+               seq [
+                 tmp#append (string ",2");
+                 printf "adding 2 !\n";
+                 with_signal
+                   ~catch:(seq [
+                       printf "Two Caught !\n";
+                       printf "adding 4 !\n";
+                       tmp#append (string ",4");
+                       throw_one;
+                     ])
+                   (fun throw_two ->
+                      seq [
+                        printf "adding 3 !\n";
+                        tmp#append (string ",3");
+                        (if jump then throw_one else throw_two);
+                      ]);
+               ]);
+          call [string "printf"; string "Agglo: %s\\n"; tmp#get;];
+          if_then_else (tmp#get
+                        =$=
+                        string (if jump then "1,2,3,5" else "1,2,3,4,5"))
+            (return 28)
+            (return 29);
+        ]
+      in
+      List.concat [
+        exits ~name:"multijump" 28 (make ~jump:true);
+        exits ~name:"multijump" 28 (make ~jump:false);
+      ]
+    end;
+    exits 0 ~name:"with_signal_example" Genspio.EDSL.(
+        let tmp = tmp_file "appender" in
+        seq [
+          tmp#set (string "start");
+          with_signal (fun signal ->
+               seq [
+                tmp#append (string "-signal");
+                signal;
+                tmp#append (string "-WRONG");
+              ])
+            ~catch:(seq [
+                tmp#append (string "-caught")
+              ]);
+          call [string "printf"; string "tmp: %s\\n"; tmp#get];
+          assert_or_fail "Timeline-of-tmp"
+            (tmp#get =$= string "start-signal-caught");
+        ]
+      );
+    begin
+      let with_failwith_basic_test =
+        Genspio.EDSL.(
+          seq [
+            comment "Test with failwith";
+            with_failwith (fun die ->
+                seq [
+                  comment "Test with failwith: just before dying";
+                  printf "Dying now\n";
+                  die
+                    ~message:(string "HElllooo I'm dying!!\n") ~return:(int 23)
+                ]
+              );
+          ]
+        ) in
+      List.concat [
+        exits ~name:"with_failwith" 23 with_failwith_basic_test;
+        exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
+            let tmpextra = tmp_file "extratmp" in
+            let tmpdir = Filename.temp_file "genspio" "test" in
+            seq [
+              comment "Test with failwith and check that files go away";
+              exec ["rm"; "-f"; tmpdir];
+              exec ["mkdir"; "-p"; tmpdir];
+              setenv (string "TMPDIR") (string tmpdir);
+              tmpextra#set (string "");
+              assert_or_fail "tmpfile-in-tmpdir"
+                begin
+                  tmpextra#path >>
+                  call [string "grep"; string tmpdir]
+                  |> returns ~value:0
+                end;
+              write_output
+                ~return_value:tmpextra#path
+                begin
+                  seq [
+                    exec [
+                      "sh"; "-c"; (* Soooo meta *)
+                      Genspio.Language.to_one_liner with_failwith_basic_test;
+                    ]
+                  ]
+                end;
+              assert_or_fail "with_failwith:ret23"
+                (tmpextra#get |> Integer.of_string |> Integer.eq (int 23));
+              tmpextra#delete;
+              call [
+                string "echo";
+                call [string "find"; string tmpdir]
+                |> output_as_string
+              ];
+              assert_or_fail "with_failwith:no-files-in-tmpdir"
+                begin
+                  call [string "find"; string tmpdir]
+                  |> output_as_string
+                     =$= ksprintf string "%s\n" tmpdir
+                end;
+              return 37;
+            ]
+          );
+      ];
+    end;
+    exits ~name:"tmp#delete" 23 Genspio.EDSL.(
+        let tmp = tmp_file "test" in
+        let s1 = string "hello\000you" in
+        seq [
+          tmp#set (string "");
+          assert_or_fail "tmp#get 1" (tmp#get =$= string "");
+          tmp#set s1;
+          assert_or_fail "tmp#get 2" (tmp#get =$= s1);
+          tmp#delete;
+          assert_or_fail "tmp#get 3" (tmp#get =$= string "");
+          return 23;
+        ]
+      );
+    exits 2 ~no_trap:true ~name:"no-trap" Genspio.EDSL.(return 2);
+    exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.(
+        seq [
+          with_failwith (fun die ->
+              seq [
+                printf "Dying now\n";
+                die
+                  ~message:(string "HElllooo I'm dying!!\n") ~return:(int 2)
+              ]
+            );
+        ]
+      );
   ]
-
 
 let posix_sh_tests = [
   Test.command "ls" [`Exits_with 0];
@@ -491,13 +703,23 @@ let posix_sh_tests = [
 
 
 let () =
-  let tests =
-    posix_sh_tests
-    @ tests
-  in
+  let test_filters =
+    try Sys.getenv "filter_tests" |> String.split ~on:(`Character ',')
+    with _ -> [] in
   let important_shells =
     try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
     with _ -> ["bash"; "dash"] in
+  let all_tests = posix_sh_tests @ tests in
+  let tests =
+    if test_filters = [] then all_tests else
+      all_tests |> List.filter ~f:(function
+        | `Command (Some n,_,_,_) when
+            List.exists test_filters ~f:(fun prefix ->
+                String.is_prefix n ~prefix) -> true
+        | `Command (Some n,_,_,_) ->
+          eprintf "NAME: %S filtered out\n%!" n; false
+        | _ -> false)
+  in
   let additional_shells =
     begin try
       Sys.getenv "add_shells"  |> String.split ~on:(`String "++")

@@ -78,6 +78,11 @@ and _ t =
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: string t -> string t
   | Setenv: string t * string t -> unit t 
+  | With_signal: {
+      signal_name: string;
+      catch: unit t;
+      run: unit t -> unit t;
+    } -> unit t
 
 module Construct = struct
   let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
@@ -97,6 +102,9 @@ module Construct = struct
   let seq l = Seq l
 
   let not t = Not t
+
+  let with_signal ?(signal_name = "USR2") ~catch run =
+    With_signal {signal_name; catch; run}
 
   let fail = Fail
 
@@ -171,17 +179,28 @@ module Construct = struct
   let parse_command_line options action =
     Parse_command_line {options; action}
 
+  module Magic = struct
+    let unit s = Raw_cmd s
+  end
 
 end
 
 type output_parameters = {
   statement_separator: string;
-  die_command: string
+  die_command: (string -> string) option;
 }
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
     let continue e = to_shell params e in
     let seq l = String.concat  ~sep:params.statement_separator l in
+    let die s =
+      match params.die_command with
+      | Some f -> f s
+      | None ->
+        ksprintf failwith
+          "Die command not set: you cannot use the `fail` construct \
+           together with the `~no_trap:true` option (error message was: %S)" s
+    in
     let expand_octal s =
       sprintf
         {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
@@ -257,7 +276,7 @@ let rec to_shell: type a. _ -> a t -> string =
         List.filter_map [varstdout; varstderr; varret]
           ~f:(Option.map ~f:(sprintf "export %s ; "))
         |> String.concat ~sep:" " in
-      sprintf "%s ( %s %s ) %s %s"
+      sprintf "%s { %s %s ; } %s %s"
         vars
         (continue expr)
         (Option.value_map exprret ~default:"" ~f:(fun path ->
@@ -282,7 +301,7 @@ let rec to_shell: type a. _ -> a t -> string =
         var
         (continue s |> expand_octal)
         value value value
-        (continue Fail)
+        (die (sprintf "String_to_int: error, $%s is not an integer" var))
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
@@ -321,15 +340,30 @@ let rec to_shell: type a. _ -> a t -> string =
            just “cuts” it, it wouldn't fail and `${HOME\nBOUH}` would be
            equal to `${HOME}`
         *)
-        sprintf "%s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\""
+        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
     | Setenv (variable, value) ->
       sprintf "export $(%s)=$(%s)"
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | Fail ->
-      params.die_command
+    | With_signal {signal_name; catch; run} ->
+      let var =
+        sprintf "tmpxxjljeadjeidjelidjeideijdedeiii_%d" (Random.int 4309843) in
+      let value = sprintf "\"$%s\"" var in
+      continue Construct.(seq [
+          Raw_cmd (sprintf "export %s=$$" var);
+          exec ["trap"; continue catch; signal_name];
+          exec [
+            (* We need the `sh -c ...` in order to properly create a subprocess,
+               if not we break when `With_signal` are enclosed, the kill
+               command does not wake up the right process. *)
+            "sh"; "-c";
+            run (Raw_cmd (sprintf " kill -s %s %s ; kill $$ " signal_name value))
+            |> continue
+          ];
+        ])
+    | Fail -> die "EDSL.fail called"
     | Parse_command_line { options; action } ->
       let prefix = Unique_name.create "getopts" in
       let variable {switch; doc;} =
@@ -364,7 +398,7 @@ let rec to_shell: type a. _ -> a t -> string =
                            sprintf "then export %s=\"$2\" " var;
                            sprintf "else printf \"ERROR -%c requires an argument\\n\" \
                                     >&2" x.switch;
-                           params.die_command;
+                           die "Command line parsing error: Aborting";
                            "fi";
                            "shift";
                            "shift";
@@ -409,7 +443,7 @@ let rec to_shell: type a. _ -> a t -> string =
             "--) shift ; break ;;";
             "-?*)";
             "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
-            params.die_command;
+            die "Command line parsing error: Aborting";
             ";;";
             "*) if [ $# -eq 0 ] ; ";
             "then echo \" $1 $# \" ; break ;";
@@ -440,20 +474,26 @@ let rec to_shell: type a. _ -> a t -> string =
   *)
 let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
-  let die = sprintf "kill -s USR1 ${%s}" variable_name in
+  let die s =
+    sprintf " { printf '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
-    sprintf "trap 'echo Script-failed-using-signal ; exit %d' USR1" exit_with;
+    sprintf "trap 'exit %d' USR1" exit_with;
     script ~die;
   ]
 
+let compile ~statement_separator ?(no_trap = false) e =
+  match no_trap with
+  | false ->
+    with_trap ~statement_separator ~exit_with:77
+      (fun ~die -> to_shell {statement_separator; die_command = Some die} e)
+  | true ->
+    to_shell {statement_separator; die_command = None} e
 
-let rec to_one_liner: type a. a t -> string = fun e ->
+let to_one_liner ?no_trap e =
   let statement_separator = " ; " in
-  with_trap ~statement_separator ~exit_with:77
-    (fun ~die -> to_shell {statement_separator; die_command = die} e)
+  compile ~statement_separator ?no_trap e
 
-let rec to_many_lines: type a. a t -> string = fun e ->
+let to_many_lines ?no_trap e =
   let statement_separator = " \n " in
-  with_trap ~statement_separator ~exit_with:77
-    (fun ~die -> to_shell {statement_separator; die_command = die} e)
+  compile ~statement_separator ?no_trap e

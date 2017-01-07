@@ -4,6 +4,40 @@ type 'a t = 'a Language.t
 val fail: unit t
 (** Abort the script/command immediately. *)
 
+val with_signal:
+  ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
+(** Use a UNIX signal (default ["USR2"]) to create a “jump.”
+
+    [with_signal ~catch (fun signal -> (* more_code *))]
+    executes [(* more_code *)] but if it uses [signal], the code behaves like
+    a raised exception, and the [catch] argument is executed.
+
+    See the example:
+
+    {[
+        let tmp = tmp_file "appender" in
+        seq [
+          tmp#set (string "start");
+          with_signal ~signal_name:"USR1" (fun signal ->
+               seq [
+                tmp#append (string "-signal");
+                signal;
+                tmp#append (string "-WRONG");
+              ])
+            ~catch:(seq [
+                tmp#append (string "-caught")
+              ]);
+          call [string "printf"; string "tmp: %s\\n"; tmp#get];
+          assert_or_fail "Timeline-of-tmp"
+            (tmp#get =$= string "start-signal-caught");
+        ]
+    ]}
+    
+    Note that by default, the compiler functions use the signal ["USR1"] and
+    having 2 calls to [trap] with the same signal in the same script
+    do not play well, so use [~signal_name:"USR1"] at your own risk.
+*)
+
 val call : string t list -> unit t
 (** Call a command from its list of “arguments” (including the first
     argument being the actual command).
@@ -164,13 +198,33 @@ val parse_command_line :
 
 val string_concat: string t list -> string t
 
-type string_variable = <
-    get : string Language.t;
-    set : string Language.t -> unit Language.t;
-  >
-val tmp_file:
-  ?tmp_dir: string t ->
-  string ->
-  string_variable
+type file = <
+  get : string t;
+  set : string t -> unit t;
+  append : string t -> unit t;
+  delete: unit t;
+  path: string t;
+>
+(** Abstraction of a file, cf. {!tmp_file}. *)
+
+
+val tmp_file: ?tmp_dir: string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values). *)
+
+val with_failwith:
+  ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
+   unit Language.t) ->
+  unit Language.t
+(** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
+    with a function that exits the flow of execution and displays
+    [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
+
+(** The {!Magic} module is like OCaml's {!Obj.magic} function for the
+    EDSL; it allows one to bypass typing. *)
+module Magic : sig
+  val unit: string -> unit t
+  (** Put any string as a [unit t] command inline ([Magic.unit s]
+      is different from [exec ["sh"; "-c"; s]] there is no escaping or
+      protection). *)
+end

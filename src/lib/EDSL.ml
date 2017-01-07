@@ -27,18 +27,33 @@ let string_concat sl =
   let out s = call [string "printf"; string "%s"; s] in
   seq (List.map sl ~f:out) |> output_as_string
 
-type string_variable = <
-    get : string Language.t;
-    set : string Language.t -> unit Language.t;
-  >
-let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
+type file = <
+  get : string t;
+  set : string t -> unit t;
+  append : string t -> unit t;
+  delete: unit t;
+  path: string t;
+>
+let tmp_file ?tmp_dir name : file =
+  let default_tmp_dir = "/tmp" in
+  let get_tmp_dir =
+    Option.value tmp_dir
+      ~default:begin
+        output_as_string (
+          (* https://en.wikipedia.org/wiki/TMPDIR *)
+          if_then_else (getenv (string "TMPDIR") <$> string "")
+            (call [string "printf"; string "%s"; getenv (string "TMPDIR")])
+            (exec ["printf"; "%s"; default_tmp_dir])
+        )
+      end
+  in
   let path =
     let clean =
       String.map name ~f:(function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' as c -> c
         | other -> '_') in
     string_concat [
-      tmp_dir;
+      get_tmp_dir;
       string "/";
       string
         (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
@@ -47,14 +62,49 @@ let tmp_file ?(tmp_dir = string "/tmp") name : string_variable =
   let tmp = string_concat [path; string "-tmp"] in
   object
     method get = output_as_string (call [string "cat"; path])
+    method path = path
     method set v =
       seq [
-        call [string "echo"; string "Setting"];
-        call [string "echo"; tmp];
+        (* call [string "echo"; string "Setting "; string name]; *)
+        (* call [string "echo"; string "Setting "; path; string " to "; v]; *)
+        (* call [string "echo"; tmp]; *)
         v >> exec ["cat"] |> write_output ~stdout:tmp;
         call [string "mv"; string "-f"; tmp; path];
       ]
+    method append v =
+      seq [
+        seq [
+          call [string "cat"; path];
+          v >> exec ["cat"];
+        ] |> write_output ~stdout:tmp;
+        call [string "mv"; string "-f"; tmp; path];
+      ]
+    method delete =
+      call [string "rm"; string "-f"; path; tmp]
   end
+
+let with_failwith f =
+  let msg = tmp_file "msg" in
+  let ret = tmp_file "ret" in
+  let varname = string "tttttt" in
+  with_signal
+    ~catch:(seq [
+        call [string "printf"; string "FAILURE: %s"; msg#get];
+        setenv varname ret#get;
+        msg#delete;
+        ret#delete;
+        call [string "exit"; getenv varname];
+      ])
+    (fun throw ->
+       f (fun ~message ~return ->
+           seq [
+             msg#set message;
+             ret#set (Integer.to_string return);
+          (* call [string "echo"; pid#get]; *)
+          (* call [string "ps"; pid#get]; *)
+             throw;
+             (* call [string "kill"; string "-s"; string "USR1"; pid#get] *)
+        ]))
 
 let if_seq ~t ?e c =
   match e with

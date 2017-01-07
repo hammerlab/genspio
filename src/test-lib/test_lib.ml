@@ -59,8 +59,9 @@ let run_with_shell ~shell l =
         return None
       | failures ->
         return (Some (
-            (sprintf "#### Command%s:\n%s\n#### Args: %s\n#### Failures:\n%s\n"
+            (sprintf "#### Command%s (%d bytes):\n%s\n#### Args: %s\n#### Failures:\n%s\n"
                (Option.value_map name ~default:"" ~f:(sprintf " “%s”"))
+               (String.length s)
                s
                (String.concat ~sep:" " args)
                (List.map failures ~f:(fun (_, msg) -> sprintf "* %s" msg)
