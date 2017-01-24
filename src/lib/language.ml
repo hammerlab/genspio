@@ -261,6 +261,7 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "do %s" (continue body);
         "done"
       ]
+    | Seq [] -> ":"
     | Seq l -> seq (List.map l ~f:continue)
     | Not t ->
       sprintf "! { %s ; }" (continue t)
