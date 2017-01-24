@@ -595,7 +595,7 @@ let tests =
         seq [
           tmp#set (string "start");
           with_signal (fun signal ->
-               seq [
+              seq [
                 tmp#append (string "-signal");
                 signal;
                 tmp#append (string "-WRONG");
@@ -694,6 +694,12 @@ let tests =
             );
         ]
       );
+    exits 21 ~name:"empty-seq" Genspio.EDSL.(
+        seq [
+          seq [];
+          return 21
+        ]);
+
   ]
 
 let posix_sh_tests = [
