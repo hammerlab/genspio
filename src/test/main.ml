@@ -84,7 +84,7 @@ let tests =
           file_exists @@ string "/djlsjdseij", return 21;
         ]
       );
-    exits 0 Construct.(
+    exits 0 ~name:"Write-stdout" Construct.(
         let path = string "/tmp/bouh" in
         seq [
           if_then (file_exists path)
@@ -100,8 +100,8 @@ let tests =
               exit 1
             end;
         ]);
-    exits 42 Construct.(
-        (* Many variation on `write_output` *)
+    exits 42 ~name:"Variations-on-write-output" Construct.(
+        (* Many variations on `write_output` *)
         let stdout = string "/tmp/p1_out" in
         let stderr = string "/tmp/p1_err" in
         let return_value = string "/tmp/p1_ret" in
@@ -113,6 +113,10 @@ let tests =
                 exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
                 return 12;
               ]);
+          call [string "cat"; return_value];
+          assert_or_fail "hello-1"
+            (call [string "cat"; return_value] |> output_as_string
+                                                  =$= string "12");
           write_output
             ~stderr ~return_value
             (seq [
@@ -129,10 +133,14 @@ let tests =
               ]);
           write_output ~stdout
             (seq [
-                printf "%s" "hello";
+                printf "%s" "helloooo";
                 exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
                 return 12;
               ]);
+          call [string "cat"; stdout];
+          assert_or_fail "hello-2"
+            (call [string "cat"; stdout] |> output_as_string
+                                            =$= string "helloooo");
           write_output
             (seq [
                 printf "%s" "hello";
@@ -142,7 +150,7 @@ let tests =
           return 42;
         ]
       );
-    exits 11 Construct.(
+    exits 11 ~name:"write-output-as-string" Construct.(
         let stdout = string "/tmp/p1_out" in
         let stderr = string "/tmp/p1_err" in
         let return_value_path = string "/tmp/p1_ret" in
@@ -171,7 +179,7 @@ let tests =
                 (
                   if_then_else
                     (output_as_string (call [string "cat"; return_value_path])
-                     =$= ksprintf string "%d\n" return_value_value)
+                     =$= ksprintf string "%d" return_value_value)
                     (return 11)
                     (return 22)
                 )
@@ -412,7 +420,7 @@ let tests =
     exits ~name:"failure-of-int-of-string" 77
       Construct.( (* It's not a string representing an integer: *)
         if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
-                      =$= string "8877732")
+                                                              =$= string "8877732")
           (return 12)
           (return 13)
       );
@@ -699,7 +707,62 @@ let tests =
           seq [];
           return 21
         ]);
-
+    exits 2 ~name:"redirect-stuff" Genspio.EDSL.(
+        let tmp1 = tmp_file "stdout" in
+        let tmp2 = tmp_file "stderr" in
+        let empty = string "" in
+        let init = string "This should be erraasseed" in
+        let recognizable = "heelllloooooo" in
+        seq [
+          call [string "printf"; string "1: %s, 2: %s\n"; tmp1#path; tmp2#path];
+          tmp1#set init;
+          tmp2#set init;
+          write_output
+            ~stdout:tmp1#path
+            ~stderr:tmp2#path
+            begin
+              with_redirections (exec ["printf"; "%s"; recognizable]) [
+                to_fd (int 1) (int 2);
+              ]
+            end;
+          assert_or_fail "stdout-empty" (tmp1#get =$= empty);
+          assert_or_fail "stderr-hello"
+            (* We can only test with grep because stderr contains a bunch of
+               other stuff, especially since we use the 
+               `-x` option of the shells *)
+            (tmp2#get >> exec ["grep"; recognizable] |> succeeds);
+          return 2;
+        ]
+      );
+    exits 3 ~name:"redirect-many" Genspio.EDSL.(
+        let tmp1 = tmp_file "fd3" in
+        let tmp2 = tmp_file "fd3-other" in
+        let recognizable = "heelllloooooo" in
+        seq [
+          tmp1#set (string "");
+          tmp2#set (string "");
+          call [string "eval";
+                output_as_string (
+                  call [string "printf"; string "exec 3> %s"; tmp1#path]
+                )];
+          with_redirections (exec ["printf"; "%s"; recognizable]) [
+            to_fd (int 1) (int 2);
+            to_fd (int 2) (int 3);
+            to_file (int 3) tmp2#path; (* we hijack tmp1's use of fd 3 *)
+          ];
+          call [string "eval";
+                output_as_string (
+                  call [string "printf"; string "exec 3>&-"]
+                )];
+          call [string "cat"; tmp1#path];
+          call [string "cat"; tmp2#path];
+          assert_or_fail "fd3-empty" (tmp1#get =$= string "");
+          assert_or_fail "fd3-other-recog"
+            (* Again going through fd `2` we've grabbed some junk: *)
+            (tmp2#get >> exec ["grep"; recognizable] |> succeeds);
+          return 3
+        ]
+      );
   ]
 
 let posix_sh_tests = [

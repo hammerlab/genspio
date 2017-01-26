@@ -127,6 +127,12 @@ val make_switch :
 (**/**)
 
 
+type fd_redirection
+val to_fd: int t -> int t -> fd_redirection
+val to_file: int t -> string t -> fd_redirection
+val with_redirections:
+  unit t -> fd_redirection list -> unit t
+
 val write_output :
   ?stdout:string t ->
   ?stderr:string t ->
