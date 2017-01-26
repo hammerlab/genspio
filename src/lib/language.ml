@@ -231,7 +231,7 @@ let rec to_shell: type a. _ -> a t -> string =
         ksprintf failwith "to_shell: sorry literal %S is impossible to \
                            escape as `exec` argument" s
       | `String v ->
-        let variable_name = Unique_name.create varprefix in
+        let variable_name = Unique_name.variable varprefix in
         let declaration =
           sprintf "%s=$(%s; printf 'x')"
             variable_name (continue v |> expand_octal)
@@ -240,7 +240,7 @@ let rec to_shell: type a. _ -> a t -> string =
           (sprintf "\"${%s%%?}\"" variable_name)
       | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
       | `Int other ->
-        let variable_name = Unique_name.create varprefix in
+        let variable_name = Unique_name.variable varprefix in
         let declaration = sprintf "%s=%s" variable_name (continue other) in
         argument ~variable_name ~declaration
           (sprintf "\"${%s%%?}\"" variable_name) 
@@ -408,7 +408,7 @@ let rec to_shell: type a. _ -> a t -> string =
         ])
     | Fail -> die "EDSL.fail called"
     | Parse_command_line { options; action } ->
-      let prefix = Unique_name.create "getopts" in
+      let prefix = Unique_name.variable "getopts" in
       let variable {switch; doc;} =
         sprintf "%s_%c" prefix switch in
       let inits = ref [] in
