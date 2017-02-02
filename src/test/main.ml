@@ -742,14 +742,11 @@ let tests =
           tmp1#set (string "");
           tmp2#set (string "");
           with_redirections (exec ["printf"; "%s"; recognizable]) [
-            to_fd (int 1) (int 2);
-            to_fd (int 2) (int 3);
+            to_file (int 3) tmp1#path;
             to_file (int 3) tmp2#path; (* we hijack tmp1's use of fd 3 *)
+            to_fd (int 2) (int 3);
+            to_fd (int 1) (int 2);
           ];
-          (* call [string "eval"; *)
-          (*       output_as_string ( *)
-          (*         call [string "printf"; string "exec 3>&-"] *)
-          (*       )]; *)
           call [string "cat"; tmp1#path];
           call [string "cat"; tmp2#path];
           assert_or_fail "fd3-empty" (tmp1#get =$= string "");
