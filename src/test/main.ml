@@ -756,6 +756,44 @@ let tests =
           return 3
         ]
       );
+    exits 2 ~name:"redirect-fails" Genspio.EDSL.(
+        let tmp1 = tmp_file "fd3" in
+        let tmp2 = tmp_file "return" in
+        let recognizable = "heelllloooooo" in
+        let this_is_bash =
+          (exec ["ps"] |> output_as_string)
+          >> exec ["grep"; "bash"]
+          |> returns ~value:0 in
+        seq [
+          tmp1#set (string "");
+          write_output
+            ~return_value:tmp2#path (
+            with_redirections (exec ["printf"; "%s"; recognizable]) [
+              to_fd (int 4) (int 3);
+              to_file (int 1) tmp1#path;
+            ]
+          );
+          call [string "printf"; string "%s:\\n"; tmp1#path];
+          call [string "cat"; tmp1#path];
+          call [string "printf"; string "%s:\\n"; tmp2#path];
+          call [string "cat"; tmp2#path];
+          assert_or_fail "fd3" (
+            (tmp1#get =$= string "")
+            |||
+            (this_is_bash
+             &&&
+             (tmp1#get =$= string recognizable))
+          );
+          assert_or_fail "return-value" (
+            (tmp2#get =$= string "2")
+            |||
+            (this_is_bash
+             &&&
+             (tmp2#get =$= string "0"))
+          );
+          return 2
+        ]
+      );
   ]
 
 let posix_sh_tests = [
