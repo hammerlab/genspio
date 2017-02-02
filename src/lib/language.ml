@@ -315,7 +315,7 @@ let rec to_shell: type a. _ -> a t -> string =
           (String.concat variables ~sep:"")
           exec
       in
-      begin match List.rev redirections with
+      begin match redirections with
       | [] -> continue unit_t
       | one :: more ->
         continue (Seq (
