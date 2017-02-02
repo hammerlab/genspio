@@ -311,8 +311,9 @@ let rec to_shell: type a. _ -> a t -> string =
             takearg#argument
             retoarg#argument
         in
-        sprintf "%s eval \"$(printf %s)\" "
+        sprintf "%s eval \"$(printf %s)\" || { echo 'Exec %s failed' >&2 ; } "
           (String.concat variables ~sep:"")
+          exec
           exec
       in
       begin match redirections with
