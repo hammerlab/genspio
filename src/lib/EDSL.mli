@@ -166,7 +166,7 @@ val with_redirections:
    - then, ["printf"] outputs to [1].
 
    Invalid cases, like redirecting to a file-descriptor has not been
-   openned, lead to undefined behavior; see
+   opened, lead to undefined behavior; see
    {{:https://github.com/hammerlab/genspio/issues/41}issue #41}.
    If the shell is POSIX, the whole expression [with_redirections expr redirs]
    exits and its return value is in [[1, 125]]; if the shell is

@@ -769,7 +769,7 @@ let tests =
           write_output
             ~return_value:tmp2#path (
             with_redirections (exec ["printf"; "%s"; recognizable]) [
-              to_fd (int 4) (int 3);
+              to_fd (int 4) (int 3); (* This fails because &3 is not open! *)
               to_file (int 1) tmp1#path;
             ]
           );
