@@ -126,12 +126,53 @@ val make_switch :
   default:unit Language.t -> unit Language.t
 (**/**)
 
+(** {3 Redirections } *)
 
 type fd_redirection
+(** Abstract type of file-descriptor redirections. *)
+
 val to_fd: int t -> int t -> fd_redirection
+(** Create a file-descriptor to  file-descriptor redirection. *)
+
 val to_file: int t -> string t -> fd_redirection
+(** Create a file-descriptor to file redirection. *)
+
 val with_redirections:
   unit t -> fd_redirection list -> unit t
+(** 
+   Run a [unit t] expression after applying a list of file-descriptor
+   redirections.
+
+   The redirections are applied in the list's order.
+   
+   Cf. the example:
+   {[
+       with_redirections (exec ["printf"; "%s"; "hello"]) [
+         to_file (int 3) (string "/path/to/one");
+         to_file (int 3) (string "/path/to/two");
+         to_fd (int 2) (int 3);
+         to_fd (int 1) (int 2);
+       ];
+   ]}
+   
+   ["printf '%s' 'hello'"] will output to the file ["/path/to/two"],
+   because redirections are set in that order:
+
+   - file-descriptor [3] is set to output to ["/path/to/one"],
+   - file-descriptor [3] is set to output to ["/path/to/two"]
+     (overriding the previous redirection),
+   - file-descriptor [2] is redirected to file-descriptor [3],
+   - file-descriptor [1] is redirected to file-descriptor [2],
+   - then, ["printf"] outputs to [1].
+
+   Invalid cases, like redirecting to a file-descriptor has not been
+   opened, lead to undefined behavior; see
+   {{:https://github.com/hammerlab/genspio/issues/41}issue #41}.
+   If the shell is POSIX, the whole expression [with_redirections expr redirs]
+   exits and its return value is in [[1, 125]]; if the shell is
+   ["bash"] or ["zsh"], the failing redirection is just ignored and [expr] is
+   executed with the remaining redirections if any.
+*)
 
 val write_output :
   ?stdout:string t ->

@@ -292,25 +292,41 @@ let rec to_shell: type a. _ -> a t -> string =
     | Not t ->
       sprintf "! { %s ; }" (continue t)
     | Redirect_output (unit_t, redirections) ->
-      let variables = ref [] in
+      (* 
+         We're here compiling the redirections into `exec` statements which
+         set up global redirections; we limit their scope with `( .. )`.
+         E.g.
+         (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ; 
+      *)
       let make_redirection { take; redirect_to } =
         let takearg = to_argument "redirection_take" (`Int take) in
         let retoarg =
           to_argument "redirection_to"
             (match redirect_to with `Fd i -> `Int i | `Path p -> `String p) in
-        variables := takearg#export :: retoarg#export :: !variables;
-        sprintf "%s>%s%s"
-          takearg#argument
-          (match redirect_to with `Fd _ -> "&" | `Path _ -> " ")
-          retoarg#argument
+        let variables =
+          takearg#export :: retoarg#export :: [] |> List.filter_opt in
+        let exec =
+          sprintf "\"exec %%s>%s%%s\" %s %s"
+            (match redirect_to with `Fd _ -> "&" | `Path _ -> "")
+            takearg#argument
+            retoarg#argument
+        in
+        sprintf "%s eval \"$(printf %s)\" || { echo 'Exec %s failed' >&2 ; } "
+          (String.concat variables ~sep:"")
+          exec
+          exec
       in
-      let compiled_redirections =
-        List.rev_map redirections ~f:make_redirection in
-      let command = Construct.string (continue unit_t) in
-      sprintf "%s eval \"{ $(%s) ; } %s\" "
-        (String.concat (List.filter_opt !variables) ~sep:"")
-        (expand_octal (continue command))
-        (String.concat ~sep:" " compiled_redirections)
+      begin match redirections with
+      | [] -> continue unit_t
+      | one :: more ->
+        continue (Seq (
+            Raw_cmd (sprintf "( %s" (make_redirection one))
+            ::
+            List.map more ~f:(fun r -> Raw_cmd (make_redirection r))
+            @ [unit_t]
+            @ [ Raw_cmd ")" ]
+          ))
+      end
     | Write_output { expr; stdout; stderr; return_value } ->
       let ret_arg =
         Option.map return_value ~f:(fun v -> to_argument "retval" (`String v))
