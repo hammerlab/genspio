@@ -4,7 +4,7 @@ include _build/project.mk
 _build/project.mk:
 	$(OCAMLBUILD) $(notdir $@)
 
-.PHONY: merlin
+.PHONY: merlin doc
 merlin:
 	rm -f .merlin _build/.merlin && $(MAKE) .merlin && cat .merlin
 
