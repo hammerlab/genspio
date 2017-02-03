@@ -77,7 +77,8 @@ let build_doc () =
        -I src/lib/  -I src/pure \
        %s " (String.concat "," lib_deps) (String.concat " " files) in
   let deps =
-    ["README.md"] (* @ mlis @mls *)
+    ["README.md"]
+    @ [Project.path_of_pack ~suffix:".cma" lib]
   in
   Solvuu_build.Util.Rule.rule
     ~name:"Build-genspio-docs"
