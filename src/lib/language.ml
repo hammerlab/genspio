@@ -394,12 +394,12 @@ let rec to_shell: type a. _ -> a t -> string =
         (* We need to get the output of the `string t` and then do a `$<thing>`
            on it:
            f () { printf "HOME" ;}
-           aa=$(printf "\${%s}" $(f)) ; sh -c "printf \"$aa\""
+           aa=$(printf "\${%s}" $(f)) ; eval "printf \"$aa\""
            And the `` | tr -d '\\n' `` part is because `\n` in the variable name
            just “cuts” it, it wouldn't fail and `${HOME\nBOUH}` would be
            equal to `${HOME}`
         *)
-        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; sh -c \"printf %s\" ; } "
+        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
     | Setenv (variable, value) ->
