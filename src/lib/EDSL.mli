@@ -1,42 +1,16 @@
+(** The Embedded Domain Specific Lanaguage to create “shell-expressions.” *)
+
+
 type 'a t = 'a Language.t
+(** The type of a typed expression. *)
 
+(** {3 Literals } *)
 
-val fail: unit t
-(** Abort the script/command immediately. *)
+val string : string -> string t
+val int : int -> int t
+val bool : bool -> bool t
 
-val with_signal:
-  ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
-(** Use a UNIX signal (default ["USR2"]) to create a “jump.”
-
-    [with_signal ~catch (fun signal -> (* more_code *))]
-    executes [(* more_code *)] but if it uses [signal], the code behaves like
-    a raised exception, and the [catch] argument is executed.
-
-    See the example:
-
-    {[
-        let tmp = tmp_file "appender" in
-        seq [
-          tmp#set (string "start");
-          with_signal ~signal_name:"USR1" (fun signal ->
-               seq [
-                tmp#append (string "-signal");
-                signal;
-                tmp#append (string "-WRONG");
-              ])
-            ~catch:(seq [
-                tmp#append (string "-caught")
-              ]);
-          call [string "printf"; string "tmp: %s\\n"; tmp#get];
-          assert_or_fail "Timeline-of-tmp"
-            (tmp#get =$= string "start-signal-caught");
-        ]
-    ]}
-    
-    Note that by default, the compiler functions use the signal ["USR1"] and
-    having 2 calls to [trap] with the same signal in the same script
-    do not play well, so use [~signal_name:"USR1"] at your own risk.
-*)
+(** {3 Basic system Commands} *)
 
 val call : string t list -> unit t
 (** Call a command from its list of “arguments” (including the first
@@ -70,6 +44,8 @@ val setenv: var:string t -> string t -> unit t
     not fit in a shell variable (newlines, ['\000']), behavior is undefined.
  *)
 
+(** {3 Boolean Expressions} *)
+
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val ( =$= ) : string t -> string t -> bool t
@@ -81,6 +57,50 @@ val returns: 'a t -> value: int -> bool t
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
 
+val not : bool t -> bool t
+
+val file_exists : string t -> bool t
+
+(** {3 Integer Arithmetic} *)
+
+module Integer : sig
+  val to_string : int t -> string t
+  val of_string : string t -> int t
+  val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus | `Mod ] -> int t -> int t
+  val add : int t -> int t -> int t
+  val ( + ) : int t -> int t -> int t
+  val sub : int t -> int t -> int t
+  val ( - ) : int t -> int t -> int t
+  val mul : int t -> int t -> int t
+  val ( * ) : int t -> int t -> int t
+  val div : int t -> int t -> int t
+  val ( / ) : int t -> int t -> int t
+  val modulo : int t -> int t -> int t
+  val (mod) : int t -> int t -> int t
+  val cmp : [ `Eq | `Ge | `Gt | `Le | `Lt | `Ne ] -> int t -> int t -> bool t
+  val eq : int t -> int t -> bool t
+  val ne : int t -> int t -> bool t
+  val lt : int t -> int t -> bool t
+  val le : int t -> int t -> bool t
+  val ge : int t -> int t -> bool t
+  val gt : int t -> int t -> bool t
+  val ( = ) : int t -> int t -> bool t
+  val ( <> ) : int t -> int t -> bool t
+  val ( < ) : int t -> int t -> bool t
+  val ( <= ) : int t -> int t -> bool t
+  val ( >= ) : int t -> int t -> bool t
+  val ( > ) : int t -> int t -> bool t
+end
+
+(** {3 String Manipulation} *)
+
+val output_as_string : unit t -> string t
+val feed : string:string t -> unit t -> unit t
+val ( >> ) : string t -> unit t -> unit t
+val string_concat: string t list -> string t
+
+(** {3 Control Flow} *)
+
 val nop : unit t
 val if_then_else :
   bool t -> unit t -> unit t -> unit t
@@ -88,6 +108,9 @@ val if_then : bool t -> unit t -> unit t
 
 val seq : unit t list -> unit t
 (** Sequence a list of expressions into an expression. *)
+
+val loop_while : bool t -> body:unit t -> unit t
+
 
 val if_seq:
   t:unit t list ->
@@ -97,10 +120,6 @@ val if_seq:
 (** [if_seq c ~t ~e] is an alternate API for {!if_then_else} (when
     [?e] is provided) or {!if_then} (otherwise) that assumes “then”
     and “else” bodies to be lists for {!seq} construct. *)
-
-val not : bool t -> bool t
-
-val file_exists : string t -> bool t
 
 (** {3 Switch Statements } *)
 
@@ -181,45 +200,71 @@ val write_output :
 
 val write_stdout : path: string t -> unit t -> unit t
 
-(** {3 Literals } *)
+(** {3 Escaping The Execution Flow } *)
 
-val string : string -> string t
-val int : int -> int t
-val bool : bool -> bool t
+val fail: unit t
+(** Expression that aborts the whole script/command immediately. *)
 
-module Integer : sig
-  val to_string : int t -> string t
-  val of_string : string t -> int t
-  val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus | `Mod ] -> int t -> int t
-  val add : int t -> int t -> int t
-  val ( + ) : int t -> int t -> int t
-  val sub : int t -> int t -> int t
-  val ( - ) : int t -> int t -> int t
-  val mul : int t -> int t -> int t
-  val ( * ) : int t -> int t -> int t
-  val div : int t -> int t -> int t
-  val ( / ) : int t -> int t -> int t
-  val modulo : int t -> int t -> int t
-  val (mod) : int t -> int t -> int t
-  val cmp : [ `Eq | `Ge | `Gt | `Le | `Lt | `Ne ] -> int t -> int t -> bool t
-  val eq : int t -> int t -> bool t
-  val ne : int t -> int t -> bool t
-  val lt : int t -> int t -> bool t
-  val le : int t -> int t -> bool t
-  val ge : int t -> int t -> bool t
-  val gt : int t -> int t -> bool t
-  val ( = ) : int t -> int t -> bool t
-  val ( <> ) : int t -> int t -> bool t
-  val ( < ) : int t -> int t -> bool t
-  val ( <= ) : int t -> int t -> bool t
-  val ( >= ) : int t -> int t -> bool t
-  val ( > ) : int t -> int t -> bool t
-end
+val with_signal:
+  ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
+(** Use a UNIX signal (default ["USR2"]) to create a “jump.”
 
-val output_as_string : unit t -> string t
-val feed : string:string t -> unit t -> unit t
-val ( >> ) : string t -> unit t -> unit t
-val loop_while : bool t -> body:unit t -> unit t
+    [with_signal ~catch (fun signal -> (* more_code *))]
+    executes [(* more_code *)] but if it uses [signal], the code behaves like
+    a raised exception, and the [catch] argument is executed.
+
+    See the example:
+
+    {[
+        let tmp = tmp_file "appender" in
+        seq [
+          tmp#set (string "start");
+          with_signal ~signal_name:"USR1" (fun signal ->
+               seq [
+                tmp#append (string "-signal");
+                signal;
+                tmp#append (string "-WRONG");
+              ])
+            ~catch:(seq [
+                tmp#append (string "-caught")
+              ]);
+          call [string "printf"; string "tmp: %s\\n"; tmp#get];
+          assert_or_fail "Timeline-of-tmp"
+            (tmp#get =$= string "start-signal-caught");
+        ]
+    ]}
+    
+    Note that by default, the compiler functions use the signal ["USR1"] and
+    having 2 calls to [trap] with the same signal in the same script
+    do not play well, so use [~signal_name:"USR1"] at your own risk.
+*)
+
+val with_failwith:
+  ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
+   unit Language.t) ->
+  unit Language.t
+(** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
+    with a function that exits the flow of execution and displays
+    [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
+
+(** {3 Temporary Files} *)
+
+type file = <
+  get : string t;
+  set : string t -> unit t;
+  append : string t -> unit t;
+  delete: unit t;
+  path: string t;
+>
+(** Abstraction of a file, cf. {!tmp_file}. *)
+
+
+val tmp_file: ?tmp_dir: string t -> string -> file
+(** Create a temporary file that may contain arbitrary strings (can be
+    used as variable containing [string t] values). *)
+
+
+(** {3 Command Line Parsing} *)
 
 type 'argument_type cli_option = 'argument_type Language.cli_option
 type 'argument_type option_spec = 'argument_type Language.option_spec
@@ -243,29 +288,7 @@ end
 val parse_command_line :
   ('parse_function, unit t) cli_options -> 'parse_function -> unit t
 
-val string_concat: string t list -> string t
-
-type file = <
-  get : string t;
-  set : string t -> unit t;
-  append : string t -> unit t;
-  delete: unit t;
-  path: string t;
->
-(** Abstraction of a file, cf. {!tmp_file}. *)
-
-
-val tmp_file: ?tmp_dir: string t -> string -> file
-(** Create a temporary file that may contain arbitrary strings (can be
-    used as variable containing [string t] values). *)
-
-val with_failwith:
-  ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
-   unit Language.t) ->
-  unit Language.t
-(** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
-    with a function that exits the flow of execution and displays
-    [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
+(** {3 Very Unsafe Operations} *)
 
 (** The {!Magic} module is like OCaml's {!Obj.magic} function for the
     EDSL; it allows one to bypass typing. *)
