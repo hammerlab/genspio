@@ -8,3 +8,4 @@ _build/project.mk:
 merlin:
 	rm -f .merlin _build/.merlin && $(MAKE) .merlin && cat .merlin
 
+doc: _build/doc/index.html
