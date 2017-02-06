@@ -26,6 +26,9 @@ You need OCaml ≥ 4.03.0 together with
 [`solvuu-build`](https://github.com/solvuu/solvuu-build):
 
     make
+    
+Testing
+-------
 
 To run the tests
 also need
@@ -51,37 +54,39 @@ cf. [`#35`](https://github.com/hammerlab/genspio/issues/35)):
 Summary:
 
 * Test "dash" (`'dash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.56 s.
+    - 0 / 141 failures
+    - time: 2.46 s.
     - version: `"Version: 0.5.8-2.1ubuntu2"`.
 * Test "bash" (`'bash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.90 s.
+    - 0 / 141 failures
+    - time: 4.47 s.
     - version: `"GNU bash, version 4.3.46(1)-release (x86_64-pc-linux-gnu)"`.
 * Test "sh" (`'sh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.61 s.
+    - 0 / 141 failures
+    - time: 2.73 s.
     - version: `""`.
 * Test "busybox" (`'busybox' 'ash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.54 s.
+    - 0 / 141 failures
+    - time: 1.87 s.
     - version: `"BusyBox v1.22.1 (Ubuntu 1:1.22.0-15ubuntu1) multi-call binary."`.
 * Test "ksh" (`'ksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 20 / 115 failures
-    - time: 1.42 s.
+    - 27 / 141 failures
+    - time: 3.28 s.
     - version: `"version         sh (AT&T Research) 93u+ 2012-08-01"`.
     - Cf. `/tmp/genspio-test-ksh-failures.txt`.
 * Test "mksh" (`'mksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.75 s.
+    - 2 / 141 failures
+    - time: 4.40 s.
     - version: `"Version: 52c-2"`.
+    - Cf. `/tmp/genspio-test-mksh-failures.txt`.
 * Test "posh" (`'posh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 115 failures
-    - time: 0.75 s.
+    - 2 / 141 failures
+    - time: 4.21 s.
     - version: `"Version: 0.12.6"`.
+    - Cf. `/tmp/genspio-test-posh-failures.txt`.
 * Test "zsh" (`'zsh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 4 / 115 failures
-    - time: 0.97 s.
+    - 4 / 141 failures
+    - time: 4.79 s.
     - version: `"zsh 5.1.1 (x86_64-ubuntu-linux-gnu)"`.
     - Cf. `/tmp/genspio-test-zsh-failures.txt`.
 
@@ -90,54 +95,27 @@ All “known” shells were tested ☺
 --------------------------------------------------------------------------------
 ```
 
-Development Notes
------------------
+Tests can be tweaked with environment variables:
 
-About dealing with `sh` / POSIX insanity:
+- `filter_tests`: is a comma-separated list of name *prefixes* to run only a
+  subset of the tests (useful when dealing a specific issue).<br/>
+  Example: `export filter_tests=redirect,with_failwith` runs 10 tests instead of
+  more than 100.
+- `important_shells`: is comma-separated list of shells for which 1 failure makes
+  the whole test fail (i.e. if a shell like `ksh` is not “important,” the
+  failures are reported but the test command still returns 0).<br/>
+  The default is `bash,dash` (The Travis CI script also considers `busybox`
+  important for GNU/Linux builds).
+- `add_shells`: is a `++`-separated list of “shells,” each one defined as a
+  comma-separated list: `<Name>,escape, <cmd-arg>, <cmd>`, where is
+  `<cmd-arg>` is replaced with the actual command tested within `<cmd>`, e.g.:
 
-- <http://stackoverflow.com/questions/7427262/how-to-read-a-file-into-a-variable-in-shell/22607352#22607352>
-- <http://www.etalabs.net/sh_tricks.html>
-- <http://apenwarr.ca/log/?m=201102>
-- <http://stackoverflow.com/questions/794902/whats-the-opposite-of-od1>
-
-Opengroup specs:
-
-- [printf command](http://pubs.opengroup.org/onlinepubs/9699919799/utilities/printf.html)
-  (and
-  [format strings](http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap05.html#tag_05))
-- [od](http://pubs.opengroup.org/onlinepubs/9699919799/utilities/od.html)
-- [trap](http://pubs.opengroup.org/onlinepubs/000095399/utilities/trap.html),
-  [kill](http://pubs.opengroup.org/onlinepubs/000095399/utilities/kill.html),
-  and
-  [`signal.h`](http://pubs.opengroup.org/onlinepubs/000095399/basedefs/signal.h.html)
-
-
-One should not count on printf hexadecimal literals (`printf '\x42'`):
-cf.
-[man page](http://www.unix.com/man-page/POSIX/1posix/printf/) and
-[issue](https://bugs.launchpad.net/ubuntu/+source/dash/+bug/1499473)
-on
-[Dash](https://en.wikipedia.org/wiki/Almquist_shell)
-→ “Won't Fix.”
-
-Put arbitrary content (incl. `\000`, `\n`, etc.) in a variable as hexadecimal:
-
-```shell
-IFS= read hexa_var << EOOOF
-$(
-cat /tmp/p1_out | {
-while true; do
-read dummy oct << EOF
-$(dd bs=1 count=1 2>/dev/null |od -t x1)
-EOF
-echo "oct: $oct" >&2
-printf "${oct}"
-if [ "$oct" = "" ] ; then break ; fi
-done
-printf '\n'
-}
-)
-EOOOF
-
-echo "hexa: $hexa_var"
+```
+export add_shells='
+Local-sh, escape, <cmd>,
+    sh -c <cmd>
+++
+My-gcloud-freebsd-sh, escape, <command>,
+   printf "%s" <command> | gcloud compute ssh fbd01 --command "sh -x"
+'
 ```
