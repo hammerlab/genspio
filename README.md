@@ -97,17 +97,17 @@ All “known” shells were tested ☺
 
 Tests can be tweaked with environment variables:
 
-- `filter_tests`: is a coma-separated list of name *prefixes* to run only a
+- `filter_tests`: is a comma-separated list of name *prefixes* to run only a
   subset of the tests (useful when dealing a specific issue).<br/>
   Example: `export filter_tests=redirect,with_failwith` runs 10 tests instead of
   more than 100.
-- `important_shells`: is coma-separated list of shells for which 1 failure makes
+- `important_shells`: is comma-separated list of shells for which 1 failure makes
   the whole test fail (i.e. if a shell like `ksh` is not “important,” the
   failures are reported but the test command still returns 0).<br/>
   The default is `bash,dash` (The Travis CI script also considers `busybox`
   important for GNU/Linux builds).
 - `add_shells`: is a `++`-separated list of “shells,” each one defined as a
-  coma-separated list: `<Name>,escape, <cmd-arg>, <cmd>`, where is
+  comma-separated list: `<Name>,escape, <cmd-arg>, <cmd>`, where is
   `<cmd-arg>` is replaced with the actual command tested within `<cmd>`, e.g.:
 
 ```
