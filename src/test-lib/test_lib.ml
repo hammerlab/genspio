@@ -95,13 +95,13 @@ let avaialable_shells () =
     sprintf "dpkg -s %s | grep ^Version" package in
   let candidates = [
     dash_like "dash" ~get_version:(package_version "dash");
-    dash_like "bash" ~get_version:"bash --version | head -n 1";
-    dash_like "sh" ~get_version:(package_version "sh");
+    (* dash_like "bash" ~get_version:"bash --version | head -n 1"; *)
+    (* dash_like "sh" ~get_version:(package_version "sh"); *)
     busybox;
-    dash_like "ksh" ~get_version:"ksh --version 2>&1";
-    dash_like "mksh" ~get_version:(package_version "mksh");
-    dash_like "posh" ~get_version:(package_version "posh");
-    dash_like "zsh" ~get_version:"zsh --version";
+    (* dash_like "ksh" ~get_version:"ksh --version 2>&1"; *)
+    (* dash_like "mksh" ~get_version:(package_version "mksh"); *)
+    (* dash_like "posh" ~get_version:(package_version "posh"); *)
+    (* dash_like "zsh" ~get_version:"zsh --version"; *)
   ] in
   let forgotten = ref [] in
   Pvem_lwt_unix.Deferred_list.while_sequential candidates ~f:(fun sh ->

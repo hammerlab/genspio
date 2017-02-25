@@ -213,7 +213,7 @@ let rec to_shell: type a. _ -> a t -> string =
     in
     let expand_octal s =
       sprintf
-        {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
+        {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
     let to_argument varprefix =
       let argument ?declaration ?variable_name argument =
@@ -311,7 +311,7 @@ let rec to_shell: type a. _ -> a t -> string =
             takearg#argument
             retoarg#argument
         in
-        sprintf "%s eval \"$(printf %s)\" || { echo 'Exec %s failed' >&2 ; } "
+        sprintf "%s eval \"$(printf -- %s)\" || { echo 'Exec %s failed' >&2 ; } "
           (String.concat variables ~sep:"")
           exec
           exec
@@ -336,7 +336,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let with_potential_return =
         sprintf "%s { %s %s ; }" var (continue expr)
           (Option.value_map ret_arg ~default:"" ~f:(fun r ->
-               sprintf "; printf \"$?\" > %s" r#argument))
+               sprintf "; printf -- \"$?\" > %s" r#argument))
       in
       let redirections =
         let make fd =
@@ -349,7 +349,7 @@ let rec to_shell: type a. _ -> a t -> string =
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
     | Int_to_string i ->
-      continue (Output_as_string (Raw_cmd (sprintf "printf '%%d' %s" (continue i))))
+      continue (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
     | String_to_int s ->
       let var = "tmpxxxxijljlijdeifh" in
       let value = sprintf "\"$%s\"" var in
@@ -399,11 +399,11 @@ let rec to_shell: type a. _ -> a t -> string =
            just “cuts” it, it wouldn't fail and `${HOME\nBOUH}` would be
            equal to `${HOME}`
         *)
-        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf %s\" ; } "
+        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf -- '%%s' %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
     | Setenv (variable, value) ->
-      sprintf "export $(%s)=$(%s)"
+      sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
     | With_signal {signal_name; catch; run} ->
@@ -435,7 +435,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let help = ref [] in
       let to_help s = help := s :: !help in
       let string_of_var var =
-        Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
+        Output_as_string (Raw_cmd (sprintf "printf -- \"${%s}\"" var)) in
       let bool_of_var var =
         Construct.succeeds (Raw_cmd (sprintf "{ ${%s} ; } " var)) in
       let unit_t =
@@ -455,7 +455,7 @@ let rec to_shell: type a. _ -> a t -> string =
                        (seq [
                            "if [ -n \"$2\" ]";
                            sprintf "then export %s=\"$2\" " var;
-                           sprintf "else printf \"ERROR -%c requires an argument\\n\" \
+                           sprintf "else printf -- \"ERROR -%c requires an argument\\n\" \
                                     >&2" x.switch;
                            die "Command line parsing error: Aborting";
                            "fi";
@@ -534,7 +534,7 @@ let rec to_shell: type a. _ -> a t -> string =
 let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
   let die s =
-    sprintf " { printf '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
+    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
     sprintf "trap 'exit %d' USR1" exit_with;

@@ -200,6 +200,8 @@ val write_output :
 
 val write_stdout : path: string t -> unit t -> unit t
 
+val eprintf : string t -> string t list -> unit t
+
 (** {3 Escaping The Execution Flow } *)
 
 val fail: unit t
@@ -287,6 +289,38 @@ end
 
 val parse_command_line :
   ('parse_function, unit t) cli_options -> 'parse_function -> unit t
+
+module Command_line: sig
+
+  type 'a cli_option = {
+    switches : string list;
+    doc : string;
+    default : 'a;
+  }
+
+  type _ option_spec =
+      Opt_flag : bool t cli_option -> bool t option_spec
+    | Opt_string : string t cli_option -> string t option_spec
+  and (_, _) cli_options =
+      Opt_end : string -> ('a, 'a) cli_options
+    | Opt_cons : 'c option_spec *
+        ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+  module Arg :
+    sig
+      val string :
+        ?default:string t ->
+        doc:string -> string list -> string t option_spec
+      val flag :
+        ?default:bool t -> doc:string -> string list -> bool t option_spec
+      val ( & ) :
+        'a option_spec -> ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options
+      val usage : string -> ('a, 'a) cli_options
+    end
+  val parse : ('a, unit t) cli_options -> 'a -> unit t
+end
+
+
+
 
 (** {3 Very Unsafe Operations} *)
 

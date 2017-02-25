@@ -237,34 +237,43 @@ let tests =
       );
     begin
       let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
-      let make ret minus_g single =
+      let make ret minus_g single count =
         exits ret
+          ~name:(sprintf "parse-cli-%d" count)
           ~args:["-f"; minus_f; single; "-g"; minus_g ]
-          Construct.(
-            parse_command_line
-              Option_list.(
-                string ~doc:"String one" 'f'
-                & string ~doc:"String two" 'g'
-                & flag ~doc:"Bool one" 'v'
-                & usage "Usage string\nwith bunch of lines to\nexplain stuff")
-              begin fun one two bone ->
-                if_then_else
-                  ((one =$= two) ||| bone)
-                  (return 11)
-                  (if_then_else
-                     (one =$= string minus_f) (* Should be always true *)
-                     (return 12) (* i.e. we're testing that weird characters have good escaping *)
-                     (return 44))
-              end
+          Genspio.EDSL.(
+            Command_line.(
+              let spec =
+                Arg.(
+                  string ~doc:"String one" ["-f"]
+                  & string ~doc:"String two" ["-g"]
+                  & flag ~doc:"Bool one" ["-v"]
+                  & usage "Usage string\nwith bunch of lines to\nexplain stuff")
+              in
+              parse spec
+                begin fun one two bone ->
+                  seq [
+                    eprintf (string "one: '%s' two: '%s'\n") [one; two];
+                    eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
+                    if_then_else
+                      ((one =$= two) ||| bone)
+                      (return 11)
+                      (if_then_else
+                         (one =$= string minus_f) (* Should be always true *)
+                         (return 12) (* i.e. we're testing that weird characters have good escaping *)
+                         (return 44))
+                  ]
+                end
+            )
           ) in
-      List.concat [
+      List.mapi ~f:(fun i f -> f i) [
         make 11 minus_f "";
         make 12 "not-one" "";
         make 11 "not-one" "-v";
         make 12 minus_f "--"; (* the `--` should prevent the `-g one` from being parsed *)
-        make 77 "not-one" "-x"; (* option does not exist, script uses `die` *)
-        make 77 "not-one" "--v";
-        make 77 "not-one" "-v j";
+        make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
+        make 12 "not-one" "--v";
+        make 12 "not-one" "-v j";
         make 11 "not \\ di $bouh one" "-v";
         make 12 "not \\ di $bouh one" " -- -v";
         make 12 "one \nwith spaces and \ttabs -dashes -- " "";
@@ -274,6 +283,7 @@ let tests =
         make 0 "not-one" "-help";
         make 0 "not-one" "-h";
       ]
+      |> List.concat
     end;
     exits 77 ~name:"die in a sequence" Construct.(
         seq [
