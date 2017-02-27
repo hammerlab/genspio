@@ -52,6 +52,12 @@ val ( =$= ) : string t -> string t -> bool t
 val ( <$> ) : string t -> string t -> bool t
 
 val returns: 'a t -> value: int -> bool t
+
+module Bool: sig
+  val to_string : bool t -> string t
+  val of_string : string t -> bool t
+end
+
 (** Check the return value of a command/expression/script. *)
     
 val succeeds : 'a t -> bool t

@@ -804,6 +804,28 @@ let tests =
           return 2
         ]
       );
+    exits 2 ~name:"bool-string-conversions" Genspio.EDSL.(
+        seq [
+          assert_or_fail "test1" (
+            (Bool.to_string (bool true)) =$= string "true"
+          );
+          assert_or_fail "test2" (
+            (Bool.to_string (bool false)) =$= string "false"
+          );
+          assert_or_fail "test3" (
+            (Bool.to_string (bool true) |> Bool.of_string)
+          );
+          assert_or_fail "test4" (
+            (Bool.to_string (bool false) |> Bool.of_string |> not)
+          );
+          return 2
+        ]
+      );
+    exits 77 ~name:"bool-string-wrong-conversions" Genspio.EDSL.(
+        if_then_else (string "anything" |> Bool.of_string |> not)
+          (return 11)
+          (return 12)
+      );
   ]
 
 let posix_sh_tests = [

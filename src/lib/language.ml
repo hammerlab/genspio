@@ -62,6 +62,8 @@ and _ t =
   | Fail: unit t
   | Int_to_string: int t -> string t
   | String_to_int: string t -> int t
+  | Bool_to_string: bool t -> string t
+  | String_to_bool: string t -> bool t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
@@ -130,6 +132,11 @@ module Construct = struct
   let (>>) string e = feed ~string e
 
   let loop_while condition ~body = While {condition; body}
+
+  module Bool = struct
+    let of_string s = String_to_bool s
+    let to_string b = Bool_to_string b
+  end
 
   module Integer = struct
     let to_string i = Int_to_string i
@@ -332,6 +339,20 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue s |> expand_octal)
         value value value
         (die (sprintf "String_to_int: error, $%s is not an integer" var))
+    | Bool_to_string b ->
+      continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
+                                             (continue b))))
+    | String_to_bool s ->
+      continue (
+        If (
+          (String_operator (s, `Eq, Literal (Literal.String "true"))),
+          (Raw_cmd "true"),
+          If (
+            (String_operator (s, `Eq, Literal (Literal.String "false"))),
+            (Raw_cmd "false"),
+            (Fail))
+        )
+      )
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
