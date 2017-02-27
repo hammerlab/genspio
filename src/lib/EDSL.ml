@@ -158,7 +158,6 @@ module Command_line = struct
     let to_help s = help := s :: !help in
     let string_of_var var =
       getenv (string var) in
-    (* Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in *)
     let bool_of_var var =
       succeeds (Language.Raw_cmd (sprintf "{ ${%s} ; } " var)) in
     let unit_t =
@@ -173,8 +172,6 @@ module Command_line = struct
           let var = variable x in
           to_init (
             setenv (string var) x.default);
-          (* sprintf "export %s=$(%s)" *)
-          (*          var (continue x.default |> expand_octal)); *)
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
                 p ||| (string s =$= getenv (string "1"))))
@@ -193,16 +190,6 @@ module Command_line = struct
                 exec ["shift"];
               ]
           );
-          (* (seq  *)
-          (*      "if [ -n \"$2\" ]"; *)
-          (*      sprintf "then export %s=\"$2\" " var; *)
-          (*      sprintf "else printf \"ERROR -%c requires an argument\\n\" \ *)
-                  (*               >&2" x.switch; *)
-          (*      die "Command line parsing error: Aborting"; *)
-          (*      "fi"; *)
-          (*      "shift"; *)
-          (*      "shift"; *)
-          (*    ])); *)
           ksprintf to_help "* `%s <string>`: %s"
             (String.concat ~sep:"," x.switches) x.doc;
           loop (f (string_of_var var)) more
@@ -213,9 +200,6 @@ module Command_line = struct
               (setenv (string var) (string "true"))
               (setenv (string var) (string "false"))
           );
-          (* sprintf *)
-          (*          "export %s=$(if %s ; then printf 'true' ; else printf 'false' ; fi)" var *)
-          (*          (continue x.default)); *)
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
                 p ||| (string s =$= getenv (string "1"))))
@@ -223,15 +207,9 @@ module Command_line = struct
                 setenv (string var) (string "true");
                 exec ["shift"];
               ]
-              (* sprintf "-%c) %s ;;" *)
-              (*   x.switch (seq [ *)
-              (*       sprintf "export %s=true" var; *)
-              (*       "shift"; *)
-              (*     ]) *)
           );
           ksprintf to_help "* `%s`: %s"
             (String.concat ~sep:"," x.switches) x.doc;
-          (* ksprintf to_help "* `-%c`: %s" x.switch x.doc; *)
           loop (f (bool_of_var var)) more
       in
       loop action options
@@ -278,35 +256,6 @@ module Command_line = struct
         ] in
       loop_while (bool true) ~body
     in
-    (*   let sep = if params.statement_separator = " \n " then "\n" else " " in *)
-    (*   String.concat ~sep ( *)
-    (*     [ *)
-    (*       "while :;"; " do case $1 in"; *)
-    (*       "-h|-help|--help) "; *)
-    (*       sprintf "export %s_help=true ; " prefix; *)
-    (*       sprintf "%s ;" *)
-    (*         (continue Construct.(string help_msg *)
-    (*                              >>  exec ["cat"])); *)
-    (*       " break ;;" *)
-    (*     ] *)
-    (*     @ List.rev !cases *)
-    (*     @ [ *)
-    (*       "--) shift ; break ;;"; *)
-    (*       "-?*\)"; *)
-    (*       "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;"; *)
-    (*       die "Command line parsing error: Aborting"; *)
-    (*       ";;"; *)
-    (*       "*\) if [ $# -eq 0 ] ; "; *)
-    (*       "then echo \" $1 $# \" ; break ;"; *)
-    (*       sprintf *)
-    (*         " else export %s_args=\"${%s_args} %s\" ; shift ; " *)
-    (*         prefix prefix *)
-    (*         (continue (Output_as_string (Raw_cmd "printf \"$1\""))) ; *)
-    (*       "fi ;; "; *)
-    (*       "esac;"; *)
-    (*       "done"] *)
-    (*   ) *)
-    (* in *)
     seq [
       setenv help_flag_var (string "false");
       seq (List.rev !inits);
@@ -315,18 +264,5 @@ module Command_line = struct
         (nop)
         unit_t;
     ]
-(*
-seq (
-  sprintf "export %s_args=" prefix
-  :: sprintf "export %s_help=false" prefix
-  :: List.rev !inits @ [
-    while_loop;
-    continue Construct.(
-        if_then_else (bool_of_var (sprintf "%s_help" prefix))
-          (nop)
-          unit_t);
-  ])
-  assert false
-*)
 
 end
