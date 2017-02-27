@@ -34,18 +34,7 @@ module Literal = struct
 
 end
 
-type 'a cli_option = {
-  switch: char;
-  doc: string;
-  default: 'a;
-}
-type _ option_spec =
-  | Opt_flag:   bool t cli_option -> bool t option_spec
-  | Opt_string: string t cli_option -> string t option_spec
-and (_, _) cli_options =
-  | Opt_end: string -> ('a, 'a) cli_options
-  | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
-and fd_redirection = {
+type fd_redirection = {
   take: int t;
   redirect_to: [ `Path of string t | `Fd of int t (* | `Input_of of unit t *) ];
 }
@@ -70,10 +59,6 @@ and _ t =
     } -> unit t
   | Feed: string t * unit t -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
-  | Parse_command_line: {
-      options: ('a, unit t) cli_options;
-      action: 'a;
-    } -> unit t
   | Fail: unit t
   | Int_to_string: int t -> string t
   | String_to_int: string t -> int t
@@ -174,20 +159,6 @@ module Construct = struct
     let (>=) = ge
     let (>) = gt
   end
-
-  module Option_list = struct
-    let string ?(default = string "") ~doc switch =
-      Opt_string {switch; doc; default}
-    let flag ?(default = bool false) ~doc switch =
-      Opt_flag {switch; doc; default}
-
-    let (&) x y = Opt_cons (x, y)
-    let usage s = Opt_end s
-
-  end
-
-  let parse_command_line options action =
-    Parse_command_line {options; action}
 
   module Magic = struct
     let unit s = Raw_cmd s
@@ -423,108 +394,6 @@ let rec to_shell: type a. _ -> a t -> string =
           ];
         ])
     | Fail -> die "EDSL.fail called"
-    | Parse_command_line { options; action } ->
-      let prefix = Unique_name.variable "getopts" in
-      let variable {switch; doc;} =
-        sprintf "%s_%c" prefix switch in
-      let inits = ref [] in
-      let to_init s = inits := s :: !inits in
-      let cases = ref [] in
-      let to_case s = cases := s :: !cases in
-      let help_intro = ref "" in
-      let help = ref [] in
-      let to_help s = help := s :: !help in
-      let string_of_var var =
-        Output_as_string (Raw_cmd (sprintf "printf -- \"${%s}\"" var)) in
-      let bool_of_var var =
-        Construct.succeeds (Raw_cmd (sprintf "{ ${%s} ; } " var)) in
-      let unit_t =
-        let rec loop
-          : type a b.
-            a -> (a, b) cli_options -> b =
-          fun f -> function
-          | Opt_end doc ->
-            help_intro := doc;
-            f
-          | Opt_cons (Opt_string x, more) ->
-            let var = variable x in
-            to_init (sprintf "export %s=$(%s)"
-                       var (continue x.default |> expand_octal));
-            to_case (sprintf "-%c) %s ;;"
-                       x.switch
-                       (seq [
-                           "if [ -n \"$2\" ]";
-                           sprintf "then export %s=\"$2\" " var;
-                           sprintf "else printf -- \"ERROR -%c requires an argument\\n\" \
-                                    >&2" x.switch;
-                           die "Command line parsing error: Aborting";
-                           "fi";
-                           "shift";
-                           "shift";
-                         ]));
-            ksprintf to_help "* `-%c <string>`: %s" x.switch x.doc;
-            loop (f (string_of_var var)) more
-          | Opt_cons (Opt_flag x, more) ->
-            let var = variable x in
-            to_init (sprintf
-                       "export %s=$(if %s ; then printf 'true' ; else printf 'false' ; fi)" var
-                       (continue x.default));
-            to_case (
-              sprintf "-%c) %s ;;"
-                x.switch (seq [
-                    sprintf "export %s=true" var;
-                    "shift";
-                  ])
-            );
-            ksprintf to_help "* `-%c`: %s" x.switch x.doc;
-            loop (f (bool_of_var var)) more
-        in
-        loop action options
-      in
-      let help_msg =
-        sprintf "%s\n\nOptions:\n\n%s\n"
-          !help_intro (String.concat ~sep:"\n" (List.rev !help))
-      in
-      let while_loop =
-        let sep = if params.statement_separator = " \n " then "\n" else " " in
-        String.concat ~sep (
-          [
-            "while :;"; " do case $1 in";
-            "-h|-help|--help) ";
-            sprintf "export %s_help=true ; " prefix;
-            sprintf "%s ;"
-              (continue Construct.(string help_msg
-                                   >>  exec ["cat"]));
-            " break ;;"
-          ]
-          @ List.rev !cases
-          @ [
-            "--) shift ; break ;;";
-            "-?*)";
-            "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
-            die "Command line parsing error: Aborting";
-            ";;";
-            "*) if [ $# -eq 0 ] ; ";
-            "then echo \" $1 $# \" ; break ;";
-            sprintf
-              " else export %s_args=\"${%s_args} %s\" ; shift ; "
-              prefix prefix
-              (continue (Output_as_string (Raw_cmd "printf \"$1\""))) ;
-            "fi ;; ";
-            "esac;";
-            "done"]
-        )
-      in
-      seq (
-        sprintf "export %s_args=" prefix
-        :: sprintf "export %s_help=false" prefix
-        :: List.rev !inits @ [
-          while_loop;
-          continue Construct.(
-              if_then_else (bool_of_var (sprintf "%s_help" prefix))
-                (nop)
-                unit_t);
-        ])
 
 (* 
      POSIX does not have ["set -o pipefail"].

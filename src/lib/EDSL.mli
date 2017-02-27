@@ -268,28 +268,6 @@ val tmp_file: ?tmp_dir: string t -> string -> file
 
 (** {3 Command Line Parsing} *)
 
-type 'argument_type cli_option = 'argument_type Language.cli_option
-type 'argument_type option_spec = 'argument_type Language.option_spec
-type ('parse_function, 'return_type) cli_options = ('parse_function, 'return_type) Language.cli_options
-module Option_list : sig
-  val string :
-    ?default: string t ->
-    doc:string -> char ->
-    string t option_spec
-  val flag :
-    ?default: bool t ->
-    doc:string -> char ->
-    bool t option_spec
-  val ( & ) :
-    'argument_type option_spec ->
-    ('parse_function, 'return_type) cli_options ->
-    ('argument_type -> 'parse_function, 'return_type) cli_options
-  val usage : string -> ('last_return_type, 'last_return_type) cli_options
-end
-
-val parse_command_line :
-  ('parse_function, unit t) cli_options -> 'parse_function -> unit t
-
 module Command_line: sig
 
   type 'a cli_option = {
