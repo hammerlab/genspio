@@ -156,7 +156,7 @@ module Command_line = struct
     let string_of_var var =
       getenv (string var) in
     let bool_of_var var =
-      succeeds (Language.Raw_cmd (sprintf "{ ${%s} ; } " var)) in
+      getenv (string var) |> Bool.of_string in
     let unit_t =
       let rec loop
         : type a b.
@@ -193,15 +193,13 @@ module Command_line = struct
         | Opt_cons (Opt_flag x, more) ->
           let var = variable x in
           to_init (
-            if_then_else x.default
-              (setenv (string var) (string "true"))
-              (setenv (string var) (string "false"))
+            setenv (string var) (Bool.to_string x.default)
           );
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
                 p ||| (string s =$= getenv (string "1"))))
               [
-                setenv (string var) (string "true");
+                setenv (string var) (Bool.to_string (bool true));
                 exec ["shift"];
               ]
           );
@@ -223,7 +221,7 @@ module Command_line = struct
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
                  p ||| (string s =$= getenv (string "1")))) [
-            setenv help_flag_var (string "true");
+            setenv help_flag_var (Bool.to_string (bool true));
             string help_msg >>  exec ["cat"];
             exec ["break"];
           ]
@@ -254,7 +252,7 @@ module Command_line = struct
       loop_while (bool true) ~body
     in
     seq [
-      setenv help_flag_var (string "false");
+      setenv help_flag_var (Bool.to_string (bool false));
       seq (List.rev !inits);
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))
