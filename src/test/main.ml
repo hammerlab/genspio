@@ -208,6 +208,17 @@ let tests =
           (return 11)
           (return 12)
       );
+    exits 11 ~name:"output-as-empty-string" Construct.(
+        if_then_else (
+          string "" =$=
+          (output_as_string (exec ["printf"; ""]))
+        )
+          (return 11)
+          (return 12)
+      );
+    exits 11 ~name:"empty-string" Construct.(
+        if_then_else (string "" =$= string "") (return 11) (return 12)
+      );
     exits 10 Construct.(
         if_then_else
           (
@@ -512,7 +523,7 @@ let tests =
         )
           (return 12) (return 27)
       );
-    exits 0 Construct.(
+    exits 0 ~name:"setenv-getenv" Construct.(
         let var = string "VVVVVVV" in
         let assert_or_return ret cond =
           if_then_else cond nop (seq [printf "Fail: %d" ret; fail]) in
@@ -522,9 +533,9 @@ let tests =
           assert_or_return 28 (getenv var =$= string "Bouh");
           (* We also “record the undefined behavior” *)
           setenv ~var (string "Bouhh\nbah");
-          assert_or_return 29 (getenv var =$= string "Bouhh");
+          assert_or_return 29 (getenv var =$= string "Bouhh\nbah");
           setenv ~var (string "Bouhhh\nbah\n");
-          assert_or_return 30 (getenv var =$= string "Bouhhh");
+          assert_or_return 30 (getenv var =$= string "Bouhhh\nbah");
           setenv ~var (string "Bouhoo\000bah\n");
           assert_or_return 12 (getenv var =$= string "Bouhoobah");
           (* We check that the environment is affected in a brutal way:

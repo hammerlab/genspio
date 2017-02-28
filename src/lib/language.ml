@@ -11,11 +11,9 @@ module Literal = struct
     | Int i -> sprintf "%d" i
     | String s ->
       with_buffer begin fun str ->
-        str "'";
         String.iter s ~f:(fun c ->
             Char.code c |> sprintf "%03o" |> str
           );
-        str "'"
       end |> fst
     | Bool true -> "true"
     | Bool false -> "false"
@@ -247,7 +245,7 @@ let rec to_shell: type a. _ -> a t -> string =
         (match op with `And -> "&&" | `Or -> "||")
         (continue b)
     | String_operator (a, op, b) ->
-      sprintf "[ %s %s %s ]"
+      sprintf "[ \"%s\" %s \"%s\" ]"
         (continue a)
         (match op with `Eq -> "=" | `Neq -> "!=")
         (continue b)
