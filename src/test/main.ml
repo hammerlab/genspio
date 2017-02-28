@@ -285,9 +285,12 @@ let () = add_tests @@ exits 13 Construct.(
 let () = add_tests @@ begin
     let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
     let make ret minus_g single count =
+      let anon1 = "annonlkjde" in
+      let anon2 = "annon 02e930 99e3\n deij" in
+      let anon3 = "annon deid \t dlsij" in
       exits ret
         ~name:(sprintf "parse-cli-%d" count)
-        ~args:["-f"; minus_f; single; "-g"; minus_g ]
+        ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3 ]
         Genspio.EDSL.(
           Command_line.(
             let spec =
@@ -298,10 +301,35 @@ let () = add_tests @@ begin
                 & usage "Usage string\nwith bunch of lines to\nexplain stuff")
             in
             parse spec
-              begin fun one two bone ->
+              begin fun ~anon one two bone ->
                 seq [
                   eprintf (string "one: '%s' two: '%s'\n") [one; two];
                   eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
+                  switch [
+                    case (string single =$= string "-v") [
+                      assert_or_fail "bone-is-true" (
+                          bone &&&
+                          (string_concat_list anon
+                           =$= string (String.concat ~sep:"" [anon1; anon2; anon3]))
+                      )
+                    ];
+                    case (string single =$= string "--") [
+                      assert_or_fail "dash-dash" (
+                          not bone &&&
+                          (string_concat_list anon
+                           =$= string (String.concat ~sep:""
+                                         [anon1; "-g"; minus_g; anon2; anon3]))
+                      )
+                    ];
+                    default [
+                      assert_or_fail "single-is-anon" (
+                          not bone &&&
+                          (string_concat_list anon
+                           =$= string (String.concat ~sep:""
+                                         [single; anon1; anon2; anon3]))
+                      )
+                    ];
+                  ];
                   if_then_else
                     ((one =$= two) ||| bone)
                     (return 11)

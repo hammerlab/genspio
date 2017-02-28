@@ -159,7 +159,7 @@ let downloader () =
                ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
     ) in
   Command_line.parse cli_spec
-    begin fun url all_in_tmp filename_ov tmp_dir ->
+    begin fun ~anon url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         if_seq (filename_ov =$= no_value)

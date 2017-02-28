@@ -23,6 +23,9 @@ let switch l =
 let string_concat sl =
   string_concat_list (list sl)
 
+let string_list_to_string l = list_to_string ~f:(fun e -> e) l
+let string_list_of_string s = list_of_string ~f:(fun e -> e) s
+
 type file = <
   get : string t;
   set : string t -> unit t;
@@ -140,7 +143,7 @@ module Command_line = struct
 
   let parse
       (options: ('a, unit t) cli_options)
-      (action: 'a) : unit t =
+      (action: anon: string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
     let variable {switches; doc;} =
       sprintf "%s_%s" prefix (String.concat ~sep:"" switches|> Digest.string |> Digest.to_hex) in
@@ -155,6 +158,9 @@ module Command_line = struct
       getenv (string var) in
     let bool_of_var var =
       getenv (string var) |> Bool.of_string in
+    let anonarg_var = prefix ^ "_anon" |> string in
+    let anon =
+      getenv anonarg_var |> string_list_of_string in
     let unit_t =
       let rec loop
         : type a b.
@@ -205,7 +211,7 @@ module Command_line = struct
             (String.concat ~sep:"," x.switches) x.doc;
           loop (f (bool_of_var var)) more
       in
-      loop action options
+      loop (action ~anon) options
     in
     let help_msg =
       sprintf "%s\n\nOptions:\n\n%s\n"
@@ -214,6 +220,13 @@ module Command_line = struct
     let help_flag_var = ksprintf string "%s_help" prefix in
     let while_loop =
       let body =
+        let append_anon_arg_to_list =
+          setenv anonarg_var (
+            list_append
+              (string_list_of_string (getenv anonarg_var))
+              (list [getenv (string "1")])
+            |> string_list_to_string
+          ) in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
           case
@@ -228,11 +241,18 @@ module Command_line = struct
           case (getenv (string "1") =$= string "--") [
             eprintf (string "WARNING: dash-dash arg: %s\\n") [getenv (string "1")];
             exec ["shift"];
+            loop_while (getenv (string "#") <$> string "0") ~body:begin
+              seq [
+                append_anon_arg_to_list;
+                exec ["shift"];
+              ]
+            end;
             exec ["break"];
           ] in
         let anon_case =
           case (getenv (string "#") <$> string "0") [
             eprintf (string "WARNING: annon arg: %s\\n") [getenv (string "1")];
+            append_anon_arg_to_list;
             exec ["shift"];
           ] in
         let default_case =
@@ -251,6 +271,7 @@ module Command_line = struct
     in
     seq [
       setenv help_flag_var (Bool.to_string (bool false));
+      setenv anonarg_var (string_list_to_string (list []));
       seq (List.rev !inits);
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))

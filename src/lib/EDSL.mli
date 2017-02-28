@@ -314,7 +314,7 @@ module Command_line: sig
         'a option_spec -> ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options
       val usage : string -> ('a, 'a) cli_options
     end
-  val parse : ('a, unit t) cli_options -> 'a -> unit t
+  val parse : ('a, unit t) cli_options -> (anon: string list t -> 'a) -> unit t
 end
 
 
