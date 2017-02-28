@@ -847,31 +847,31 @@ let tests =
     exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
         seq [
           assert_or_fail "test1" (
-            (concat (list [string "one"; string "two"; string "three"]))
+            (string_concat_list (list [string "one"; string "two"; string "three"]))
             =$= string "onetwothree"
           );
           assert_or_fail "test2" (
-            (concat (list [string "one"; string "two"]))
+            (string_concat_list (list [string "one"; string "two"]))
             =$= string "onetwo"
           );
           assert_or_fail "test3" (
-            (concat (list [string "one"]))
+            (string_concat_list (list [string "one"]))
             =$= string "one"
           );
           assert_or_fail "test4" (
-            (concat (list []))
+            (string_concat_list (list []))
             =$= string ""
           );
           assert_or_fail "test5" (
-            (concat (list [string ""]))
+            (string_concat_list (list [string ""]))
             =$= string ""
           );
           assert_or_fail "test6" (
-            (concat (list [string "one"; string ""; string "three"]))
+            (string_concat_list (list [string "one"; string ""; string "three"]))
             =$= string "onethree"
           );
           assert_or_fail "test7" (
-            (concat (list [string "one"; string ""; string ""]))
+            (string_concat_list (list [string "one"; string ""; string ""]))
             =$= string "one"
           );
           return 5

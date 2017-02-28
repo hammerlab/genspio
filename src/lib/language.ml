@@ -135,7 +135,7 @@ module Construct = struct
 
   let list l = List l
 
-  let concat l = String_concat l
+  let string_concat_list l = String_concat l
 
   module Bool = struct
     let of_string s = String_to_bool s

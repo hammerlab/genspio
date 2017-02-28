@@ -107,9 +107,10 @@ val list: 'a t list -> 'a list t
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
+
 val string_concat: string t list -> string t
 
-val concat : string list t -> string t
+val string_concat_list: string list t -> string t
 
 (** {3 Control Flow} *)
 

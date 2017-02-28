@@ -21,7 +21,7 @@ let switch l =
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 let string_concat sl =
-  concat (list sl)
+  string_concat_list (list sl)
 
 type file = <
   get : string t;
