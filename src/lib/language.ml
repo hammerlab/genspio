@@ -38,7 +38,7 @@ type fd_redirection = {
 }
 and _ t =
   | Exec: string t list -> unit t
-  | Raw_cmd: string -> unit t
+  | Raw_cmd: string -> 'a t
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
   | Not: bool t -> bool t
@@ -65,6 +65,7 @@ and _ t =
   | List: 'a t list -> 'a list t
   | String_concat: string list t -> string t
   | List_append: ('a list t * 'a list t) -> 'a list t
+  | List_iter: 'a list t * ((unit -> 'a t) -> unit t) -> unit t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
@@ -140,6 +141,8 @@ module Construct = struct
 
   let list_append la lb = List_append (la, lb)
 
+  let list_iter l ~f = List_iter (l, f)
+
   module Bool = struct
     let of_string s = String_to_bool s
     let to_string b = Bool_to_string b
@@ -175,7 +178,7 @@ module Construct = struct
   end
 
   module Magic = struct
-    let unit s = Raw_cmd s
+    let unit s : unit t = Raw_cmd s
   end
 
 end
@@ -363,8 +366,9 @@ let rec to_shell: type a. _ -> a t -> string =
         )
       )
     | List l ->
-      (* Lists are newline-separated internal represetations. *)
-      let output o = sprintf "printf -- '%%s' \"%s\"" (continue o) in
+      (* Lists are newline-separated internal represetations,
+         prefixed by `G`. *)
+      let output o = sprintf "printf -- 'G%%s' \"%s\"" (continue o) in
       let outputs = List.map l ~f:output in
       let rec build =
         function
@@ -376,9 +380,22 @@ let rec to_shell: type a. _ -> a t -> string =
       (seq (build outputs))
     | String_concat sl ->
       let outputing_list = continue sl in
-      sprintf "$( { %s ; } | tr -d '\\n' )" outputing_list
+      sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
     | List_append (la, lb) ->
       seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
+    | List_iter (l, f) ->
+      let variter = Unique_name.variable "list_iter_var" in
+      let varlist = Unique_name.variable "list_iter_list" in
+      let outputing_list = continue l in
+      seq [
+        sprintf "export %s=\"$(%s)\" " varlist outputing_list;
+        sprintf "for %s in ${%s} " variter varlist;
+        "do : "; (* we cannot put a `;` after do so the first command is no-op *)
+        continue (f (fun () ->
+            (* Here we remove the `G` from the internal represetation: *)
+            Raw_cmd (sprintf "${%s#G}" variter)));
+        "done";
+      ]
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)

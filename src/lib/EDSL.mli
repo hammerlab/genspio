@@ -104,6 +104,8 @@ val list: 'a t list -> 'a list t
 
 val list_append: 'a list t -> 'a list t -> 'a list t
 
+val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+
 
 (** {3 String Manipulation} *)
 

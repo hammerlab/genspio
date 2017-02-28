@@ -910,6 +910,76 @@ let tests =
           return 5
         ]
       );
+    exits 5 ~name:"list-iter-strings" Genspio.EDSL.(
+        let make_string_concat_test name l =
+          let slist = List.map l ~f:string |> list in
+          let tmp = tmp_file "listitertest" in 
+          seq [
+            tmp#set (string "");
+            list_iter slist ~f:(fun v ->
+                seq [
+                  eprintf (string "Concatenating: '%s'\\n") [v ()];
+                  tmp#set (string_concat [tmp#get; string ":"; v ()]);
+                  (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
+                ]
+              );
+            assert_or_fail name (
+              tmp#get
+              =$=
+              string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
+            );
+          ]
+        in
+        seq [
+          make_string_concat_test "test1" ["one"; "two"; "three"];
+          make_string_concat_test "test2" ["four"];
+          make_string_concat_test "test3" [];
+          make_string_concat_test "test4" [""];
+          make_string_concat_test "test5" [""; ""];
+          make_string_concat_test "test6" [""; "bouh"; ""; "bah"];
+          make_string_concat_test "test9" ["deiajd\ndedaeijl"; ""];
+          make_string_concat_test "test10" ["deiajd\ndeda\000eijl"; ":"];
+          return 5
+        ]
+      );
+    exits 5 ~name:"list-iter-ints" Genspio.EDSL.(
+        let count = ref 0 in
+        let make_int_test l =
+          let ilist = List.map l ~f:int |> list in
+          let tmp = tmp_file "listitertest" in 
+          let name =
+            incr count;
+            sprintf "test%d-%s" !count
+              (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
+          (* Checking that implementing `fold` with `iter` does the `fold`: *)
+          seq [
+            tmp#set (int 0 |> Integer.to_string);
+            list_iter ilist ~f:(fun v ->
+                seq [
+                  eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
+                  tmp#set
+                    Integer.(
+                      (tmp#get |> of_string) + v () |> to_string
+                    );
+                ]
+              );
+            assert_or_fail name (
+              tmp#get
+              =$=
+              Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
+            );
+          ]
+        in
+        seq [
+          make_int_test [];
+          make_int_test [1];
+          make_int_test [3];
+          make_int_test [1; 2; 3];
+          make_int_test [1; 2; 3; 0];
+          make_int_test (List.init 42 (fun i -> i));
+          return 5
+        ]
+      );
   ]
 
 let posix_sh_tests = [
