@@ -46,369 +46,422 @@ let exits ?no_trap ?name ?args n c =
   else
     tests
 
-let tests =
-  let exit n = Construct.exec ["exit"; Int.to_string n] in
-  let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n] in
-  let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt in
-  let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt in
-  let assert_or_fail name cond =
-    let open Genspio.EDSL in
-    if_then_else cond nop (seq [printf "Fail: %s\n" name; fail]) in
-  List.concat [
-    exits 0 Construct.(
-        succeeds (exec ["ls"])
-        &&& returns ~value:18 (seq [
-            exec ["ls"];
-            exec ["sh"; "-c"; "exit 18"]])
-      );
-    exits 23 Construct.(
-        seq [
-          if_then_else (file_exists (string "/etc/passwd"))
-            (exit 23)
-            (exit 1);
-          exit 2;
-        ]
-      );
-    exits 23 Construct.(
-        seq [
-          if_then_else (file_exists (string "/etc/passwd") |> not)
-            (exit 1)
-            (exit 23);
-          exit 2;
-        ]
-      );
-    exits 20 Construct.(
-        make_switch ~default:(return 18) [
-          file_exists @@ string "/djlsjdseij", return 19;
-          file_exists @@ string "/etc/passwd", return 20;
-          file_exists @@ string "/djlsjdseij", return 21;
-        ]
-      );
-    exits 0 ~name:"Write-stdout" Construct.(
-        let path = string "/tmp/bouh" in
-        seq [
-          if_then (file_exists path)
-            begin
-              call [string "rm"; string "-f"; path]
-            end;
-          write_stdout ~path (seq [
-              printf "bouh";
-              exec ["ls"; "-la"];
-            ]);
-          if_then (file_exists path |> not)
-            begin
-              exit 1
-            end;
+let shexit n = Construct.exec ["exit"; Int.to_string n]
+let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n]
+let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
+let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt
+let assert_or_fail name cond =
+  let open Genspio.EDSL in
+  if_then_else cond nop (seq [printf "Fail: %s\n" name; fail])
+
+let tests = ref []
+
+let add_tests t = tests := t @ !tests
+
+let () = add_tests @@ exits 0 Construct.(
+    succeeds (exec ["ls"])
+    &&& returns ~value:18 (seq [
+        exec ["ls"];
+        exec ["sh"; "-c"; "exit 18"]])
+  )
+
+let () = add_tests @@ exits 0 Construct.(
+    succeeds (exec ["ls"])
+    &&& returns ~value:18 (seq [
+        exec ["ls"];
+        exec ["sh"; "-c"; "exit 18"]])
+  )
+
+let () = add_tests @@ exits 23 Construct.(
+    seq [
+      if_then_else (file_exists (string "/etc/passwd"))
+        (shexit 23)
+        (shexit 1);
+      shexit 2;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 23 Construct.(
+    seq [
+      if_then_else (file_exists (string "/etc/passwd") |> not)
+        (shexit 1)
+        (shexit 23);
+      shexit 2;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 20 Construct.(
+    make_switch ~default:(return 18) [
+      file_exists @@ string "/djlsjdseij", return 19;
+      file_exists @@ string "/etc/passwd", return 20;
+      file_exists @@ string "/djlsjdseij", return 21;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 4 ~name:"Write-stdout" Construct.(
+    let path = string "/tmp/bouh" in
+    seq [
+      if_then (file_exists path)
+        begin
+          call [string "rm"; string "-f"; path]
+        end;
+      write_stdout ~path (seq [
+          printf "bouh";
+          exec ["ls"; "-la"];
         ]);
-    exits 42 ~name:"Variations-on-write-output" Construct.(
-        (* Many variations on `write_output` *)
-        let stdout = string "/tmp/p1_out" in
-        let stderr = string "/tmp/p1_err" in
-        let return_value = string "/tmp/p1_ret" in
-        seq [
-          write_output
-            ~stdout ~stderr ~return_value
-            (seq [
-                printf "%s" "hello";
-                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
-                return 12;
-              ]);
-          call [string "cat"; return_value];
-          assert_or_fail "hello-1"
-            (call [string "cat"; return_value] |> output_as_string
-                                                  =$= string "12");
-          write_output
-            ~stderr ~return_value
-            (seq [
-                printf "%s" "hello";
-                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
-                return 12;
-              ]);
-          write_output
-            ~return_value
-            (seq [
-                printf "%s" "hello";
-                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
-                return 12;
-              ]);
-          write_output ~stdout
-            (seq [
-                printf "%s" "helloooo";
-                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
-                return 12;
-              ]);
-          call [string "cat"; stdout];
-          assert_or_fail "hello-2"
-            (call [string "cat"; stdout] |> output_as_string
-                                            =$= string "helloooo");
-          write_output
-            (seq [
-                printf "%s" "hello";
-                exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
-                return 12;
-              ]);
-          return 42;
-        ]
-      );
-    exits 11 ~name:"write-output-as-string" Construct.(
-        let stdout = string "/tmp/p1_out" in
-        let stderr = string "/tmp/p1_err" in
-        let return_value_path = string "/tmp/p1_ret" in
-        let return_value_value = 31 in
-        let will_be_escaped =
-          "newline:\n tab: \t \x42\b" in
-        let will_not_be_escaped =
-          "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
-        seq [
-          call [string "rm"; string "-f"; stdout; stderr; return_value_path];
-          write_output
-            ~stdout ~stderr ~return_value:return_value_path
-            (seq [
-                printf "%s" will_be_escaped;
-                printf "%s" will_not_be_escaped;
-                exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"];
-                return return_value_value;
-              ]);
-          if_then_else (
-            output_as_string (call [string "cat"; stdout])
-            =$= string (will_be_escaped ^ will_not_be_escaped)
-          )
+      if_then (file_exists path |> not)
+        begin
+          return 11
+        end;
+      return 4
+    ]);
+  ()
+
+let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
+    (* Many variations on `write_output` *)
+    let stdout = string "/tmp/p1_out" in
+    let stderr = string "/tmp/p1_err" in
+    let return_value = string "/tmp/p1_ret" in
+    seq [
+      write_output
+        ~stdout ~stderr ~return_value
+        (seq [
+            printf "%s" "hello";
+            exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+            return 12;
+          ]);
+      call [string "cat"; return_value];
+      assert_or_fail "hello-1"
+        (call [string "cat"; return_value] |> output_as_string
+                                              =$= string "12");
+      write_output
+        ~stderr ~return_value
+        (seq [
+            printf "%s" "hello";
+            exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+            return 12;
+          ]);
+      write_output
+        ~return_value
+        (seq [
+            printf "%s" "hello";
+            exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+            return 12;
+          ]);
+      write_output ~stdout
+        (seq [
+            printf "%s" "helloooo";
+            exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+            return 12;
+          ]);
+      call [string "cat"; stdout];
+      assert_or_fail "hello-2"
+        (call [string "cat"; stdout] |> output_as_string
+                                        =$= string "helloooo");
+      write_output
+        (seq [
+            printf "%s" "hello";
+            exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
+            return 12;
+          ]);
+      return 42;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 11 ~name:"write-output-as-string" Construct.(
+    let stdout = string "/tmp/p1_out" in
+    let stderr = string "/tmp/p1_err" in
+    let return_value_path = string "/tmp/p1_ret" in
+    let return_value_value = 31 in
+    let will_be_escaped =
+      "newline:\n tab: \t \x42\b" in
+    let will_not_be_escaped =
+      "spaces, a;c -- ' - '' \\  ''' # ''''  @ ${nope} & ` ~" in
+    seq [
+      call [string "rm"; string "-f"; stdout; stderr; return_value_path];
+      write_output
+        ~stdout ~stderr ~return_value:return_value_path
+        (seq [
+            printf "%s" will_be_escaped;
+            printf "%s" will_not_be_escaped;
+            exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"];
+            return return_value_value;
+          ]);
+      if_then_else (
+        output_as_string (call [string "cat"; stdout])
+        =$= string (will_be_escaped ^ will_not_be_escaped)
+      )
+        (
+          if_then_else
+            (output_as_string (call [string "cat"; stderr]) <$> string "err")
             (
               if_then_else
-                (output_as_string (call [string "cat"; stderr]) <$> string "err")
-                (
+                (output_as_string (call [string "cat"; return_value_path])
+                 =$= ksprintf string "%d" return_value_value)
+                (return 11)
+                (return 22)
+            )
+            (return 23)
+        )
+        (return 24);
+    ]);
+  ()
+
+let () = add_tests @@ exits 12 Construct.(
+    (* This looks dumb but finding an encoding of strings that makes
+       this work was pretty hard using CRAZIX shell *)
+    if_then_else (
+      string "some" =$= string "some\n"
+    )
+      (return 11)
+      (return 12)
+  );
+  ()
+
+let () = add_tests @@ exits 11 Construct.(
+    if_then_else (
+      string "some" =$=
+      (output_as_string (
+          (if_then_else (string "bouh\n" =$= string "bouh")
+             (printf "nnnooo")
+             (printf "some"))
+        ))
+    )
+      (return 11)
+      (return 12)
+  );
+  ()
+
+let () = add_tests @@ exits 11 ~name:"output-as-empty-string" Construct.(
+    if_then_else (
+      string "" =$=
+      (output_as_string (exec ["printf"; ""]))
+    )
+      (return 11)
+      (return 12)
+  );
+  ()
+
+let () = add_tests @@ exits 11 ~name:"empty-string" Construct.(
+    if_then_else (string "" =$= string "") (return 11) (return 12)
+  );
+  ()
+
+let () = add_tests @@ exits 10 Construct.(
+    if_then_else
+      (
+        (string "b\x00ouh\nbah\n" >> exec ["cat"] |> output_as_string)
+        =$=
+        string "b\x00ouh\nbah\n"
+      )
+      (return 10)
+      (return 11)
+  );
+  ()
+
+let () = add_tests @@ exits 13 Construct.(
+    let tmp = "/tmp/test_loop_while" in
+    let cat_potentially_empty =
+      if_then_else (exec ["cat"; tmp] |> succeeds)
+        nop
+        (printf "") in
+    seq [
+      exec ["rm"; "-f"; tmp];
+      exec ["rm"; "-f"; tmp];
+      loop_while
+        (cat_potentially_empty |> output_as_string <$> string "nnnn")
+        ~body:begin
+          exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
+        end;
+      return 13;
+    ];
+  );
+  ()
+
+let () = add_tests @@ begin
+    let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
+    let make ret minus_g single count =
+      exits ret
+        ~name:(sprintf "parse-cli-%d" count)
+        ~args:["-f"; minus_f; single; "-g"; minus_g ]
+        Genspio.EDSL.(
+          Command_line.(
+            let spec =
+              Arg.(
+                string ~doc:"String one" ["-f"]
+                & string ~doc:"String two" ["-g"]
+                & flag ~doc:"Bool one" ["-v"]
+                & usage "Usage string\nwith bunch of lines to\nexplain stuff")
+            in
+            parse spec
+              begin fun one two bone ->
+                seq [
+                  eprintf (string "one: '%s' two: '%s'\n") [one; two];
+                  eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
                   if_then_else
-                    (output_as_string (call [string "cat"; return_value_path])
-                     =$= ksprintf string "%d" return_value_value)
+                    ((one =$= two) ||| bone)
                     (return 11)
-                    (return 22)
-                )
-                (return 23)
-            )
-            (return 24);
-        ]);
-    exits 12 Construct.( (* This looks dumb but finding an encoding of
-                            strings that makes this work was pretty hard
-                            a CRAZIX shell *)
-        if_then_else (
-          string "some" =$= string "some\n"
-        )
-          (return 11)
-          (return 12)
-      );
-    exits 11 Construct.(
-        if_then_else (
-          string "some" =$=
-          (output_as_string (
-              (if_then_else (string "bouh\n" =$= string "bouh")
-                 (printf "nnnooo")
-                 (printf "some"))
-            ))
-        )
-          (return 11)
-          (return 12)
-      );
-    exits 11 ~name:"output-as-empty-string" Construct.(
-        if_then_else (
-          string "" =$=
-          (output_as_string (exec ["printf"; ""]))
-        )
-          (return 11)
-          (return 12)
-      );
-    exits 11 ~name:"empty-string" Construct.(
-        if_then_else (string "" =$= string "") (return 11) (return 12)
-      );
-    exits 10 Construct.(
-        if_then_else
-          (
-            (string "b\x00ouh\nbah\n" >> exec ["cat"] |> output_as_string)
-            =$=
-            string "b\x00ouh\nbah\n"
+                    (if_then_else
+                       (one =$= string minus_f) (* Should be always true *)
+                       (return 12) (* i.e. we're testing that weird characters have good escaping *)
+                       (return 44))
+                ]
+              end
           )
-          (return 10)
-          (return 11)
-      );
-    exits 13 Construct.(
-        let tmp = "/tmp/test_loop_while" in
-        let cat_potentially_empty =
-          if_then_else (exec ["cat"; tmp] |> succeeds)
-            nop
-            (printf "") in
-        seq [
-          exec ["rm"; "-f"; tmp];
-          exec ["rm"; "-f"; tmp];
-          loop_while
-            (cat_potentially_empty |> output_as_string <$> string "nnnn")
-            ~body:begin
-              exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
-            end;
-          return 13;
-        ];
-      );
-    begin
-      let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
-      let make ret minus_g single count =
-        exits ret
-          ~name:(sprintf "parse-cli-%d" count)
-          ~args:["-f"; minus_f; single; "-g"; minus_g ]
-          Genspio.EDSL.(
-            Command_line.(
-              let spec =
-                Arg.(
-                  string ~doc:"String one" ["-f"]
-                  & string ~doc:"String two" ["-g"]
-                  & flag ~doc:"Bool one" ["-v"]
-                  & usage "Usage string\nwith bunch of lines to\nexplain stuff")
-              in
-              parse spec
-                begin fun one two bone ->
-                  seq [
-                    eprintf (string "one: '%s' two: '%s'\n") [one; two];
-                    eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
-                    if_then_else
-                      ((one =$= two) ||| bone)
-                      (return 11)
-                      (if_then_else
-                         (one =$= string minus_f) (* Should be always true *)
-                         (return 12) (* i.e. we're testing that weird characters have good escaping *)
-                         (return 44))
-                  ]
-                end
-            )
-          ) in
-      List.mapi ~f:(fun i f -> f i) [
-        make 11 minus_f "";
-        make 12 "not-one" "";
-        make 11 "not-one" "-v";
-        make 12 minus_f "--"; (* the `--` should prevent the `-g one` from being parsed *)
-        make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
-        make 12 "not-one" "--v";
-        make 12 "not-one" "-v j";
-        make 11 "not \\ di $bouh one" "-v";
-        make 12 "not \\ di $bouh one" " -- -v";
-        make 12 "one \nwith spaces and \ttabs -dashes -- " "";
-        make 12 "one \nwith  spaces and \ttabs -dashes -- " "";
-        make 12 "one with \\ spaces and \ttabs -dashes -- " "";
-        make 0 "not-one" "--help";
-        make 0 "not-one" "-help";
-        make 0 "not-one" "-h";
-      ]
-      |> List.concat
-    end;
-    exits 77 ~name:"die in a sequence" Construct.(
-        seq [
-          printf "Going to die";
-          fail;
-          return 42;
-        ]
-      );
-    exits 77 ~name:"cannot capture death itself" Construct.(
-        seq [
-          write_output
-            ~return_value:(string "/tmp/dieretval")
-            (seq [
-                printf "Going to die\n";
-                fail;
-                return 42;
-              ]);
-          return 23;
-        ]
-      );
-    exits 77 ~name:"cannot poison death either" Construct.(
-        seq [
-          string "dj ijdedej j42 ijde - '' "
-          >> seq [
+        ) in
+    List.mapi ~f:(fun i f -> f i) [
+      make 11 minus_f "";
+      make 12 "not-one" "";
+      make 11 "not-one" "-v";
+      make 12 minus_f "--"; (* the `--` should prevent the `-g one` from being parsed *)
+      make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
+      make 12 "not-one" "--v";
+      make 12 "not-one" "-v j";
+      make 11 "not \\ di $bouh one" "-v";
+      make 12 "not \\ di $bouh one" " -- -v";
+      make 12 "one \nwith spaces and \ttabs -dashes -- " "";
+      make 12 "one \nwith  spaces and \ttabs -dashes -- " "";
+      make 12 "one with \\ spaces and \ttabs -dashes -- " "";
+      make 0 "not-one" "--help";
+      make 0 "not-one" "-help";
+      make 0 "not-one" "-h";
+    ]
+    |> List.concat
+  end
+
+let () = add_tests @@ exits 77 ~name:"die in a sequence" Construct.(
+    seq [
+      printf "Going to die";
+      fail;
+      return 42;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 77 ~name:"cannot capture death itself" Construct.(
+    seq [
+      write_output
+        ~return_value:(string "/tmp/dieretval")
+        (seq [
             printf "Going to die\n";
             fail;
             return 42;
-          ];
-          return 23;
-        ]
-      );
-    begin
-      let gives = 11 in
-      let does_not_give = 12 in
-      let t cmd yn value =
-        let name =
-          sprintf "%s %s %d" cmd
-            (if yn = gives then "returns" else "does not return") value in
-        exits ~name yn Construct.(
-            if_then_else
-              (exec ["sh"; "-c"; cmd] |> returns ~value)
-              (return gives)
-              (return does_not_give)
-          ) in
-      List.concat [
-        t "ls" gives 0;
-        t "ls /deijdsljidisjeidje" does_not_give 0;
-        t "ls /deijdsljidisjeidje" does_not_give 42;
-        t "exit 2" gives 2;
-        exits 21 ~name:"More complex return check" Construct.(
-            if_then_else
-              (seq [
-                  printf "I aaam so complex!\n";
-                  if_then_else (string "djsleidjs" =$=
-                                output_as_string (printf "diejliejjj"))
-                    (return 41)
-                    (return 42);
-                ]
-               |> returns ~value:42)
-              (return 21)
-              (return 22)
-          );
-      ]
-    end;
-    exits 11 Construct.(
-        let tmp = "/tmp/test_error_in_output_as_string" in
-        let cat_tmp = exec ["cat"; tmp] in
-        seq [
-          exec ["rm"; "-f"; tmp];
+          ]);
+      return 23;
+    ]
+  );
+  ()
+
+let () = add_tests @@ exits 77 ~name:"cannot poison death either" Construct.(
+    seq [
+      string "dj ijdedej j42 ijde - '' "
+      >> seq [
+        printf "Going to die\n";
+        fail;
+        return 42;
+      ];
+      return 23;
+    ]
+  );
+  ()
+
+let () = add_tests @@ begin
+    let gives = 11 in
+    let does_not_give = 12 in
+    let t cmd yn value =
+      let name =
+        sprintf "%s %s %d" cmd
+          (if yn = gives then "returns" else "does not return") value in
+      exits ~name yn Construct.(
           if_then_else
-            (* cat <absent-file> |> to_string does not abort the script: *)
-            (cat_tmp |> output_as_string =$= string "")
-            (return 11)
-            (return 12);
-        ];
-      );
-    exits 11 Construct.(
-        let tmp = "/tmp/test_error_in_output_as_string" in
-        let cat_tmp = exec ["cat"; tmp] in
-        seq [
-          exec ["rm"; "-f"; tmp];
+            (exec ["sh"; "-c"; cmd] |> returns ~value)
+            (return gives)
+            (return does_not_give)
+        ) in
+    List.concat [
+      t "ls" gives 0;
+      t "ls /deijdsljidisjeidje" does_not_give 0;
+      t "ls /deijdsljidisjeidje" does_not_give 42;
+      t "exit 2" gives 2;
+      exits 21 ~name:"More complex return check" Construct.(
           if_then_else
-            (seq [printf "aaa"; cat_tmp] |> output_as_string =$= string "aaa")
-            (return 11)
-            (return 12);
-        ];
-      );
-    exits 77 Construct.(
-        let tmp = "/tmp/test_error_in_output_as_string" in
-        let cat_tmp = exec ["cat"; tmp] in
-        let succeed_or_die ut =
-          if_then_else (succeeds ut)
-            nop
             (seq [
-                printf "Failure !";
-                fail;
-              ]) in
-        seq [
-          exec ["rm"; "-f"; tmp];
-          if_then_else
-            (seq [printf "aaa"; cat_tmp] |> succeed_or_die
-             |> output_as_string =$= string "aaa")
-            (return 11)
-            (return 12);
-        ];
-      );
-    (* Use of the `call` constructor: *)
-    exits 28 Construct.(
-        if_then_else
-          (call [string "cat"; output_as_string (printf "/does not exist")]
-           |> succeeds)
-          (return 11)
-          (return 28);
-      );
+                printf "I aaam so complex!\n";
+                if_then_else (string "djsleidjs" =$=
+                              output_as_string (printf "diejliejjj"))
+                  (return 41)
+                  (return 42);
+              ]
+             |> returns ~value:42)
+            (return 21)
+            (return 22)
+        );
+    ]
+  end
+
+let () = add_tests @@ exits 11 Construct.(
+    let tmp = "/tmp/test_error_in_output_as_string" in
+    let cat_tmp = exec ["cat"; tmp] in
+    seq [
+      exec ["rm"; "-f"; tmp];
+      if_then_else
+        (* cat <absent-file> |> to_string does not abort the script: *)
+        (cat_tmp |> output_as_string =$= string "")
+        (return 11)
+        (return 12);
+    ];
+  );
+  ()
+
+let () = add_tests @@ exits 11 Construct.(
+    let tmp = "/tmp/test_error_in_output_as_string" in
+    let cat_tmp = exec ["cat"; tmp] in
+    seq [
+      exec ["rm"; "-f"; tmp];
+      if_then_else
+        (seq [printf "aaa"; cat_tmp] |> output_as_string =$= string "aaa")
+        (return 11)
+        (return 12);
+    ];
+  );
+  ()
+
+let () = add_tests @@ exits 77 Construct.(
+    let tmp = "/tmp/test_error_in_output_as_string" in
+    let cat_tmp = exec ["cat"; tmp] in
+    let succeed_or_die ut =
+      if_then_else (succeeds ut)
+        nop
+        (seq [
+            printf "Failure !";
+            fail;
+          ]) in
+    seq [
+      exec ["rm"; "-f"; tmp];
+      if_then_else
+        (seq [printf "aaa"; cat_tmp] |> succeed_or_die
+         |> output_as_string =$= string "aaa")
+        (return 11)
+        (return 12);
+    ];
+  );
+  ()
+
+let () = add_tests @@ (* Use of the `call` constructor: *)
+  exits 28 Construct.(
+      if_then_else
+        (call [string "cat"; output_as_string (printf "/does not exist")]
+         |> succeeds)
+        (return 11)
+        (return 28);
+    );
+  ()
+
+let () = add_tests @@ List.concat [
     exits 17 Construct.(
         if_then_else (bool true) (return 17) (return 16)
       );
@@ -424,6 +477,10 @@ let tests =
           (return 11)
           (return 13)
       );
+  ]
+
+(* Bunch of Interger/arithmetic tests: *)
+let () = add_tests @@ List.concat [
     exits 12 Construct.(
         if_then_else (int 42 |> Integer.to_string
                       |> Integer.of_string |> Integer.to_string
@@ -494,210 +551,236 @@ let tests =
         )
           (return 23) (return 13)
       );
-    exits 25 Construct.(
-        if_then_else (
-          (getenv (string "HOME") =$= string (Sys.getenv "HOME"))
-          &&&
-          (getenv (string "PATH") =$= string (Sys.getenv "PATH"))
-          &&&
-          (getenv (string_concat [string "PA"; string "TH"])
-           =$= string (Sys.getenv "PATH"))
-        )
-          (return 25) (return 13)
+  ]
+
+let () = add_tests @@ exits 25 Construct.(
+    if_then_else (
+      (getenv (string "HOME") =$= string (Sys.getenv "HOME"))
+      &&&
+      (getenv (string "PATH") =$= string (Sys.getenv "PATH"))
+      &&&
+      (getenv (string_concat [string "PA"; string "TH"])
+       =$= string (Sys.getenv "PATH"))
+    )
+      (return 25) (return 13)
+  );
+  ()
+
+
+let () = add_tests @@ exits 29 Construct.(
+    if_then_else (
+      (getenv (string "HOMEEEEEEEE")) =$= string ""
+    )
+      (return 29) (return 27)
+  );
+  ()
+let () = add_tests @@ exits 27 Construct.(
+    if_then_else (  (* Explicit test of a corner case: *)
+      (getenv (string "HOME\nME")) =$= string (Sys.getenv "HOME")
+    )
+      (return 12) (return 27)
+  );
+  ()
+
+let () = add_tests @@ exits 27 Construct.(
+    if_then_else (
+      (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
+    )
+      (return 12) (return 27)
+  );
+  ()
+let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
+    let var = string "VVVVVVV" in
+    let assert_or_return ret cond =
+      if_then_else cond nop (seq [printf "Fail: %d" ret; fail]) in
+    seq [
+      assert_or_return 27 (getenv var =$= string "");
+      setenv ~var (string "Bouh");
+      assert_or_return 28 (getenv var =$= string "Bouh");
+      (* We also “record the undefined behavior” *)
+      setenv ~var (string "Bouhh\nbah");
+      assert_or_return 29 (getenv var =$= string "Bouhh\nbah");
+      setenv ~var (string "Bouhhh\nbah\n");
+      assert_or_return 30 (getenv var =$= string "Bouhhh\nbah");
+      setenv ~var (string "Bouhoo\000bah\n");
+      assert_or_return 12 (getenv var =$= string "Bouhoobah");
+      (* We check that the environment is affected in a brutal way:
+         we mess up the $PATH:
+         /bin/sh: 1: ls: not found
+         We cannot even use `return` anymore after that: *)
+      setenv ~var:(string "PATH") (string "/nope");
+      assert_or_return 42 (
+        exec ["/bin/sh"; "-c"; "ls"] |> succeeds |> not
       );
-    exits 29 Construct.(
-        if_then_else (
-          (getenv (string "HOMEEEEEEEE")) =$= string ""
-        )
-          (return 29) (return 27)
-      );
-    exits 27 Construct.(
-        if_then_else (  (* Explicit test of a corner case: *)
-          (getenv (string "HOME\nME")) =$= string (Sys.getenv "HOME")
-        )
-          (return 12) (return 27)
-      );
-    exits 27 Construct.(
-        if_then_else (
-          (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
-        )
-          (return 12) (return 27)
-      );
-    exits 0 ~name:"setenv-getenv" Construct.(
-        let var = string "VVVVVVV" in
-        let assert_or_return ret cond =
-          if_then_else cond nop (seq [printf "Fail: %d" ret; fail]) in
-        seq [
-          assert_or_return 27 (getenv var =$= string "");
-          setenv ~var (string "Bouh");
-          assert_or_return 28 (getenv var =$= string "Bouh");
-          (* We also “record the undefined behavior” *)
-          setenv ~var (string "Bouhh\nbah");
-          assert_or_return 29 (getenv var =$= string "Bouhh\nbah");
-          setenv ~var (string "Bouhhh\nbah\n");
-          assert_or_return 30 (getenv var =$= string "Bouhhh\nbah");
-          setenv ~var (string "Bouhoo\000bah\n");
-          assert_or_return 12 (getenv var =$= string "Bouhoobah");
-          (* We check that the environment is affected in a brutal way:
-             we mess up the $PATH:
-             /bin/sh: 1: ls: not found
-             We cannot even use `return` anymore after that: *)
-          setenv ~var:(string "PATH") (string "/nope");
-          assert_or_return 42 (
-            exec ["/bin/sh"; "-c"; "ls"] |> succeeds |> not
-          );
-        ]
-      );
-    exits 32 Construct.(
-        seq [
-          with_signal
-            ~catch:(seq [printf "Caught !"; exit 32])
-            (fun throw ->
-               seq [
-                 printf "Throwing";
-                 throw;
-                 return 42;
-               ]);
-          return 28;
-        ]
-      );
-    exits 28 Construct.(
-        seq [
-          comment "trowing once stuff";
-          with_signal
-            ~catch:(seq [printf "Caught !"; exit 32])
-            (fun throw ->
-               seq [
-                 printf "Not Throwing";
-               ]);
-          return 28;
-        ]
-      );
-    begin
-      let open Genspio.EDSL in
-      let tmp = tmp_file "agglomeration" in
-      let make ~jump =
-        seq [
-          comment "Multi-trowing stuff: %b" jump;
-          setenv (string "TMPDIR") (string "/var/tmp/");
-          tmp#set (string "1");
-          printf "adding 1 !\n";
-          with_signal
-            ~catch:(seq [
-                printf "One Caught !\n";
-                printf "adding 5 !\n";
-                tmp#append (string ",5");
-              ])
-            (fun throw_one ->
-               seq [
-                 tmp#append (string ",2");
-                 printf "adding 2 !\n";
-                 with_signal
-                   ~catch:(seq [
-                       printf "Two Caught !\n";
-                       printf "adding 4 !\n";
-                       tmp#append (string ",4");
-                       throw_one;
-                     ])
-                   (fun throw_two ->
-                      seq [
-                        printf "adding 3 !\n";
-                        tmp#append (string ",3");
-                        (if jump then throw_one else throw_two);
-                      ]);
-               ]);
-          call [string "printf"; string "Agglo: %s\\n"; tmp#get;];
-          if_then_else (tmp#get
-                        =$=
-                        string (if jump then "1,2,3,5" else "1,2,3,4,5"))
-            (return 28)
-            (return 29);
-        ]
-      in
-      List.concat [
-        exits ~name:"multijump" 28 (make ~jump:true);
-        exits ~name:"multijump" 28 (make ~jump:false);
+    ]
+  );
+  ()
+
+
+let () = add_tests @@ exits 32 Construct.(
+    seq [
+      with_signal
+        ~catch:(seq [printf "Caught !"; shexit 32])
+        (fun throw ->
+           seq [
+             printf "Throwing";
+             throw;
+             return 42;
+           ]);
+      return 28;
+    ]
+  );
+  ()
+
+
+let () = add_tests @@ exits 28 Construct.(
+    seq [
+      comment "trowing once stuff";
+      with_signal
+        ~catch:(seq [printf "Caught !"; shexit 32])
+        (fun throw ->
+           seq [
+             printf "Not Throwing";
+           ]);
+      return 28;
+    ]
+  );
+  ()
+
+
+let () = add_tests @@ begin
+    let open Genspio.EDSL in
+    let tmp = tmp_file "agglomeration" in
+    let make ~jump =
+      seq [
+        comment "Multi-trowing stuff: %b" jump;
+        setenv (string "TMPDIR") (string "/var/tmp/");
+        tmp#set (string "1");
+        printf "adding 1 !\n";
+        with_signal
+          ~catch:(seq [
+              printf "One Caught !\n";
+              printf "adding 5 !\n";
+              tmp#append (string ",5");
+            ])
+          (fun throw_one ->
+             seq [
+               tmp#append (string ",2");
+               printf "adding 2 !\n";
+               with_signal
+                 ~catch:(seq [
+                     printf "Two Caught !\n";
+                     printf "adding 4 !\n";
+                     tmp#append (string ",4");
+                     throw_one;
+                   ])
+                 (fun throw_two ->
+                    seq [
+                      printf "adding 3 !\n";
+                      tmp#append (string ",3");
+                      (if jump then throw_one else throw_two);
+                    ]);
+             ]);
+        call [string "printf"; string "Agglo: %s\\n"; tmp#get;];
+        if_then_else (tmp#get
+                      =$=
+                      string (if jump then "1,2,3,5" else "1,2,3,4,5"))
+          (return 28)
+          (return 29);
       ]
-    end;
-    exits 0 ~name:"with_signal_example" Genspio.EDSL.(
-        let tmp = tmp_file "appender" in
-        seq [
-          tmp#set (string "start");
-          with_signal (fun signal ->
-              seq [
-                tmp#append (string "-signal");
-                signal;
-                tmp#append (string "-WRONG");
-              ])
-            ~catch:(seq [
-                tmp#append (string "-caught")
-              ]);
-          call [string "printf"; string "tmp: %s\\n"; tmp#get];
-          assert_or_fail "Timeline-of-tmp"
-            (tmp#get =$= string "start-signal-caught");
-        ]
-      );
-    begin
-      let with_failwith_basic_test =
-        Genspio.EDSL.(
+    in
+    List.concat [
+      exits ~name:"multijump" 28 (make ~jump:true);
+      exits ~name:"multijump" 28 (make ~jump:false);
+    ]
+  end;
+  ()
+
+let () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
+    let tmp = tmp_file "appender" in
+    seq [
+      tmp#set (string "start");
+      with_signal (fun signal ->
           seq [
-            comment "Test with failwith";
-            with_failwith (fun die ->
+            tmp#append (string "-signal");
+            signal;
+            tmp#append (string "-WRONG");
+          ])
+        ~catch:(seq [
+            tmp#append (string "-caught")
+          ]);
+      call [string "printf"; string "tmp: %s\\n"; tmp#get];
+      assert_or_fail "Timeline-of-tmp"
+        (tmp#get =$= string "start-signal-caught");
+    ]
+  );
+  ()
+
+
+let () = add_tests @@ begin
+    let with_failwith_basic_test =
+      Genspio.EDSL.(
+        seq [
+          comment "Test with failwith";
+          with_failwith (fun die ->
+              seq [
+                comment "Test with failwith: just before dying";
+                printf "Dying now\n";
+                die
+                  ~message:(string "HElllooo I'm dying!!\n") ~return:(int 23)
+              ]
+            );
+        ]
+      ) in
+    List.concat [
+      exits ~name:"with_failwith" 23 with_failwith_basic_test;
+      exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
+          let tmpextra = tmp_file "extratmp" in
+          let tmpdir = Filename.temp_file "genspio" "test" in
+          seq [
+            comment "Test with failwith and check that files go away";
+            exec ["rm"; "-f"; tmpdir];
+            exec ["mkdir"; "-p"; tmpdir];
+            setenv (string "TMPDIR") (string tmpdir);
+            tmpextra#set (string "");
+            assert_or_fail "tmpfile-in-tmpdir"
+              begin
+                tmpextra#path >>
+                call [string "grep"; string tmpdir]
+                |> returns ~value:0
+              end;
+            write_output
+              ~return_value:tmpextra#path
+              begin
                 seq [
-                  comment "Test with failwith: just before dying";
-                  printf "Dying now\n";
-                  die
-                    ~message:(string "HElllooo I'm dying!!\n") ~return:(int 23)
-                ]
-              );
-          ]
-        ) in
-      List.concat [
-        exits ~name:"with_failwith" 23 with_failwith_basic_test;
-        exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
-            let tmpextra = tmp_file "extratmp" in
-            let tmpdir = Filename.temp_file "genspio" "test" in
-            seq [
-              comment "Test with failwith and check that files go away";
-              exec ["rm"; "-f"; tmpdir];
-              exec ["mkdir"; "-p"; tmpdir];
-              setenv (string "TMPDIR") (string tmpdir);
-              tmpextra#set (string "");
-              assert_or_fail "tmpfile-in-tmpdir"
-                begin
-                  tmpextra#path >>
-                  call [string "grep"; string tmpdir]
-                  |> returns ~value:0
-                end;
-              write_output
-                ~return_value:tmpextra#path
-                begin
-                  seq [
-                    exec [
-                      "sh"; "-c"; (* Soooo meta *)
-                      Genspio.Language.to_one_liner with_failwith_basic_test;
-                    ]
+                  exec [
+                    "sh"; "-c"; (* Soooo meta *)
+                    Genspio.Language.to_one_liner with_failwith_basic_test;
                   ]
-                end;
-              assert_or_fail "with_failwith:ret23"
-                (tmpextra#get |> Integer.of_string |> Integer.eq (int 23));
-              tmpextra#delete;
-              call [
-                string "echo";
+                ]
+              end;
+            assert_or_fail "with_failwith:ret23"
+              (tmpextra#get |> Integer.of_string |> Integer.eq (int 23));
+            tmpextra#delete;
+            call [
+              string "echo";
+              call [string "find"; string tmpdir]
+              |> output_as_string
+            ];
+            assert_or_fail "with_failwith:no-files-in-tmpdir"
+              begin
                 call [string "find"; string tmpdir]
                 |> output_as_string
-              ];
-              assert_or_fail "with_failwith:no-files-in-tmpdir"
-                begin
-                  call [string "find"; string tmpdir]
-                  |> output_as_string
-                     =$= ksprintf string "%s\n" tmpdir
-                end;
-              return 37;
-            ]
-          );
-      ];
-    end;
+                   =$= ksprintf string "%s\n" tmpdir
+              end;
+            return 37;
+          ]
+        );
+    ];
+  end
+
+
+let () = add_tests @@ List.concat [
     exits ~name:"tmp#basic" 23 Genspio.EDSL.(
         let tmp = tmp_file "test" in
         seq [
@@ -718,6 +801,10 @@ let tests =
           return 23;
         ]
       );
+  ]
+
+
+let () = add_tests @@ List.concat [
     exits 2 ~no_trap:true ~name:"no-trap" Genspio.EDSL.(return 2);
     exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.(
         seq [
@@ -730,11 +817,16 @@ let tests =
             );
         ]
       );
-    exits 21 ~name:"empty-seq" Genspio.EDSL.(
-        seq [
-          seq [];
-          return 21
-        ]);
+  ]
+
+let () = add_tests @@ exits 21 ~name:"empty-seq" Genspio.EDSL.(
+    seq [
+      seq [];
+      return 21
+    ]);
+  ()
+
+let () = add_tests @@ List.concat [
     exits 2 ~name:"redirect-stuff" Genspio.EDSL.(
         let tmp1 = tmp_file "stdout" in
         let tmp2 = tmp_file "stderr" in
@@ -756,7 +848,7 @@ let tests =
           assert_or_fail "stdout-empty" (tmp1#get =$= empty);
           assert_or_fail "stderr-hello"
             (* We can only test with grep because stderr contains a bunch of
-               other stuff, especially since we use the 
+               other stuff, especially since we use the
                `-x` option of the shells *)
             (tmp2#get >> exec ["grep"; recognizable] |> succeeds);
           return 2;
@@ -822,6 +914,10 @@ let tests =
           return 2
         ]
       );
+  ]
+
+
+let () = add_tests @@ List.concat [
     exits 2 ~name:"bool-string-conversions" Genspio.EDSL.(
         seq [
           assert_or_fail "test1" (
@@ -844,164 +940,169 @@ let tests =
           (return 11)
           (return 12)
       );
-    exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
-        seq [
-          assert_or_fail "test1" (
-            (string_concat_list (list [string "one"; string "two"; string "three"]))
-            =$= string "onetwothree"
-          );
-          assert_or_fail "test2" (
-            (string_concat_list (list [string "one"; string "two"]))
-            =$= string "onetwo"
-          );
-          assert_or_fail "test3" (
-            (string_concat_list (list [string "one"]))
-            =$= string "one"
-          );
-          assert_or_fail "test4" (
-            (string_concat_list (list []))
-            =$= string ""
-          );
-          assert_or_fail "test5" (
-            (string_concat_list (list [string ""]))
-            =$= string ""
-          );
-          assert_or_fail "test6" (
-            (string_concat_list (list [string "one"; string ""; string "three"]))
-            =$= string "onethree"
-          );
-          assert_or_fail "test7" (
-            (string_concat_list (list [string "one"; string ""; string ""]))
-            =$= string "one"
-          );
-          return 5
-        ]
-      );
-    exits 5 ~name:"list-append" Genspio.EDSL.(
-        let make_string_concat_test name la lb =
-          let slist l = List.map l ~f:string |> list in
-          assert_or_fail name (
-            string_concat_list (list_append (slist la) (slist lb))
-            =$=
-            string (la @ lb |> String.concat ~sep:"")
-          );
-        in
-        seq [
-          make_string_concat_test "test1"
-            ["one"; "two"; "three"] [];
-          make_string_concat_test "test2"
-            ["one"; "two"; "three"] ["four"];
-          make_string_concat_test "test3"
-            ["one"; "two"] ["thre"; "four"];
-          make_string_concat_test "test4"
-            [] ["thre"; "four"];
-          make_string_concat_test "test5"
-            [] [];
-          make_string_concat_test "test6"
-            [""] [];
-          make_string_concat_test "test7"
-            [""] [""];
-          make_string_concat_test "test8"
-            [] [""];
-          make_string_concat_test "test9"
-            [] ["deiajd\ndedaeijl"; ""];
-          make_string_concat_test "test10"
-            [] ["deiajd\ndeda\000eijl"; ":"];
-          return 5
-        ]
-      );
-    begin
-      (* We make a bunch of separate tests to avoid the command line
-         argument size limit: *)
-      let make_list_iter_strings_test i l =
-        let name =
-          sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
-        exits 5 ~name Genspio.EDSL.(
-            let slist = List.map l ~f:string |> list in
-            let tmp = tmp_file "listitertest" in 
-            let tmp2 = tmp_file "listserializationtest" in 
-            seq [
-              tmp#set (string "");
-              (* We serialize the list to `tmp2`: *)
-              tmp2#set (list_to_string slist (fun e -> e));
-              (* We get back the serialized list from `tmp2`: *)
-              tmp2#get |> list_of_string ~f:(fun e -> e)
-              |> list_iter ~f:(fun v ->
-                  (* list_iter slist ~f:(fun v -> *)
-                  seq [
-                    eprintf (string "Concatenating: '%s'\\n") [v ()];
-                    tmp#set (string_concat [tmp#get; string ":"; v ()]);
-                    (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
-                  ]
-                );
-              assert_or_fail name (
-                tmp#get
-                =$=
-                string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
-              );
-              return 5
-            ]
-          );
-      in
-      List.concat_mapi ~f:make_list_iter_strings_test [
-        ["one"; "two"; "three"];
-        ["four"];
-        [];
-        [""];
-        [""; ""];
-        [""; "bouh"; ""; "bah"];
-        ["deiajd\ndedaeijl"; ""];
-        ["deiajd\ndeda\000eijl"; ":"];
-      ]
-    end;
-    begin
-      let make_int_test i l =
-        let name =
-          sprintf "list-iter-ints-%d-%s" i
-            (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
-        exits 5 ~name Genspio.EDSL.(
-            let ilist = List.map l ~f:int |> list in
-            let tmp = tmp_file "listitertest" in 
-            let tmp2 = tmp_file "listserializationtest" in 
-            (* Checking that implementing `fold` with `iter` does the `fold`: *)
-            seq [
-              (* We serialize the list to `tmp2`: *)
-              tmp2#set (list_to_string ilist Integer.to_string);
-              tmp#set (int 0 |> Integer.to_string);
-              (* We get back the serialized list from `tmp2`: *)
-              tmp2#get |> list_of_string ~f:Integer.of_string
-              |> list_iter ~f:(fun v ->
-                  seq [
-                    eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
-                    tmp#set
-                      Integer.(
-                        (tmp#get |> of_string) + v () |> to_string
-                      );
-                  ]
-                );
-              assert_or_fail name (
-                tmp#get
-                =$=
-                Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
-              );
-              return 5
-            ]
-          )
-      in
-      List.concat_mapi ~f:make_int_test [
-        [];
-        [1];
-        [3];
-        [1; 2; 3];
-        [1; 2; 3; 0];
-        (List.init 42 (fun i -> i));
-      ]
-    end;
   ]
 
-let posix_sh_tests = [
-  Test.command "ls" [`Exits_with 0];
-]
+
+let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
+    seq [
+      assert_or_fail "test1" (
+        (string_concat_list (list [string "one"; string "two"; string "three"]))
+        =$= string "onetwothree"
+      );
+      assert_or_fail "test2" (
+        (string_concat_list (list [string "one"; string "two"]))
+        =$= string "onetwo"
+      );
+      assert_or_fail "test3" (
+        (string_concat_list (list [string "one"]))
+        =$= string "one"
+      );
+      assert_or_fail "test4" (
+        (string_concat_list (list []))
+        =$= string ""
+      );
+      assert_or_fail "test5" (
+        (string_concat_list (list [string ""]))
+        =$= string ""
+      );
+      assert_or_fail "test6" (
+        (string_concat_list (list [string "one"; string ""; string "three"]))
+        =$= string "onethree"
+      );
+      assert_or_fail "test7" (
+        (string_concat_list (list [string "one"; string ""; string ""]))
+        =$= string "one"
+      );
+      return 5
+    ]
+  );
+  ()
+
+
+let () = add_tests @@ exits 5 ~name:"list-append" Genspio.EDSL.(
+    let make_string_concat_test name la lb =
+      let slist l = List.map l ~f:string |> list in
+      assert_or_fail name (
+        string_concat_list (list_append (slist la) (slist lb))
+        =$=
+        string (la @ lb |> String.concat ~sep:"")
+      );
+    in
+    seq [
+      make_string_concat_test "test1"
+        ["one"; "two"; "three"] [];
+      make_string_concat_test "test2"
+        ["one"; "two"; "three"] ["four"];
+      make_string_concat_test "test3"
+        ["one"; "two"] ["thre"; "four"];
+      make_string_concat_test "test4"
+        [] ["thre"; "four"];
+      make_string_concat_test "test5"
+        [] [];
+      make_string_concat_test "test6"
+        [""] [];
+      make_string_concat_test "test7"
+        [""] [""];
+      make_string_concat_test "test8"
+        [] [""];
+      make_string_concat_test "test9"
+        [] ["deiajd\ndedaeijl"; ""];
+      make_string_concat_test "test10"
+        [] ["deiajd\ndeda\000eijl"; ":"];
+      return 5
+    ]
+  );
+  ()
+let () = add_tests @@ begin
+    (* We make a bunch of separate tests to avoid the command line
+       argument size limit: *)
+    let make_list_iter_strings_test i l =
+      let name =
+        sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
+      exits 5 ~name Genspio.EDSL.(
+          let slist = List.map l ~f:string |> list in
+          let tmp = tmp_file "listitertest" in
+          let tmp2 = tmp_file "listserializationtest" in
+          seq [
+            tmp#set (string "");
+            (* We serialize the list to `tmp2`: *)
+            tmp2#set (list_to_string slist (fun e -> e));
+            (* We get back the serialized list from `tmp2`: *)
+            tmp2#get |> list_of_string ~f:(fun e -> e)
+            |> list_iter ~f:(fun v ->
+                (* list_iter slist ~f:(fun v -> *)
+                seq [
+                  eprintf (string "Concatenating: '%s'\\n") [v ()];
+                  tmp#set (string_concat [tmp#get; string ":"; v ()]);
+                  (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
+                ]
+              );
+            assert_or_fail name (
+              tmp#get
+              =$=
+              string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
+            );
+            return 5
+          ]
+        );
+    in
+    List.concat_mapi ~f:make_list_iter_strings_test [
+      ["one"; "two"; "three"];
+      ["four"];
+      [];
+      [""];
+      [""; ""];
+      [""; "bouh"; ""; "bah"];
+      ["deiajd\ndedaeijl"; ""];
+      ["deiajd\ndeda\000eijl"; ":"];
+    ]
+  end
+
+
+
+let () = add_tests @@ begin
+    let make_int_test i l =
+      let name =
+        sprintf "list-iter-ints-%d-%s" i
+          (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
+      exits 5 ~name Genspio.EDSL.(
+          let ilist = List.map l ~f:int |> list in
+          let tmp = tmp_file "listitertest" in
+          let tmp2 = tmp_file "listserializationtest" in
+          (* Checking that implementing `fold` with `iter` does the `fold`: *)
+          seq [
+            (* We serialize the list to `tmp2`: *)
+            tmp2#set (list_to_string ilist Integer.to_string);
+            tmp#set (int 0 |> Integer.to_string);
+            (* We get back the serialized list from `tmp2`: *)
+            tmp2#get |> list_of_string ~f:Integer.of_string
+            |> list_iter ~f:(fun v ->
+                seq [
+                  eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
+                  tmp#set
+                    Integer.(
+                      (tmp#get |> of_string) + v () |> to_string
+                    );
+                ]
+              );
+            assert_or_fail name (
+              tmp#get
+              =$=
+              Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
+            );
+            return 5
+          ]
+        )
+    in
+    List.concat_mapi ~f:make_int_test [
+      [];
+      [1];
+      [3];
+      [1; 2; 3];
+      [1; 2; 3; 0];
+      (List.init 42 (fun i -> i));
+    ]
+  end
 
 
 
@@ -1014,7 +1115,7 @@ let () =
     with _ -> ["bash"; "dash"] in
   let only_dash =
     try Sys.getenv "only_dash" = "true" with _ -> false in
-  let all_tests = posix_sh_tests @ tests in
+  let all_tests = !tests in
   let tests =
     if test_filters = [] then all_tests else
       all_tests |> List.filter ~f:(function
@@ -1059,8 +1160,8 @@ let () =
     Lwt_main.run
       (Test.run ~only_dash ~important_shells ~additional_shells tests)
   with
-  | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
-  | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5
+  | `Ok (`Succeeded) -> Printf.printf "Success! \\o/.\n%!"; exit 0
+  | `Ok (`Failed msg) -> Printf.printf "Test failed: %s.\n%!" msg; exit 5
   | `Error (`IO _ as e) ->
     eprintf "IO-ERROR:\n  %s\n%!" (Pvem_lwt_unix.IO.error_to_string e);
     exit 2
