@@ -841,6 +841,8 @@ let () =
   let important_shells =
     try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
     with _ -> ["bash"; "dash"] in
+  let only_dash =
+    try Sys.getenv "only_dash" = "true" with _ -> false in
   let all_tests = posix_sh_tests @ tests in
   let tests =
     if test_filters = [] then all_tests else
@@ -883,7 +885,8 @@ let () =
     end
   in
   begin match
-    Lwt_main.run (Test.run ~important_shells ~additional_shells tests)
+    Lwt_main.run
+      (Test.run ~only_dash ~important_shells ~additional_shells tests)
   with
   | `Ok (`Succeeded) -> printf "Success! \\o/.\n%!"; exit 0
   | `Ok (`Failed msg) -> printf "Test failed: %s.\n%!" msg; exit 5

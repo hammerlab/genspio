@@ -77,7 +77,7 @@ type shell = {
   get_version: string;
 } [@@deriving make]
 
-let avaialable_shells () =
+let avaialable_shells ~only_dash () =
   let exec l =
     List.map ~f:Filename.quote l |> String.concat ~sep:" " in
   let dash_like bin ~get_version =
@@ -93,16 +93,19 @@ let avaialable_shells () =
   let package_version package =
     (* for when there is no `--version`, `-V`, etc. we go the “debian” way *)
     sprintf "dpkg -s %s | grep ^Version" package in
-  let candidates = [
-    dash_like "dash" ~get_version:(package_version "dash");
-    (* dash_like "bash" ~get_version:"bash --version | head -n 1"; *)
-    (* dash_like "sh" ~get_version:(package_version "sh"); *)
-    busybox;
-    (* dash_like "ksh" ~get_version:"ksh --version 2>&1"; *)
-    (* dash_like "mksh" ~get_version:(package_version "mksh"); *)
-    (* dash_like "posh" ~get_version:(package_version "posh"); *)
-    (* dash_like "zsh" ~get_version:"zsh --version"; *)
-  ] in
+  let candidates =
+    match only_dash with
+    | true -> [dash_like "dash" ~get_version:(package_version "dash")]
+    | false -> [
+        dash_like "dash" ~get_version:(package_version "dash");
+        dash_like "bash" ~get_version:"bash --version | head -n 1";
+        dash_like "sh" ~get_version:(package_version "sh");
+        busybox;
+        dash_like "ksh" ~get_version:"ksh --version 2>&1";
+        dash_like "mksh" ~get_version:(package_version "mksh");
+        dash_like "posh" ~get_version:(package_version "posh");
+        dash_like "zsh" ~get_version:"zsh --version";
+      ] in
   let forgotten = ref [] in
   Pvem_lwt_unix.Deferred_list.while_sequential candidates ~f:(fun sh ->
       Pvem_lwt_unix.System.Shell.execute (sprintf "which %s" sh.executable)
@@ -116,8 +119,8 @@ let avaialable_shells () =
   >>= fun l ->
   return (l, !forgotten)
 
-let run ~important_shells ~additional_shells l =
-  avaialable_shells ()
+let run ~only_dash ~important_shells ~additional_shells l =
+  avaialable_shells ~only_dash ()
   >>= fun (shells, forgotten) ->
   Pvem_lwt_unix.Deferred_list.while_sequential (shells @ additional_shells)
     ~f:begin fun (shell, version) ->

@@ -109,6 +109,8 @@ Tests can be tweaked with environment variables:
 - `add_shells`: is a `++`-separated list of “shells,” each one defined as a
   comma-separated list: `<Name>,escape, <cmd-arg>, <cmd>`, where is
   `<cmd-arg>` is replaced with the actual command tested within `<cmd>`, e.g.:
+- `only_dash`: run the tests only with `dash` (useful to speedup
+  modify-compile-test loops while developing).
 
 ```
 export add_shells='
