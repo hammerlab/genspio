@@ -877,7 +877,39 @@ let tests =
           return 5
         ]
       );
-
+    exits 5 ~name:"list-append" Genspio.EDSL.(
+        let make_string_concat_test name la lb =
+          let slist l = List.map l ~f:string |> list in
+          assert_or_fail name (
+            string_concat_list (list_append (slist la) (slist lb))
+            =$=
+            string (la @ lb |> String.concat ~sep:"")
+          );
+        in
+        seq [
+          make_string_concat_test "test1"
+            ["one"; "two"; "three"] [];
+          make_string_concat_test "test2"
+            ["one"; "two"; "three"] ["four"];
+          make_string_concat_test "test3"
+            ["one"; "two"] ["thre"; "four"];
+          make_string_concat_test "test4"
+            [] ["thre"; "four"];
+          make_string_concat_test "test5"
+            [] [];
+          make_string_concat_test "test6"
+            [""] [];
+          make_string_concat_test "test7"
+            [""] [""];
+          make_string_concat_test "test8"
+            [] [""];
+          make_string_concat_test "test9"
+            [] ["deiajd\ndedaeijl"; ""];
+          make_string_concat_test "test10"
+            [] ["deiajd\ndeda\000eijl"; ":"];
+          return 5
+        ]
+      );
   ]
 
 let posix_sh_tests = [

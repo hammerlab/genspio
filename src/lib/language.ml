@@ -64,6 +64,7 @@ and _ t =
   | String_to_bool: string t -> bool t
   | List: 'a t list -> 'a list t
   | String_concat: string list t -> string t
+  | List_append: ('a list t * 'a list t) -> 'a list t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
@@ -136,6 +137,8 @@ module Construct = struct
   let list l = List l
 
   let string_concat_list l = String_concat l
+
+  let list_append la lb = List_append (la, lb)
 
   module Bool = struct
     let of_string s = String_to_bool s
@@ -374,6 +377,8 @@ let rec to_shell: type a. _ -> a t -> string =
     | String_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d '\\n' )" outputing_list
+    | List_append (la, lb) ->
+      seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)

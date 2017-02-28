@@ -102,6 +102,9 @@ end
 
 val list: 'a t list -> 'a list t
 
+val list_append: 'a list t -> 'a list t -> 'a list t
+
+
 (** {3 String Manipulation} *)
 
 val output_as_string : unit t -> string t
