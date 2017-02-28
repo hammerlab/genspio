@@ -698,6 +698,13 @@ let tests =
           );
       ];
     end;
+    exits ~name:"tmp#basic" 23 Genspio.EDSL.(
+        let tmp = tmp_file "test" in
+        seq [
+          tmp#set (string "");
+          return 23;
+        ]
+      );
     exits ~name:"tmp#delete" 23 Genspio.EDSL.(
         let tmp = tmp_file "test" in
         let s1 = string "hello\000you" in

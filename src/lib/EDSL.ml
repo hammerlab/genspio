@@ -21,9 +21,7 @@ let switch l =
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 let string_concat sl =
-  (* This is a pretty unefficient implementation: *)
-  let out s = call [string "printf"; string "%s"; s] in
-  seq (List.map sl ~f:out) |> output_as_string
+  concat (list sl)
 
 type file = <
   get : string t;
