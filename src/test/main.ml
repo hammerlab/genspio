@@ -910,76 +910,93 @@ let tests =
           return 5
         ]
       );
-    exits 5 ~name:"list-iter-strings" Genspio.EDSL.(
-        let make_string_concat_test name l =
-          let slist = List.map l ~f:string |> list in
-          let tmp = tmp_file "listitertest" in 
-          seq [
-            tmp#set (string "");
-            list_iter slist ~f:(fun v ->
-                seq [
-                  eprintf (string "Concatenating: '%s'\\n") [v ()];
-                  tmp#set (string_concat [tmp#get; string ":"; v ()]);
-                  (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
-                ]
+    begin
+      (* We make a bunch of separate tests to avoid the command line
+         argument size limit: *)
+      let make_list_iter_strings_test i l =
+        let name =
+          sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
+        exits 5 ~name Genspio.EDSL.(
+            let slist = List.map l ~f:string |> list in
+            let tmp = tmp_file "listitertest" in 
+            let tmp2 = tmp_file "listserializationtest" in 
+            seq [
+              tmp#set (string "");
+              (* We serialize the list to `tmp2`: *)
+              tmp2#set (list_to_string slist (fun e -> e));
+              (* We get back the serialized list from `tmp2`: *)
+              tmp2#get |> list_of_string ~f:(fun e -> e)
+              |> list_iter ~f:(fun v ->
+                  (* list_iter slist ~f:(fun v -> *)
+                  seq [
+                    eprintf (string "Concatenating: '%s'\\n") [v ()];
+                    tmp#set (string_concat [tmp#get; string ":"; v ()]);
+                    (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
+                  ]
+                );
+              assert_or_fail name (
+                tmp#get
+                =$=
+                string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
               );
-            assert_or_fail name (
-              tmp#get
-              =$=
-              string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
-            );
-          ]
-        in
-        seq [
-          make_string_concat_test "test1" ["one"; "two"; "three"];
-          make_string_concat_test "test2" ["four"];
-          make_string_concat_test "test3" [];
-          make_string_concat_test "test4" [""];
-          make_string_concat_test "test5" [""; ""];
-          make_string_concat_test "test6" [""; "bouh"; ""; "bah"];
-          make_string_concat_test "test9" ["deiajd\ndedaeijl"; ""];
-          make_string_concat_test "test10" ["deiajd\ndeda\000eijl"; ":"];
-          return 5
-        ]
-      );
-    exits 5 ~name:"list-iter-ints" Genspio.EDSL.(
-        let count = ref 0 in
-        let make_int_test l =
-          let ilist = List.map l ~f:int |> list in
-          let tmp = tmp_file "listitertest" in 
-          let name =
-            incr count;
-            sprintf "test%d-%s" !count
-              (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
-          (* Checking that implementing `fold` with `iter` does the `fold`: *)
-          seq [
-            tmp#set (int 0 |> Integer.to_string);
-            list_iter ilist ~f:(fun v ->
-                seq [
-                  eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
-                  tmp#set
-                    Integer.(
-                      (tmp#get |> of_string) + v () |> to_string
-                    );
-                ]
+              return 5
+            ]
+          );
+      in
+      List.concat_mapi ~f:make_list_iter_strings_test [
+        ["one"; "two"; "three"];
+        ["four"];
+        [];
+        [""];
+        [""; ""];
+        [""; "bouh"; ""; "bah"];
+        ["deiajd\ndedaeijl"; ""];
+        ["deiajd\ndeda\000eijl"; ":"];
+      ]
+    end;
+    begin
+      let make_int_test i l =
+        let name =
+          sprintf "list-iter-ints-%d-%s" i
+            (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
+        exits 5 ~name Genspio.EDSL.(
+            let ilist = List.map l ~f:int |> list in
+            let tmp = tmp_file "listitertest" in 
+            let tmp2 = tmp_file "listserializationtest" in 
+            (* Checking that implementing `fold` with `iter` does the `fold`: *)
+            seq [
+              (* We serialize the list to `tmp2`: *)
+              tmp2#set (list_to_string ilist Integer.to_string);
+              tmp#set (int 0 |> Integer.to_string);
+              (* We get back the serialized list from `tmp2`: *)
+              tmp2#get |> list_of_string ~f:Integer.of_string
+              |> list_iter ~f:(fun v ->
+                  seq [
+                    eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
+                    tmp#set
+                      Integer.(
+                        (tmp#get |> of_string) + v () |> to_string
+                      );
+                  ]
+                );
+              assert_or_fail name (
+                tmp#get
+                =$=
+                Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
               );
-            assert_or_fail name (
-              tmp#get
-              =$=
-              Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
-            );
-          ]
-        in
-        seq [
-          make_int_test [];
-          make_int_test [1];
-          make_int_test [3];
-          make_int_test [1; 2; 3];
-          make_int_test [1; 2; 3; 0];
-          make_int_test (List.init 42 (fun i -> i));
-          return 5
-        ]
-      );
+              return 5
+            ]
+          )
+      in
+      List.concat_mapi ~f:make_int_test [
+        [];
+        [1];
+        [3];
+        [1; 2; 3];
+        [1; 2; 3; 0];
+        (List.init 42 (fun i -> i));
+      ]
+    end;
   ]
 
 let posix_sh_tests = [

@@ -62,6 +62,8 @@ and _ t =
   | String_to_int: string t -> int t
   | Bool_to_string: bool t -> string t
   | String_to_bool: string t -> bool t
+  | List_to_string: 'a list t * ('a t -> string t) -> string t
+  | String_to_list: string t * (string t -> 'a t) -> 'a list t
   | List: 'a t list -> 'a list t
   | String_concat: string list t -> string t
   | List_append: ('a list t * 'a list t) -> 'a list t
@@ -142,6 +144,9 @@ module Construct = struct
   let list_append la lb = List_append (la, lb)
 
   let list_iter l ~f = List_iter (l, f)
+
+  let list_to_string l ~f = List_to_string (l, f)
+  let list_of_string l ~f = String_to_list (l, f)
 
   module Bool = struct
     let of_string s = String_to_bool s
@@ -378,6 +383,10 @@ let rec to_shell: type a. _ -> a t -> string =
           one :: "printf -- '\\n'" :: build (two :: t)
       in
       (seq (build outputs))
+    | List_to_string (l, f) ->
+      continue (Output_as_string (Raw_cmd (continue l)))
+    | String_to_list (s, f) ->
+      continue s |> expand_octal |> sprintf "printf -- '%%s' \"$(%s)\""
     | String_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
