@@ -62,6 +62,8 @@ and _ t =
   | String_to_int: string t -> int t
   | Bool_to_string: bool t -> string t
   | String_to_bool: string t -> bool t
+  | List: 'a t list -> 'a list t
+  | String_concat: string list t -> string t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
@@ -131,6 +133,10 @@ module Construct = struct
 
   let loop_while condition ~body = While {condition; body}
 
+  let list l = List l
+
+  let concat l = String_concat l
+
   module Bool = struct
     let of_string s = String_to_bool s
     let to_string b = Bool_to_string b
@@ -178,7 +184,10 @@ type output_parameters = {
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
     let continue e = to_shell params e in
-    let seq l = String.concat  ~sep:params.statement_separator l in
+    let seq =
+      function
+      | [] -> ":"
+      | l -> String.concat  ~sep:params.statement_separator l in
     let die s =
       match params.die_command with
       | Some f -> f s
@@ -263,7 +272,6 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "do %s" (continue body);
         "done"
       ]
-    | Seq [] -> ":"
     | Seq l -> seq (List.map l ~f:continue)
     | Not t ->
       sprintf "! { %s ; }" (continue t)
@@ -351,6 +359,21 @@ let rec to_shell: type a. _ -> a t -> string =
             (Fail))
         )
       )
+    | List l ->
+      (* Lists are newline-separated internal represetations. *)
+      let output o = sprintf "printf -- '%%s' \"%s\"" (continue o) in
+      let outputs = List.map l ~f:output in
+      let rec build =
+        function
+        | [] -> []
+        | [one] -> [one]
+        | one :: two :: t ->
+          one :: "printf -- '\\n'" :: build (two :: t)
+      in
+      (seq (build outputs))
+    | String_concat sl ->
+      let outputing_list = continue sl in
+      sprintf "$( { %s ; } | tr -d '\\n' )" outputing_list
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)

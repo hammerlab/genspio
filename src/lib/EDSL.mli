@@ -98,12 +98,18 @@ module Integer : sig
   val ( > ) : int t -> int t -> bool t
 end
 
+(** {3 Lists} *)
+
+val list: 'a t list -> 'a list t
+
 (** {3 String Manipulation} *)
 
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
 val string_concat: string t list -> string t
+
+val concat : string list t -> string t
 
 (** {3 Control Flow} *)
 

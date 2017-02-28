@@ -837,6 +837,40 @@ let tests =
           (return 11)
           (return 12)
       );
+    exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
+        seq [
+          assert_or_fail "test1" (
+            (concat (list [string "one"; string "two"; string "three"]))
+            =$= string "onetwothree"
+          );
+          assert_or_fail "test2" (
+            (concat (list [string "one"; string "two"]))
+            =$= string "onetwo"
+          );
+          assert_or_fail "test3" (
+            (concat (list [string "one"]))
+            =$= string "one"
+          );
+          assert_or_fail "test4" (
+            (concat (list []))
+            =$= string ""
+          );
+          assert_or_fail "test5" (
+            (concat (list [string ""]))
+            =$= string ""
+          );
+          assert_or_fail "test6" (
+            (concat (list [string "one"; string ""; string "three"]))
+            =$= string "onethree"
+          );
+          assert_or_fail "test7" (
+            (concat (list [string "one"; string ""; string ""]))
+            =$= string "one"
+          );
+          return 5
+        ]
+      );
+
   ]
 
 let posix_sh_tests = [
