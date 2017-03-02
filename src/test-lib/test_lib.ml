@@ -45,6 +45,7 @@ let check_command s ~verifies =
     | `Error (`Shell (_, `Exn e)) ->
       return [false, sprintf "Shell EXN : %s" (Printexc.to_string e)]
     | `Error (`Timeout _) ->
+      eprintf "Timeout!\n%!";
       return [false, sprintf "Timeout !!"]
     end
   end
