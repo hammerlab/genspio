@@ -70,6 +70,8 @@ gennspio_test=_build/src/test/genspio-test.byte
 genspio_examples=_build/src/test/genspio-examples.byte
 
 echo "================== TEST 0 ======================================================"
+export single_test_timeout=20.
+export verbose_tests=true
 $gennspio_test
 
 # We also run the example

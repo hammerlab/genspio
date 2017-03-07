@@ -111,6 +111,8 @@ Tests can be tweaked with environment variables:
   `<cmd-arg>` is replaced with the actual command tested within `<cmd>`, e.g.:
 - `only_dash`: run the tests only with `dash` (useful to speedup
   modify-compile-test loops while developing).
+- `single_test_timeout`: the timeout for a signle test run
+  (default: 5. seconds).
 
 ```
 export add_shells='

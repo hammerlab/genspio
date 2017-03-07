@@ -6,6 +6,9 @@ open Pvem_lwt_unix.Deferred_result
 let verbose =
   try Sys.getenv "verbose_tests" = "true" with _ -> false
 
+let single_test_timeout =
+  try Sys.getenv "single_test_timeout" |> float_of_string  with _ -> 5.
+
 let babble fmt =
   ksprintf (fun s ->
       if verbose
@@ -18,7 +21,7 @@ let check_command s ~verifies =
      |> String.concat ~sep:", ")
     (String.sub s ~index:0 ~length:300 |> Option.value ~default:s);
   begin
-    Pvem_lwt_unix.System.with_timeout 5. ~f:begin fun () ->
+    Pvem_lwt_unix.System.with_timeout single_test_timeout ~f:begin fun () ->
       Pvem_lwt_unix.System.Shell.execute s
     end
     >>< begin function
@@ -42,6 +45,7 @@ let check_command s ~verifies =
     | `Error (`Shell (_, `Exn e)) ->
       return [false, sprintf "Shell EXN : %s" (Printexc.to_string e)]
     | `Error (`Timeout _) ->
+      eprintf "Timeout!\n%!";
       return [false, sprintf "Timeout !!"]
     end
   end
