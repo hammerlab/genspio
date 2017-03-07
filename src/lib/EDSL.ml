@@ -161,7 +161,22 @@ module Command_line = struct
     let anonarg_var = prefix ^ "_anon" |> string in
     let anon =
       getenv anonarg_var |> string_list_of_string in
-    let unit_t =
+    let applied_action =
+      (* 
+        The `loop` function below is building 3 pieces of code at once:
+
+        * variable intializations
+        * individual cases (incl variable assignments) in the `while true { switch { .... } }` loop
+        * the `unit t`, a.k.a. `applied_action`: it calls the user-provided 
+          `action` function on the parsed arguments (building the closure 
+          as the loop goes), the result is a piece of `unit t` code that uses
+          the parsed command line arguments.
+         
+        The 2 first items are agglomerated in the `inits` and `cases`
+        references.
+         
+        See also: https://drup.github.io/2016/08/02/difflists/
+      *)
       let rec loop
         : type a b.
           a -> (a, b) cli_options -> b =
@@ -239,7 +254,6 @@ module Command_line = struct
         in
         let dash_dash_case =
           case (getenv (string "1") =$= string "--") [
-            eprintf (string "WARNING: dash-dash arg: %s\\n") [getenv (string "1")];
             exec ["shift"];
             loop_while (getenv (string "#") <$> string "0") ~body:begin
               seq [
@@ -251,21 +265,17 @@ module Command_line = struct
           ] in
         let anon_case =
           case (getenv (string "#") <$> string "0") [
-            eprintf (string "WARNING: annon arg: %s\\n") [getenv (string "1")];
             append_anon_arg_to_list;
             exec ["shift"];
           ] in
         let default_case =
           default [
-            eprintf (string "WARNING: should be empty: '%s'\\n") [getenv (string "1")];
             exec ["break"];
           ] in
         let cases =
           help_case :: List.rev !cases @ [dash_dash_case; anon_case; default_case] in
         seq [
-          eprintf (string "While loop start: $1: %s\n") [getenv (string "1")];
           switch cases;
-          eprintf (string "While loop end: $1: %s\n") [getenv (string "1")];
         ] in
       loop_while (bool true) ~body
     in
@@ -276,7 +286,7 @@ module Command_line = struct
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))
         (nop)
-        unit_t;
+        applied_action;
     ]
 
 end
