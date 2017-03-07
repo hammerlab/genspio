@@ -144,21 +144,22 @@ let downloader () =
   end in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   let cli_spec =
-    Option_list.(
+    Command_line.Arg.(
       string
-        ~doc:"The URL to the stuff" 'u'
+        ~doc:"The URL to the stuff" ["-u"; "--url"]
         ~default:no_value
-      & flag 'c' ~doc:"Do everything in the temp-dir"
-      & string 'f'
+      & flag ["-c"; "--all-in-tmp"] ~doc:"Do everything in the temp-dir"
+      & string ["-f"; "--local-filename"]
         ~doc:"Override the downloaded file-name"
         ~default:no_value
-      & string 't'
+      & string ["-t"; "--tmp-dir"]
         ~doc:"Use <dir> as temp-dir"
         ~default:(Genspio.EDSL.string "/tmp/genspio-downloader-tmpdir")
-      & usage "$0 -u URL [-c]"
+      & usage "Download archives and decrypt/unarchive them.\n\
+               ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
     ) in
-  parse_command_line cli_spec
-    begin fun url all_in_tmp filename_ov tmp_dir ->
+  Command_line.parse cli_spec
+    begin fun ~anon url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         if_seq (filename_ov =$= no_value)

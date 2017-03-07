@@ -11,11 +11,9 @@ module Literal = struct
     | Int i -> sprintf "%d" i
     | String s ->
       with_buffer begin fun str ->
-        str "'";
         String.iter s ~f:(fun c ->
             Char.code c |> sprintf "%03o" |> str
           );
-        str "'"
       end |> fst
     | Bool true -> "true"
     | Bool false -> "false"
@@ -34,24 +32,13 @@ module Literal = struct
 
 end
 
-type 'a cli_option = {
-  switch: char;
-  doc: string;
-  default: 'a;
-}
-type _ option_spec =
-  | Opt_flag:   bool t cli_option -> bool t option_spec
-  | Opt_string: string t cli_option -> string t option_spec
-and (_, _) cli_options =
-  | Opt_end: string -> ('a, 'a) cli_options
-  | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
-and fd_redirection = {
+type fd_redirection = {
   take: int t;
   redirect_to: [ `Path of string t | `Fd of int t (* | `Input_of of unit t *) ];
 }
 and _ t =
   | Exec: string t list -> unit t
-  | Raw_cmd: string -> unit t
+  | Raw_cmd: string -> 'a t
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
   | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
   | Not: bool t -> bool t
@@ -70,13 +57,17 @@ and _ t =
     } -> unit t
   | Feed: string t * unit t -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
-  | Parse_command_line: {
-      options: ('a, unit t) cli_options;
-      action: 'a;
-    } -> unit t
   | Fail: unit t
   | Int_to_string: int t -> string t
   | String_to_int: string t -> int t
+  | Bool_to_string: bool t -> string t
+  | String_to_bool: string t -> bool t
+  | List_to_string: 'a list t * ('a t -> string t) -> string t
+  | String_to_list: string t * (string t -> 'a t) -> 'a list t
+  | List: 'a t list -> 'a list t
+  | String_concat: string list t -> string t
+  | List_append: ('a list t * 'a list t) -> 'a list t
+  | List_iter: 'a list t * ((unit -> 'a t) -> unit t) -> unit t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
@@ -146,6 +137,22 @@ module Construct = struct
 
   let loop_while condition ~body = While {condition; body}
 
+  let list l = List l
+
+  let string_concat_list l = String_concat l
+
+  let list_append la lb = List_append (la, lb)
+
+  let list_iter l ~f = List_iter (l, f)
+
+  let list_to_string l ~f = List_to_string (l, f)
+  let list_of_string l ~f = String_to_list (l, f)
+
+  module Bool = struct
+    let of_string s = String_to_bool s
+    let to_string b = Bool_to_string b
+  end
+
   module Integer = struct
     let to_string i = Int_to_string i
     let of_string s = String_to_int s
@@ -175,22 +182,8 @@ module Construct = struct
     let (>) = gt
   end
 
-  module Option_list = struct
-    let string ?(default = string "") ~doc switch =
-      Opt_string {switch; doc; default}
-    let flag ?(default = bool false) ~doc switch =
-      Opt_flag {switch; doc; default}
-
-    let (&) x y = Opt_cons (x, y)
-    let usage s = Opt_end s
-
-  end
-
-  let parse_command_line options action =
-    Parse_command_line {options; action}
-
   module Magic = struct
-    let unit s = Raw_cmd s
+    let unit s : unit t = Raw_cmd s
   end
 
 end
@@ -202,7 +195,10 @@ type output_parameters = {
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
     let continue e = to_shell params e in
-    let seq l = String.concat  ~sep:params.statement_separator l in
+    let seq =
+      function
+      | [] -> ":"
+      | l -> String.concat  ~sep:params.statement_separator l in
     let die s =
       match params.die_command with
       | Some f -> f s
@@ -213,7 +209,7 @@ let rec to_shell: type a. _ -> a t -> string =
     in
     let expand_octal s =
       sprintf
-        {sh| printf "$(printf '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
+        {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
     let to_argument varprefix =
       let argument ?declaration ?variable_name argument =
@@ -269,7 +265,7 @@ let rec to_shell: type a. _ -> a t -> string =
         (match op with `And -> "&&" | `Or -> "||")
         (continue b)
     | String_operator (a, op, b) ->
-      sprintf "[ %s %s %s ]"
+      sprintf "[ \"%s\" %s \"%s\" ]"
         (continue a)
         (match op with `Eq -> "=" | `Neq -> "!=")
         (continue b)
@@ -287,7 +283,6 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "do %s" (continue body);
         "done"
       ]
-    | Seq [] -> ":"
     | Seq l -> seq (List.map l ~f:continue)
     | Not t ->
       sprintf "! { %s ; }" (continue t)
@@ -311,7 +306,7 @@ let rec to_shell: type a. _ -> a t -> string =
             takearg#argument
             retoarg#argument
         in
-        sprintf "%s eval \"$(printf %s)\" || { echo 'Exec %s failed' >&2 ; } "
+        sprintf "%s eval \"$(printf -- %s)\" || { echo 'Exec %s failed' >&2 ; } "
           (String.concat variables ~sep:"")
           exec
           exec
@@ -336,7 +331,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let with_potential_return =
         sprintf "%s { %s %s ; }" var (continue expr)
           (Option.value_map ret_arg ~default:"" ~f:(fun r ->
-               sprintf "; printf \"$?\" > %s" r#argument))
+               sprintf "; printf -- \"$?\" > %s" r#argument))
       in
       let redirections =
         let make fd =
@@ -349,7 +344,7 @@ let rec to_shell: type a. _ -> a t -> string =
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
     | Int_to_string i ->
-      continue (Output_as_string (Raw_cmd (sprintf "printf '%%d' %s" (continue i))))
+      continue (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
     | String_to_int s ->
       let var = "tmpxxxxijljlijdeifh" in
       let value = sprintf "\"$%s\"" var in
@@ -361,6 +356,55 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue s |> expand_octal)
         value value value
         (die (sprintf "String_to_int: error, $%s is not an integer" var))
+    | Bool_to_string b ->
+      continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
+                                             (continue b))))
+    | String_to_bool s ->
+      continue (
+        If (
+          (String_operator (s, `Eq, Literal (Literal.String "true"))),
+          (Raw_cmd "true"),
+          If (
+            (String_operator (s, `Eq, Literal (Literal.String "false"))),
+            (Raw_cmd "false"),
+            (Fail))
+        )
+      )
+    | List l ->
+      (* Lists are newline-separated internal represetations,
+         prefixed by `G`. *)
+      let output o = sprintf "printf -- 'G%%s' \"%s\"" (continue o) in
+      let outputs = List.map l ~f:output in
+      let rec build =
+        function
+        | [] -> []
+        | [one] -> [one]
+        | one :: two :: t ->
+          one :: "printf -- '\\n'" :: build (two :: t)
+      in
+      (seq (build outputs))
+    | List_to_string (l, f) ->
+      continue (Output_as_string (Raw_cmd (continue l)))
+    | String_to_list (s, f) ->
+      continue s |> expand_octal |> sprintf "printf -- '%%s' \"$(%s)\""
+    | String_concat sl ->
+      let outputing_list = continue sl in
+      sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+    | List_append (la, lb) ->
+      seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
+    | List_iter (l, f) ->
+      let variter = Unique_name.variable "list_iter_var" in
+      let varlist = Unique_name.variable "list_iter_list" in
+      let outputing_list = continue l in
+      seq [
+        sprintf "export %s=\"$(%s)\" " varlist outputing_list;
+        sprintf "for %s in ${%s} " variter varlist;
+        "do : "; (* we cannot put a `;` after do so the first command is no-op *)
+        continue (f (fun () ->
+            (* Here we remove the `G` from the internal represetation: *)
+            Raw_cmd (sprintf "${%s#G}" variter)));
+        "done";
+      ]
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
@@ -399,11 +443,11 @@ let rec to_shell: type a. _ -> a t -> string =
            just “cuts” it, it wouldn't fail and `${HOME\nBOUH}` would be
            equal to `${HOME}`
         *)
-        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf %s\" ; } "
+        sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf -- '%%s' %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
     | Setenv (variable, value) ->
-      sprintf "export $(%s)=$(%s)"
+      sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
     | With_signal {signal_name; catch; run} ->
@@ -423,108 +467,6 @@ let rec to_shell: type a. _ -> a t -> string =
           ];
         ])
     | Fail -> die "EDSL.fail called"
-    | Parse_command_line { options; action } ->
-      let prefix = Unique_name.variable "getopts" in
-      let variable {switch; doc;} =
-        sprintf "%s_%c" prefix switch in
-      let inits = ref [] in
-      let to_init s = inits := s :: !inits in
-      let cases = ref [] in
-      let to_case s = cases := s :: !cases in
-      let help_intro = ref "" in
-      let help = ref [] in
-      let to_help s = help := s :: !help in
-      let string_of_var var =
-        Output_as_string (Raw_cmd (sprintf "printf \"${%s}\"" var)) in
-      let bool_of_var var =
-        Construct.succeeds (Raw_cmd (sprintf "{ ${%s} ; } " var)) in
-      let unit_t =
-        let rec loop
-          : type a b.
-            a -> (a, b) cli_options -> b =
-          fun f -> function
-          | Opt_end doc ->
-            help_intro := doc;
-            f
-          | Opt_cons (Opt_string x, more) ->
-            let var = variable x in
-            to_init (sprintf "export %s=$(%s)"
-                       var (continue x.default |> expand_octal));
-            to_case (sprintf "-%c) %s ;;"
-                       x.switch
-                       (seq [
-                           "if [ -n \"$2\" ]";
-                           sprintf "then export %s=\"$2\" " var;
-                           sprintf "else printf \"ERROR -%c requires an argument\\n\" \
-                                    >&2" x.switch;
-                           die "Command line parsing error: Aborting";
-                           "fi";
-                           "shift";
-                           "shift";
-                         ]));
-            ksprintf to_help "* `-%c <string>`: %s" x.switch x.doc;
-            loop (f (string_of_var var)) more
-          | Opt_cons (Opt_flag x, more) ->
-            let var = variable x in
-            to_init (sprintf
-                       "export %s=$(if %s ; then printf 'true' ; else printf 'false' ; fi)" var
-                       (continue x.default));
-            to_case (
-              sprintf "-%c) %s ;;"
-                x.switch (seq [
-                    sprintf "export %s=true" var;
-                    "shift";
-                  ])
-            );
-            ksprintf to_help "* `-%c`: %s" x.switch x.doc;
-            loop (f (bool_of_var var)) more
-        in
-        loop action options
-      in
-      let help_msg =
-        sprintf "%s\n\nOptions:\n\n%s\n"
-          !help_intro (String.concat ~sep:"\n" (List.rev !help))
-      in
-      let while_loop =
-        let sep = if params.statement_separator = " \n " then "\n" else " " in
-        String.concat ~sep (
-          [
-            "while :;"; " do case $1 in";
-            "-h|-help|--help) ";
-            sprintf "export %s_help=true ; " prefix;
-            sprintf "%s ;"
-              (continue Construct.(string help_msg
-                                   >>  exec ["cat"]));
-            " break ;;"
-          ]
-          @ List.rev !cases
-          @ [
-            "--) shift ; break ;;";
-            "-?*)";
-            "printf 'ERROR: Unknown option: %s\\n' \"$1\" >&2 ;";
-            die "Command line parsing error: Aborting";
-            ";;";
-            "*) if [ $# -eq 0 ] ; ";
-            "then echo \" $1 $# \" ; break ;";
-            sprintf
-              " else export %s_args=\"${%s_args} %s\" ; shift ; "
-              prefix prefix
-              (continue (Output_as_string (Raw_cmd "printf \"$1\""))) ;
-            "fi ;; ";
-            "esac;";
-            "done"]
-        )
-      in
-      seq (
-        sprintf "export %s_args=" prefix
-        :: sprintf "export %s_help=false" prefix
-        :: List.rev !inits @ [
-          while_loop;
-          continue Construct.(
-              if_then_else (bool_of_var (sprintf "%s_help" prefix))
-                (nop)
-                unit_t);
-        ])
 
 (* 
      POSIX does not have ["set -o pipefail"].
@@ -534,7 +476,7 @@ let rec to_shell: type a. _ -> a t -> string =
 let with_trap ~statement_separator ~exit_with script =
   let variable_name = "very_long_name_that_we_should_not_reuse" in
   let die s =
-    sprintf " { printf '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
+    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
     sprintf "trap 'exit %d' USR1" exit_with;

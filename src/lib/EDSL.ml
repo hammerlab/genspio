@@ -1,7 +1,4 @@
 type 'a t = 'a Language.t
-type 'a cli_option = 'a Language.cli_option
-type 'a option_spec = 'a Language.option_spec
-type ('a, 'b) cli_options = ('a, 'b) Language.cli_options
 type fd_redirection = Language.fd_redirection
 let (//) = Filename.concat
 
@@ -24,9 +21,10 @@ let switch l =
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 let string_concat sl =
-  (* This is a pretty unefficient implementation: *)
-  let out s = call [string "printf"; string "%s"; s] in
-  seq (List.map sl ~f:out) |> output_as_string
+  string_concat_list (list sl)
+
+let string_list_to_string l = list_to_string ~f:(fun e -> e) l
+let string_list_of_string s = list_of_string ~f:(fun e -> e) s
 
 type file = <
   get : string t;
@@ -111,3 +109,174 @@ let if_seq ~t ?e c =
   match e with
   | None -> if_then c (seq t)
   | Some f -> if_then_else c (seq t) (seq f) 
+
+
+let eprintf fmt l =
+  with_redirections
+    (call (string "printf" :: string "--" :: fmt :: l)) [
+    to_fd (int 1) (int 2);
+  ]
+
+module Command_line = struct
+  type 'a cli_option = {
+    switches: string list;
+    doc: string;
+    default: 'a;
+  }
+  type _ option_spec =
+    | Opt_flag:   bool t cli_option -> bool t option_spec
+    | Opt_string: string t cli_option -> string t option_spec
+  and (_, _) cli_options =
+    | Opt_end: string -> ('a, 'a) cli_options
+    | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+
+  module Arg = struct
+    let string ?(default = string "") ~doc switches =
+      Opt_string {switches; doc; default}
+    let flag ?(default = bool false) ~doc switches =
+      Opt_flag {switches; doc; default}
+
+    let (&) x y = Opt_cons (x, y)
+    let usage s = Opt_end s
+
+  end
+
+  let parse
+      (options: ('a, unit t) cli_options)
+      (action: anon: string list t -> 'a) : unit t =
+    let prefix = Common.Unique_name.variable "getopts" in
+    let variable {switches; doc;} =
+      sprintf "%s_%s" prefix (String.concat ~sep:"" switches|> Digest.string |> Digest.to_hex) in
+    let inits = ref [] in
+    let to_init s = inits := s :: !inits in
+    let cases = ref [] in
+    let to_case s = cases := s :: !cases in
+    let help_intro = ref "" in
+    let help = ref [] in
+    let to_help s = help := s :: !help in
+    let string_of_var var =
+      getenv (string var) in
+    let bool_of_var var =
+      getenv (string var) |> Bool.of_string in
+    let anonarg_var = prefix ^ "_anon" |> string in
+    let anon =
+      getenv anonarg_var |> string_list_of_string in
+    let unit_t =
+      let rec loop
+        : type a b.
+          a -> (a, b) cli_options -> b =
+        fun f -> function
+        | Opt_end doc ->
+          help_intro := doc;
+          f
+        | Opt_cons (Opt_string x, more) ->
+          let var = variable x in
+          to_init (
+            setenv (string var) x.default);
+          to_case (
+            case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
+                p ||| (string s =$= getenv (string "1"))))
+              [
+                if_seq (getenv (string "2") =$= string "")
+                  ~t:[
+                    eprintf
+                      (string "ERROR option '%s' requires an argument\\n")
+                      [getenv (string "1")];
+                    fail;
+                  ]
+                  ~e:[
+                    setenv (string var) (getenv (string "2"));
+                  ];
+                exec ["shift"];
+                exec ["shift"];
+              ]
+          );
+          ksprintf to_help "* `%s <string>`: %s"
+            (String.concat ~sep:"," x.switches) x.doc;
+          loop (f (string_of_var var)) more
+        | Opt_cons (Opt_flag x, more) ->
+          let var = variable x in
+          to_init (
+            setenv (string var) (Bool.to_string x.default)
+          );
+          to_case (
+            case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
+                p ||| (string s =$= getenv (string "1"))))
+              [
+                setenv (string var) (Bool.to_string (bool true));
+                exec ["shift"];
+              ]
+          );
+          ksprintf to_help "* `%s`: %s"
+            (String.concat ~sep:"," x.switches) x.doc;
+          loop (f (bool_of_var var)) more
+      in
+      loop (action ~anon) options
+    in
+    let help_msg =
+      sprintf "%s\n\nOptions:\n\n%s\n"
+        !help_intro (String.concat ~sep:"\n" (List.rev !help))
+    in
+    let help_flag_var = ksprintf string "%s_help" prefix in
+    let while_loop =
+      let body =
+        let append_anon_arg_to_list =
+          setenv anonarg_var (
+            list_append
+              (string_list_of_string (getenv anonarg_var))
+              (list [getenv (string "1")])
+            |> string_list_to_string
+          ) in
+        let help_case =
+          let help_switches = ["-h"; "-help"; "--help"] in
+          case
+            (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
+                 p ||| (string s =$= getenv (string "1")))) [
+            setenv help_flag_var (Bool.to_string (bool true));
+            string help_msg >>  exec ["cat"];
+            exec ["break"];
+          ]
+        in
+        let dash_dash_case =
+          case (getenv (string "1") =$= string "--") [
+            eprintf (string "WARNING: dash-dash arg: %s\\n") [getenv (string "1")];
+            exec ["shift"];
+            loop_while (getenv (string "#") <$> string "0") ~body:begin
+              seq [
+                append_anon_arg_to_list;
+                exec ["shift"];
+              ]
+            end;
+            exec ["break"];
+          ] in
+        let anon_case =
+          case (getenv (string "#") <$> string "0") [
+            eprintf (string "WARNING: annon arg: %s\\n") [getenv (string "1")];
+            append_anon_arg_to_list;
+            exec ["shift"];
+          ] in
+        let default_case =
+          default [
+            eprintf (string "WARNING: should be empty: '%s'\\n") [getenv (string "1")];
+            exec ["break"];
+          ] in
+        let cases =
+          help_case :: List.rev !cases @ [dash_dash_case; anon_case; default_case] in
+        seq [
+          eprintf (string "While loop start: $1: %s\n") [getenv (string "1")];
+          switch cases;
+          eprintf (string "While loop end: $1: %s\n") [getenv (string "1")];
+        ] in
+      loop_while (bool true) ~body
+    in
+    seq [
+      setenv help_flag_var (Bool.to_string (bool false));
+      setenv anonarg_var (string_list_to_string (list []));
+      seq (List.rev !inits);
+      while_loop;
+      if_then_else (bool_of_var (sprintf "%s_help" prefix))
+        (nop)
+        unit_t;
+    ]
+
+end

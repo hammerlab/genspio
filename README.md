@@ -54,39 +54,39 @@ cf. [`#35`](https://github.com/hammerlab/genspio/issues/35)):
 Summary:
 
 * Test "dash" (`'dash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 141 failures
-    - time: 2.46 s.
+    - 0 / 184 failures
+    - time: 16.04 s.
     - version: `"Version: 0.5.8-2.1ubuntu2"`.
 * Test "bash" (`'bash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 141 failures
-    - time: 4.47 s.
+    - 0 / 184 failures
+    - time: 28.24 s.
     - version: `"GNU bash, version 4.3.46(1)-release (x86_64-pc-linux-gnu)"`.
 * Test "sh" (`'sh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 141 failures
-    - time: 2.73 s.
+    - 0 / 184 failures
+    - time: 15.69 s.
     - version: `""`.
 * Test "busybox" (`'busybox' 'ash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 141 failures
-    - time: 1.87 s.
+    - 0 / 184 failures
+    - time: 11.43 s.
     - version: `"BusyBox v1.22.1 (Ubuntu 1:1.22.0-15ubuntu1) multi-call binary."`.
 * Test "ksh" (`'ksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 27 / 141 failures
-    - time: 3.28 s.
+    - 19 / 184 failures
+    - time: 20.85 s.
     - version: `"version         sh (AT&T Research) 93u+ 2012-08-01"`.
     - Cf. `/tmp/genspio-test-ksh-failures.txt`.
 * Test "mksh" (`'mksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 2 / 141 failures
-    - time: 4.40 s.
+    - 2 / 184 failures
+    - time: 29.24 s.
     - version: `"Version: 52c-2"`.
     - Cf. `/tmp/genspio-test-mksh-failures.txt`.
 * Test "posh" (`'posh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 2 / 141 failures
-    - time: 4.21 s.
+    - 2 / 184 failures
+    - time: 29.13 s.
     - version: `"Version: 0.12.6"`.
     - Cf. `/tmp/genspio-test-posh-failures.txt`.
 * Test "zsh" (`'zsh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 4 / 141 failures
-    - time: 4.79 s.
+    - 20 / 184 failures
+    - time: 22.33 s.
     - version: `"zsh 5.1.1 (x86_64-ubuntu-linux-gnu)"`.
     - Cf. `/tmp/genspio-test-zsh-failures.txt`.
 
@@ -109,6 +109,8 @@ Tests can be tweaked with environment variables:
 - `add_shells`: is a `++`-separated list of “shells,” each one defined as a
   comma-separated list: `<Name>,escape, <cmd-arg>, <cmd>`, where is
   `<cmd-arg>` is replaced with the actual command tested within `<cmd>`, e.g.:
+- `only_dash`: run the tests only with `dash` (useful to speedup
+  modify-compile-test loops while developing).
 
 ```
 export add_shells='

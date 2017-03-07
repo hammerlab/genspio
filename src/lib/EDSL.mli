@@ -52,6 +52,12 @@ val ( =$= ) : string t -> string t -> bool t
 val ( <$> ) : string t -> string t -> bool t
 
 val returns: 'a t -> value: int -> bool t
+
+module Bool: sig
+  val to_string : bool t -> string t
+  val of_string : string t -> bool t
+end
+
 (** Check the return value of a command/expression/script. *)
     
 val succeeds : 'a t -> bool t
@@ -92,12 +98,26 @@ module Integer : sig
   val ( > ) : int t -> int t -> bool t
 end
 
+(** {3 Lists} *)
+
+val list: 'a t list -> 'a list t
+
+val list_append: 'a list t -> 'a list t -> 'a list t
+
+val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+
+val list_to_string: 'a list t -> f:('a t -> string t) -> string t
+val list_of_string: string t -> f:(string t -> 'a t) -> 'a list t
+
 (** {3 String Manipulation} *)
 
 val output_as_string : unit t -> string t
 val feed : string:string t -> unit t -> unit t
 val ( >> ) : string t -> unit t -> unit t
+
 val string_concat: string t list -> string t
+
+val string_concat_list: string list t -> string t
 
 (** {3 Control Flow} *)
 
@@ -200,6 +220,8 @@ val write_output :
 
 val write_stdout : path: string t -> unit t -> unit t
 
+val eprintf : string t -> string t list -> unit t
+
 (** {3 Escaping The Execution Flow } *)
 
 val fail: unit t
@@ -266,27 +288,37 @@ val tmp_file: ?tmp_dir: string t -> string -> file
 
 (** {3 Command Line Parsing} *)
 
-type 'argument_type cli_option = 'argument_type Language.cli_option
-type 'argument_type option_spec = 'argument_type Language.option_spec
-type ('parse_function, 'return_type) cli_options = ('parse_function, 'return_type) Language.cli_options
-module Option_list : sig
-  val string :
-    ?default: string t ->
-    doc:string -> char ->
-    string t option_spec
-  val flag :
-    ?default: bool t ->
-    doc:string -> char ->
-    bool t option_spec
-  val ( & ) :
-    'argument_type option_spec ->
-    ('parse_function, 'return_type) cli_options ->
-    ('argument_type -> 'parse_function, 'return_type) cli_options
-  val usage : string -> ('last_return_type, 'last_return_type) cli_options
+module Command_line: sig
+
+  type 'a cli_option = {
+    switches : string list;
+    doc : string;
+    default : 'a;
+  }
+
+  type _ option_spec =
+      Opt_flag : bool t cli_option -> bool t option_spec
+    | Opt_string : string t cli_option -> string t option_spec
+  and (_, _) cli_options =
+      Opt_end : string -> ('a, 'a) cli_options
+    | Opt_cons : 'c option_spec *
+        ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+  module Arg :
+    sig
+      val string :
+        ?default:string t ->
+        doc:string -> string list -> string t option_spec
+      val flag :
+        ?default:bool t -> doc:string -> string list -> bool t option_spec
+      val ( & ) :
+        'a option_spec -> ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options
+      val usage : string -> ('a, 'a) cli_options
+    end
+  val parse : ('a, unit t) cli_options -> (anon: string list t -> 'a) -> unit t
 end
 
-val parse_command_line :
-  ('parse_function, unit t) cli_options -> 'parse_function -> unit t
+
+
 
 (** {3 Very Unsafe Operations} *)
 
