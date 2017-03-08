@@ -1145,12 +1145,12 @@ let () = add_tests @@ begin
             ] |> output_as_string in
           let fed =
             bag >> pipe [
-              exec ["sed"; "s/Hello/Ciao/"]
+              exec ["tr"; "H"; "B"];
             ] |> output_as_string in
           seq [
             eprintf (string "Bag: %s") [bag];
             assert_or_fail "pipe-basic1" (bag =$= string "HelloWorld");
-            assert_or_fail "pipe-basic2" (fed =$= string "CiaoWorld");
+            assert_or_fail "pipe-basic2" (fed =$= string "BelloWorld");
             return 13;
           ]
         );
