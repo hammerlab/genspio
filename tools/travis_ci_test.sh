@@ -72,7 +72,14 @@ genspio_examples=_build/src/test/genspio-examples.byte
 echo "================== TEST 0 ======================================================"
 export single_test_timeout=20.
 export verbose_tests=true
-$gennspio_test
+if $gennspio_test
+then
+    echo "Tests OK"
+else
+    echo "Dash Failures:"
+    cat /tmp/genspio-test-dash-failures.txt
+    exit 2
+fi
 
 # We also run the example
 # we get the script and then we test it
