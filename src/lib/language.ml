@@ -56,6 +56,7 @@ and _ t =
       return_value: string t option;
     } -> unit t
   | Feed: string t * unit t -> unit t
+  | Pipe: unit t list -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
   | Fail: unit t
   | Int_to_string: int t -> string t
@@ -134,6 +135,9 @@ module Construct = struct
 
   let feed ~string e = Feed (string, e)
   let (>>) string e = feed ~string e
+
+  let pipe l = Pipe l
+  let (||>) a b = Pipe [a; b]
 
   let loop_while condition ~body = While {condition; body}
 
@@ -431,6 +435,10 @@ let rec to_shell: type a. _ -> a t -> string =
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
+    | Pipe [] -> ":"
+    | Pipe l ->
+      sprintf " %s "
+        (List.map l ~f:continue |> String.concat ~sep:" | ")
     | Getenv s ->
       let var = "tmpxxjljlijdeifhideijdedeiii" in
       let value = sprintf "\"$%s\"" var in
