@@ -220,6 +220,15 @@ val write_output :
 
 val write_stdout : path: string t -> unit t -> unit t
 
+
+val pipe: unit t list -> unit t
+(** Pipe commands together (["stdout"] into ["stdin"] exactly like the
+    [" | "] operator). *)
+
+val (||>) : unit t -> unit t -> unit t
+(** [a ||> b] is a shortcut for [pipe [a; b]]. *)
+
+
 val eprintf : string t -> string t list -> unit t
 
 (** {3 Escaping The Execution Flow } *)
