@@ -162,20 +162,23 @@ module Command_line = struct
     let anon =
       getenv anonarg_var |> string_list_of_string in
     let applied_action =
-      (* 
-        The `loop` function below is building 3 pieces of code at once:
+      (** 
+        The [loop] function below is building 3 pieces of Genspio code at once:
 
-        * variable intializations
-        * individual cases (incl variable assignments) in the `while true { switch { .... } }` loop
-        * the `unit t`, a.k.a. `applied_action`: it calls the user-provided 
-          `action` function on the parsed arguments (building the closure 
-          as the loop goes), the result is a piece of `unit t` code that uses
-          the parsed command line arguments.
-         
-        The 2 first items are agglomerated in the `inits` and `cases`
+        - variable initializations
+        - individual case statements (including variable assignments)
+          that are part of the ["while true { switch { .... } }"] loop 
+          that incrementally interprets each command line argument.
+        - [applied_action] (of type [unit t]) is the
+          the result of applying the [action] function to all the elements of
+          [options] + the list of anonymous arguments.
+          It is hence the (user-provided) code that uses the parsed arguments.
+          The [loop] function builds the closure as the loop goes since
+          [options] is a “difference list”, see also:
+          {{:https://drup.github.io/2016/08/02/difflists/}Drup's blog post}.
+
+        The 2 first items are agglomerated in the [inits] and [cases]
         references.
-         
-        See also: https://drup.github.io/2016/08/02/difflists/
       *)
       let rec loop
         : type a b.

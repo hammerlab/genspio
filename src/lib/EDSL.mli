@@ -297,13 +297,17 @@ module Command_line: sig
      - Build a command-line “format specification” using the {!Arg} module.
      - Call the {!parse} function with an appropriately typed function.
 
-     Example: {[
+     Example:
+     Here is a potential argument specification for a shell script
+     that downloads and unarchives them (see also ["src/test/examples.ml"]).
+     {[
        let cli_spec =
          Command_line.Arg.(
            string
              ~doc:"The URL to the stuff" ["-u"; "--url"]
              ~default:no_value
-           & flag ["-c"; "--all-in-tmp"] ~doc:"Do everything in the temp-dir"
+           & flag ["-d"; "--remove-intermediary-files"]
+               ~doc:"Remove intermediary files."
            & string ["-f"; "--local-filename"]
              ~doc:"Override the downloaded file-name"
              ~default:no_value
@@ -322,7 +326,7 @@ module Command_line: sig
             unit Genspio.EDSL.t)
            Genspio.EDSL.Command_line.cli_options
           
-           so the second argument must have type:
+           so the action function (the second argument to parse) must have type:
 
            anon:string list Genspio.EDSL.t ->
            string Genspio.EDSL.t ->
