@@ -1132,6 +1132,68 @@ let () = add_tests @@ begin
     ]
   end
 
+let () = add_tests @@ begin
+    List.concat [
+      exits 13 ~name:"pipe-basic" Genspio.EDSL.(
+          let bag =
+            pipe [
+              exec ["printf"; "hello-world\\n"];
+              exec ["tr"; "-d"; "-"];
+              exec ["sed"; "s/wo/Wo/"];
+              exec ["sed"; "s/h/H/"];
+              exec ["tr"; "-d"; "\\n"];
+            ] |> output_as_string in
+          let fed =
+            bag >> pipe [
+              exec ["tr"; "H"; "B"];
+            ] |> output_as_string in
+          seq [
+            eprintf (string "Bag: %s") [bag];
+            assert_or_fail "pipe-basic1" (bag =$= string "HelloWorld");
+            assert_or_fail "pipe-basic2" (fed =$= string "BelloWorld");
+            return 13;
+          ]
+        );
+      exits 42 ~name:"pipe-xargs" Genspio.EDSL.(
+          seq [
+            assert_or_fail "pipe-xargs-1" (
+              output_as_string
+                (exec ["printf"; "1\\n2\\n3\\n"]
+                 ||> exec ["xargs"; "printf"; "%02d:%02d:%02d"])
+              =$= string "01:02:03"
+            );
+            return 42;
+          ]
+        );
+      exits 42 ~name:"pipe-escape" Genspio.EDSL.(
+          let tmp1 = tmp_file "pipe-escape-1" in
+          let tmp2 = tmp_file "pipe-escape-2" in
+          let tubes =
+            with_signal
+              ~catch:(tmp1#set (string "ok"))
+              (fun jump ->
+                 tmp2#set (
+                   pipe [
+                     exec ["echo"; "hello world"];
+                     jump;
+                     exec ["tr"; "-d"; " "];
+                   ]
+                   |> output_as_string
+                 )
+              )
+          in
+          seq [
+            tmp1#set (string "init1");
+            tmp2#set (string "init2");
+            tubes;
+            assert_or_fail "tmp1-ok" (tmp1#get =$= string "ok");
+            eprintf (string "Tmp2: %s.") [tmp2#get]; 
+            assert_or_fail "tmp2-init" (tmp2#get =$= string "init2");
+            return 42;
+          ]
+        );
+    ]
+  end
 
 
 let () =
