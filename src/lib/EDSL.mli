@@ -288,7 +288,62 @@ val tmp_file: ?tmp_dir: string t -> string -> file
 
 (** {3 Command Line Parsing} *)
 
+(** Typed command-line parsing for your shell scripts, à la {!Prtinf.scanf}. *)
 module Command_line: sig
+  (** 
+
+     Use this module like OCaml's {!Printf.scanf} function.
+
+     - Build a command-line “format specification” using the {!Arg} module.
+     - Call the {!parse} function with an appropriately typed function.
+
+     Example:
+     Here is a potential argument specification for a shell script
+     that downloads and unarchives them (see also ["src/test/examples.ml"]).
+     {[
+       let cli_spec =
+         Command_line.Arg.(
+           string
+             ~doc:"The URL to the stuff" ["-u"; "--url"]
+             ~default:no_value
+           & flag ["-d"; "--remove-intermediary-files"]
+               ~doc:"Remove intermediary files."
+           & string ["-f"; "--local-filename"]
+             ~doc:"Override the downloaded file-name"
+             ~default:no_value
+           & string ["-t"; "--tmp-dir"]
+             ~doc:"Use <dir> as temp-dir"
+             ~default:(Genspio.EDSL.string "/tmp/genspio-downloader-tmpdir")
+           & usage "Download archives and decrypt/unarchive them.\n\
+                    ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
+         ) in
+       (*
+          `cli_spec` has type:
+
+           (string Genspio.EDSL.t ->
+            bool Genspio.EDSL.t ->
+            string Genspio.EDSL.t -> string Genspio.EDSL.t -> unit Genspio.EDSL.t,
+            unit Genspio.EDSL.t)
+           Genspio.EDSL.Command_line.cli_options
+          
+           so the action function (the second argument to parse) must have type:
+
+           anon:string list Genspio.EDSL.t ->
+           string Genspio.EDSL.t ->
+           bool Genspio.EDSL.t ->
+           string Genspio.EDSL.t ->
+           string Genspio.EDSL.t ->
+           unit Genspio.EDSL.t
+       *)
+       Command_line.parse cli_spec
+         (fun ~anon url all_in_tmp filename_ov tmp_dir ->
+            (*
+               ...
+               your code
+               ...
+            *)
+     ]}
+  *)
 
   type 'a cli_option = {
     switches : string list;
@@ -303,17 +358,18 @@ module Command_line: sig
       Opt_end : string -> ('a, 'a) cli_options
     | Opt_cons : 'c option_spec *
         ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
+
   module Arg :
     sig
       val string :
-        ?default:string t ->
-        doc:string -> string list -> string t option_spec
+        ?default:string t -> doc:string -> string list -> string t option_spec
       val flag :
         ?default:bool t -> doc:string -> string list -> bool t option_spec
       val ( & ) :
         'a option_spec -> ('b, 'c) cli_options -> ('a -> 'b, 'c) cli_options
       val usage : string -> ('a, 'a) cli_options
     end
+
   val parse : ('a, unit t) cli_options -> (anon: string list t -> 'a) -> unit t
 end
 
