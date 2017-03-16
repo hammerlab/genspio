@@ -350,7 +350,7 @@ let rec to_shell: type a. _ -> a t -> string =
     | Int_to_string i ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
     | String_to_int s ->
-      let var = "tmpxxxxijljlijdeifh" in
+      let var =  Unique_name.variable "string_to_int" in
       let value = sprintf "\"$%s\"" var in
       (* We put the result of the string expression in a variable to
          evaluate it once; then we test that the result is an integer
@@ -440,7 +440,7 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf " %s "
         (List.map l ~f:continue |> String.concat ~sep:" | ")
     | Getenv s ->
-      let var = "tmpxxjljlijdeifhideijdedeiii" in
+      let var = Unique_name.variable "getenv" in
       let value = sprintf "\"$%s\"" var in
       let cmd_outputs_value =
         (* We need to get the output of the `string t` and then do a `$<thing>`
@@ -459,8 +459,7 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
     | With_signal {signal_name; catch; run} ->
-      let var =
-        sprintf "tmpxxjljeadjeidjelidjeideijdedeiii_%d" (Random.int 4309843) in
+      let var = Unique_name.variable "with_signal" in
       let value = sprintf "\"$%s\"" var in
       continue Construct.(seq [
           Raw_cmd (sprintf "export %s=$$" var);
@@ -482,7 +481,7 @@ let rec to_shell: type a. _ -> a t -> string =
      ["trap"] to choose the exit status.
   *)
 let with_trap ~statement_separator ~exit_with script =
-  let variable_name = "very_long_name_that_we_should_not_reuse" in
+  let variable_name = Unique_name.variable "genspio_trap" in
   let die s =
     sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
   String.concat ~sep:statement_separator [
