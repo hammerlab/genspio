@@ -48,11 +48,11 @@ let exits ?no_trap ?name ?args n c =
 
 let shexit n = Construct.exec ["exit"; Int.to_string n]
 let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n]
-let printf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
+let tprintf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
 let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt
 let assert_or_fail name cond =
   let open Genspio.EDSL in
-  if_then_else cond nop (seq [printf "Fail: %s\n" name; fail])
+  if_then_else cond nop (seq [tprintf "Fail: %s\n" name; fail])
 
 let tests = ref []
 
@@ -109,7 +109,7 @@ let () = add_tests @@ exits 4 ~name:"Write-stdout" Construct.(
           call [string "rm"; string "-f"; path]
         end;
       write_stdout ~path (seq [
-          printf "bouh";
+          tprintf "bouh";
           exec ["ls"; "-la"];
         ]);
       if_then (file_exists path |> not)
@@ -129,7 +129,7 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
       write_output
         ~stdout ~stderr ~return_value
         (seq [
-            printf "%s" "hello";
+            tprintf "%s" "hello";
             exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
             return 12;
           ]);
@@ -140,20 +140,20 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
       write_output
         ~stderr ~return_value
         (seq [
-            printf "%s" "hello";
+            tprintf "%s" "hello";
             exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
             return 12;
           ]);
       write_output
         ~return_value
         (seq [
-            printf "%s" "hello";
+            tprintf "%s" "hello";
             exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
             return 12;
           ]);
       write_output ~stdout
         (seq [
-            printf "%s" "helloooo";
+            tprintf "%s" "helloooo";
             exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
             return 12;
           ]);
@@ -163,7 +163,7 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
                                         =$= string "helloooo");
       write_output
         (seq [
-            printf "%s" "hello";
+            tprintf "%s" "hello";
             exec ["sh"; "-c"; "printf \"olleh\" 1>&2"];
             return 12;
           ]);
@@ -186,8 +186,8 @@ let () = add_tests @@ exits 11 ~name:"write-output-as-string" Construct.(
       write_output
         ~stdout ~stderr ~return_value:return_value_path
         (seq [
-            printf "%s" will_be_escaped;
-            printf "%s" will_not_be_escaped;
+            tprintf "%s" will_be_escaped;
+            tprintf "%s" will_not_be_escaped;
             exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"];
             return return_value_value;
           ]);
@@ -227,8 +227,8 @@ let () = add_tests @@ exits 11 Construct.(
       string "some" =$=
       (output_as_string (
           (if_then_else (string "bouh\n" =$= string "bouh")
-             (printf "nnnooo")
-             (printf "some"))
+             (tprintf "nnnooo")
+             (tprintf "some"))
         ))
     )
       (return 11)
@@ -268,7 +268,7 @@ let () = add_tests @@ exits 13 Construct.(
     let cat_potentially_empty =
       if_then_else (exec ["cat"; tmp] |> succeeds)
         nop
-        (printf "") in
+        (tprintf "") in
     seq [
       exec ["rm"; "-f"; tmp];
       exec ["rm"; "-f"; tmp];
@@ -363,7 +363,7 @@ let () = add_tests @@ begin
 
 let () = add_tests @@ exits 77 ~name:"die in a sequence" Construct.(
     seq [
-      printf "Going to die";
+      tprintf "Going to die";
       fail;
       return 42;
     ]
@@ -375,7 +375,7 @@ let () = add_tests @@ exits 77 ~name:"cannot capture death itself" Construct.(
       write_output
         ~return_value:(string "/tmp/dieretval")
         (seq [
-            printf "Going to die\n";
+            tprintf "Going to die\n";
             fail;
             return 42;
           ]);
@@ -388,7 +388,7 @@ let () = add_tests @@ exits 77 ~name:"cannot poison death either" Construct.(
     seq [
       string "dj ijdedej j42 ijde - '' "
       >> seq [
-        printf "Going to die\n";
+        tprintf "Going to die\n";
         fail;
         return 42;
       ];
@@ -418,9 +418,9 @@ let () = add_tests @@ begin
       exits 21 ~name:"More complex return check" Construct.(
           if_then_else
             (seq [
-                printf "I aaam so complex!\n";
+                tprintf "I aaam so complex!\n";
                 if_then_else (string "djsleidjs" =$=
-                              output_as_string (printf "diejliejjj"))
+                              output_as_string (tprintf "diejliejjj"))
                   (return 41)
                   (return 42);
               ]
@@ -451,7 +451,7 @@ let () = add_tests @@ exits 11 Construct.(
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
-        (seq [printf "aaa"; cat_tmp] |> output_as_string =$= string "aaa")
+        (seq [tprintf "aaa"; cat_tmp] |> output_as_string =$= string "aaa")
         (return 11)
         (return 12);
     ];
@@ -465,13 +465,13 @@ let () = add_tests @@ exits 77 Construct.(
       if_then_else (succeeds ut)
         nop
         (seq [
-            printf "Failure !";
+            tprintf "Failure !";
             fail;
           ]) in
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
-        (seq [printf "aaa"; cat_tmp] |> succeed_or_die
+        (seq [tprintf "aaa"; cat_tmp] |> succeed_or_die
          |> output_as_string =$= string "aaa")
         (return 11)
         (return 12);
@@ -482,7 +482,7 @@ let () = add_tests @@ exits 77 Construct.(
 let () = add_tests @@ (* Use of the `call` constructor: *)
   exits 28 Construct.(
       if_then_else
-        (call [string "cat"; output_as_string (printf "/does not exist")]
+        (call [string "cat"; output_as_string (tprintf "/does not exist")]
          |> succeeds)
         (return 11)
         (return 28);
@@ -620,7 +620,7 @@ let () = add_tests @@ exits 27 Construct.(
 let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
     let var = string "VVVVVVV" in
     let assert_or_return ret cond =
-      if_then_else cond nop (seq [printf "Fail: %d" ret; fail]) in
+      if_then_else cond nop (seq [tprintf "Fail: %d" ret; fail]) in
     seq [
       assert_or_return 27 (getenv var =$= string "");
       setenv ~var (string "Bouh");
@@ -648,10 +648,10 @@ let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
 let () = add_tests @@ exits 32 Construct.(
     seq [
       with_signal
-        ~catch:(seq [printf "Caught !"; shexit 32])
+        ~catch:(seq [tprintf "Caught !"; shexit 32])
         (fun throw ->
            seq [
-             printf "Throwing";
+             tprintf "Throwing";
              throw;
              return 42;
            ]);
@@ -665,10 +665,10 @@ let () = add_tests @@ exits 28 Construct.(
     seq [
       comment "trowing once stuff";
       with_signal
-        ~catch:(seq [printf "Caught !"; shexit 32])
+        ~catch:(seq [tprintf "Caught !"; shexit 32])
         (fun throw ->
            seq [
-             printf "Not Throwing";
+             tprintf "Not Throwing";
            ]);
       return 28;
     ]
@@ -684,27 +684,27 @@ let () = add_tests @@ begin
         comment "Multi-trowing stuff: %b" jump;
         setenv (string "TMPDIR") (string "/var/tmp/");
         tmp#set (string "1");
-        printf "adding 1 !\n";
+        tprintf "adding 1 !\n";
         with_signal
           ~catch:(seq [
-              printf "One Caught !\n";
-              printf "adding 5 !\n";
+              tprintf "One Caught !\n";
+              tprintf "adding 5 !\n";
               tmp#append (string ",5");
             ])
           (fun throw_one ->
              seq [
                tmp#append (string ",2");
-               printf "adding 2 !\n";
+               tprintf "adding 2 !\n";
                with_signal
                  ~catch:(seq [
-                     printf "Two Caught !\n";
-                     printf "adding 4 !\n";
+                     tprintf "Two Caught !\n";
+                     tprintf "adding 4 !\n";
                      tmp#append (string ",4");
                      throw_one;
                    ])
                  (fun throw_two ->
                     seq [
-                      printf "adding 3 !\n";
+                      tprintf "adding 3 !\n";
                       tmp#append (string ",3");
                       (if jump then throw_one else throw_two);
                     ]);
@@ -753,7 +753,7 @@ let () = add_tests @@ begin
           with_failwith (fun die ->
               seq [
                 comment "Test with failwith: just before dying";
-                printf "Dying now\n";
+                tprintf "Dying now\n";
                 die
                   ~message:(string "HElllooo I'm dying!!\n") ~return:(int 23)
               ]
@@ -838,7 +838,7 @@ let () = add_tests @@ List.concat [
         seq [
           with_failwith (fun die ->
               seq [
-                printf "Dying now\n";
+                tprintf "Dying now\n";
                 die
                   ~message:(string "HElllooo I'm dying!!\n") ~return:(int 2)
               ]

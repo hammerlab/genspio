@@ -110,10 +110,10 @@ let if_seq ~t ?e c =
   | None -> if_then c (seq t)
   | Some f -> if_then_else c (seq t) (seq f) 
 
-
+let printf fmt l =
+  call (string "printf" :: string "--" :: fmt :: l)
 let eprintf fmt l =
-  with_redirections
-    (call (string "printf" :: string "--" :: fmt :: l)) [
+  with_redirections (printf fmt l) [
     to_fd (int 1) (int 2);
   ]
 

@@ -228,8 +228,11 @@ val pipe: unit t list -> unit t
 val (||>) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
+val printf : string t -> string t list -> unit t
+(**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
 
 val eprintf : string t -> string t list -> unit t
+(** Like {!printf} but redirected to ["stderr"]. *)
 
 (** {3 Escaping The Execution Flow } *)
 
