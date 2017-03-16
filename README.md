@@ -11,6 +11,11 @@ The tests run the output of the compiler against a few shells that it tries to
 find on the host (e.g. `dash`, `bash`, `busybox`, `mksh`, `zsh` … cf. the
 example test results summary below).
 
+If you have any questions, you may submit an
+[issue](https://github.com/hammerlab/genspio/issues), or join
+the authors on the public “Slack” channel of the Hammer Lab:
+[![Slack Status](http://publicslack.hammerlab.org/badge.svg)](http://publicslack.hammerlab.org)
+
 Build
 -----
 
@@ -27,6 +32,55 @@ You need OCaml ≥ 4.03.0 together with
 
     make
     
+Getting Started
+---------------
+
+The idea is to build values of type `Genspio.EDSL.t` (through the combinators in
+the [`Genspio.EDSL`](src/lib/EDSL.mli) module), and compile them with
+functions from [`Genspio.Compile`](src/lib/compile.mli).
+
+Here is a quick example:
+
+```ocaml
+utop> open Genspio.EDSL;;
+
+utop> 
+let c =
+  let username_one_way =
+    (* We lift the string "USER" to EDSL-land and use function `getenv`: *)
+    getenv (string "USER") in
+  let username_the_other_way =
+    (* The usual pipe operator is `||>`,
+       `output_as_string` takes `stdout` from a `unit t` as a `string t`. *)
+    (exec ["whoami"] ||> exec ["tr"; "-d"; "\\n"]) |> output_as_string in
+  let my_printf : string -> string t list -> unit t = fun fmt args ->
+    (* The function `call` is like `exec` but operates on `string t` values
+       instead of just OCaml strings: *)
+    call (string "printf" :: string fmt :: args) in
+  (* The operator `=$=` is `string t` equality, it returns a `bool t` that
+     we can use with `if_seq`: *)
+  if_seq (username_one_way =$= username_the_other_way)
+     ~t:[
+        my_printf "Username matches: `%s`\\n" [username_one_way];
+     ]
+     ~e:[
+        my_printf "Usernames do not match: `%s` Vs `%s`\\n"
+          [username_one_way; username_the_other_way];
+     ]
+;;
+val c : unit t
+
+utop> Sys.command (Genspio.Compile.to_one_liner);;
+Username matches: `smondet`
+- : int = 0
+```
+
+
+See `src/test/examples.ml` for a (much) bigger example, and 
+[`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) for real-world
+use.
+
+
 Testing
 -------
 
@@ -49,48 +103,50 @@ cf. [`#35`](https://github.com/hammerlab/genspio/issues/35)):
 ```markdown
 --------------------------------------------------------------------------------
 
+
 ### All Tests
 
 Summary:
 
 * Test "dash" (`'dash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 184 failures
-    - time: 16.04 s.
+    - 0 / 190 failures
+    - time: 13.31 s.
     - version: `"Version: 0.5.8-2.1ubuntu2"`.
 * Test "bash" (`'bash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 184 failures
-    - time: 28.24 s.
+    - 0 / 190 failures
+    - time: 23.37 s.
     - version: `"GNU bash, version 4.3.46(1)-release (x86_64-pc-linux-gnu)"`.
 * Test "sh" (`'sh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 184 failures
-    - time: 15.69 s.
+    - 0 / 190 failures
+    - time: 13.59 s.
     - version: `""`.
 * Test "busybox" (`'busybox' 'ash' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 0 / 184 failures
-    - time: 11.43 s.
+    - 0 / 190 failures
+    - time: 8.80 s.
     - version: `"BusyBox v1.22.1 (Ubuntu 1:1.22.0-15ubuntu1) multi-call binary."`.
 * Test "ksh" (`'ksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 19 / 184 failures
-    - time: 20.85 s.
+    - 20 / 190 failures
+    - time: 14.78 s.
     - version: `"version         sh (AT&T Research) 93u+ 2012-08-01"`.
     - Cf. `/tmp/genspio-test-ksh-failures.txt`.
 * Test "mksh" (`'mksh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 2 / 184 failures
-    - time: 29.24 s.
+    - 2 / 190 failures
+    - time: 25.56 s.
     - version: `"Version: 52c-2"`.
     - Cf. `/tmp/genspio-test-mksh-failures.txt`.
 * Test "posh" (`'posh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 2 / 184 failures
-    - time: 29.13 s.
+    - 2 / 190 failures
+    - time: 24.40 s.
     - version: `"Version: 0.12.6"`.
     - Cf. `/tmp/genspio-test-posh-failures.txt`.
 * Test "zsh" (`'zsh' '-x' '-c' '<command>' '--' '<arg1>' '<arg2>' '<arg-n>'`):
-    - 20 / 184 failures
-    - time: 22.33 s.
+    - 20 / 190 failures
+    - time: 17.94 s.
     - version: `"zsh 5.1.1 (x86_64-ubuntu-linux-gnu)"`.
     - Cf. `/tmp/genspio-test-zsh-failures.txt`.
 
 All “known” shells were tested ☺
+
 
 --------------------------------------------------------------------------------
 ```
@@ -123,3 +179,8 @@ My-gcloud-freebsd-sh, escape, <command>,
    printf "%s" <command> | gcloud compute ssh fbd01 --command "sh -x"
 '
 ```
+
+License
+-------
+
+It's [Apache 2.0](http://www.apache.org/licenses/LICENSE-2.0).

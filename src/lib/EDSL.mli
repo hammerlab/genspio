@@ -2,7 +2,7 @@
 
 
 type 'a t = 'a Language.t
-(** The type of a typed expression. *)
+(** The type of a Genspio expression. *)
 
 (** {3 Literals } *)
 
@@ -48,24 +48,24 @@ val setenv: var:string t -> string t -> unit t
 
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
+val not : bool t -> bool t
 val ( =$= ) : string t -> string t -> bool t
 val ( <$> ) : string t -> string t -> bool t
 
 val returns: 'a t -> value: int -> bool t
+(** Check the return value of a command/expression/script. *)
 
 module Bool: sig
   val to_string : bool t -> string t
   val of_string : string t -> bool t
 end
 
-(** Check the return value of a command/expression/script. *)
     
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
 
-val not : bool t -> bool t
-
 val file_exists : string t -> bool t
+
 
 (** {3 Integer Arithmetic} *)
 
@@ -107,30 +107,39 @@ val list_append: 'a list t -> 'a list t -> 'a list t
 val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
 
 val list_to_string: 'a list t -> f:('a t -> string t) -> string t
+
 val list_of_string: string t -> f:(string t -> 'a t) -> 'a list t
 
 (** {3 String Manipulation} *)
 
 val output_as_string : unit t -> string t
+
 val feed : string:string t -> unit t -> unit t
+(** Feed some content ([~string]) into the ["stdin"] filedescriptor of
+    a [unit t] expression. *)
+
 val ( >> ) : string t -> unit t -> unit t
+(** [str >> cmd] is [feed ~string:str cmd]. *)
 
 val string_concat: string t list -> string t
+(** Concatenate an (OCaml) list of [string t] values. *)
 
 val string_concat_list: string list t -> string t
+(** Concatenate a Genspio list of strings [string list t]. *)
 
 (** {3 Control Flow} *)
 
 val nop : unit t
-val if_then_else :
-  bool t -> unit t -> unit t -> unit t
+(** The silent “no-operation.” *)
+
+val if_then_else : bool t -> unit t -> unit t -> unit t
+
 val if_then : bool t -> unit t -> unit t
 
 val seq : unit t list -> unit t
 (** Sequence a list of expressions into an expression. *)
 
 val loop_while : bool t -> body:unit t -> unit t
-
 
 val if_seq:
   t:unit t list ->
@@ -217,9 +226,11 @@ val write_output :
   ?stdout:string t ->
   ?stderr:string t ->
   ?return_value:string t -> unit t -> unit t
+(** Redirect selected streams or the return value to files ([stdout],
+    [stderr], [return_value] are paths). *)
 
 val write_stdout : path: string t -> unit t -> unit t
-
+(** [write_stdout ~path expr] is [write_output expr ~stdout:path]. *)
 
 val pipe: unit t list -> unit t
 (** Pipe commands together (["stdout"] into ["stdin"] exactly like the
@@ -270,7 +281,10 @@ val with_signal:
     
     Note that by default, the compiler functions use the signal ["USR1"] and
     having 2 calls to [trap] with the same signal in the same script
-    do not play well, so use [~signal_name:"USR1"] at your own risk.
+    does not play well, so use [~signal_name:"USR1"] at your own risk.
+    
+    Moreover, for now this feature makes use of ["sh -c <>"] sub-shells; it
+    does not play well with arbitrary redirections.
 *)
 
 val with_failwith:
@@ -295,7 +309,13 @@ type file = <
 
 val tmp_file: ?tmp_dir: string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
-    used as variable containing [string t] values). *)
+    used as variable containing [string t] values).
+    
+    [tmp_file (string "foo")] points to a path that is a {b function}
+    of the string ["foo"]; it does not try to make temporary-files
+    unique, on the contrary two calls to [tmp_file (string "foo")] ensure that
+    it is the same file.
+ *)
 
 
 (** {3 Command Line Parsing} *)
