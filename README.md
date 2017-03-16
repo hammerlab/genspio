@@ -70,7 +70,7 @@ let c =
 ;;
 val c : unit t
 
-utop> Sys.command (Genspio.Compile.to_one_liner);;
+utop> Sys.command (Genspio.Compile.to_one_liner c);;
 Username matches: `smondet`
 - : int = 0
 ```
