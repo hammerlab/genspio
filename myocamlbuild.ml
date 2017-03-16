@@ -23,7 +23,6 @@ let lib : Project.item =
     ~findlib_deps:lib_deps
     ~dir:"src/lib"
     ~style:(`Pack project_name)
-    ~pkg:project_name
 
 
 let test : Project.item list =
@@ -36,7 +35,7 @@ let test : Project.item list =
         ~findlib_deps:(lib_deps @ test_deps)
         ~dir:"src/test-lib/"
         ~style:(`Pack "tests")
-        ~pkg:(project_name ^ ".test-lib")
+        ~install:`No
         ~internal_deps:[lib]
     in
     [
@@ -44,10 +43,12 @@ let test : Project.item list =
       Project.app (project_name ^ "-test")
         ~thread:()
         ~file:"src/test/main.ml"
+        ~install:`No
         ~internal_deps:[lib; test_lib];
       Project.app (project_name ^ "-examples")
         ~thread:()
         ~file:"src/test/examples.ml"
+        ~install:`No
         ~internal_deps:[lib; test_lib];
     ]
   else
