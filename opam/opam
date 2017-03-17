@@ -22,7 +22,7 @@ remove: []
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "solvuu-build" {build & "0.3.0"}
+  "solvuu-build" {build & >= "0.3.0"}
   "nonstd"
   "sosa"
 ]
