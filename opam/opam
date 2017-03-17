@@ -2,9 +2,9 @@ opam-version: "1.2"
 version: "master"
 maintainer: "Seb Mondet <seb@mondet.org>"
 authors: "Seb Mondet <seb@mondet.org>"
-homepage: "https://github.com/hammerlab/genspio"
+homepage: "http://www.hammerlab.org/docs/genspio/master/index.html"
 bug-reports: "https://github.com/hammerlab/genspio/issues"
-dev-repo: "https://github.com/hammerlab/genspio"
+dev-repo: "https://github.com/hammerlab/genspio.git"
 license: "Apache 2.0"
 
 build: [
@@ -22,7 +22,7 @@ remove: []
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "solvuu-build" {build}
+  "solvuu-build" {build & >= "0.3.0"}
   "nonstd"
   "sosa"
 ]
