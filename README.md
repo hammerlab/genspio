@@ -19,7 +19,11 @@ the authors on the public “Slack” channel of the Hammer Lab:
 Build
 -----
 
-You can install the library though `opam pin`:
+You can install the library though `opam`:
+
+    opam install genspio
+
+Or get the development version with `opam pin`:
 
     opam pin add genspio https://github.com/hammerlab/genspio.git
 

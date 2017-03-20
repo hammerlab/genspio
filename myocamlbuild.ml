@@ -2,7 +2,7 @@ open Nonstd
 open Solvuu_build.Std
 
 let project_name = "genspio"
-let version = "master"
+let version = "0.0.0"
 
 let build_tests =
   try Sys.getenv "WITH_TESTS" = "true" with _ -> false
