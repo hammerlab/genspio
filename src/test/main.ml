@@ -581,14 +581,20 @@ let () = add_tests @@ List.concat [
       );
   ]
 
-let () = add_tests @@ exits 25 Construct.(
+let () = add_tests @@ exits ~name:"getenv" 25 Construct.(
+    let alternate_get_env v =
+      (* We cannot use OCaml's Sys.getenv because the compilation output may
+         be run on a different host/system (through SSH or alike). *)
+      exec ["sh"; "-c";
+            sprintf "echo ${%s} | tr -d '\\n'" v
+           ] |> output_as_string in
     if_then_else (
-      (getenv (string "HOME") =$= string (Sys.getenv "HOME"))
+      (getenv (string "HOME") =$= (alternate_get_env "HOME"))
       &&&
-      (getenv (string "PATH") =$= string (Sys.getenv "PATH"))
+      (getenv (string "PATH") =$= (alternate_get_env "PATH"))
       &&&
       (getenv (string_concat [string "PA"; string "TH"])
-       =$= string (Sys.getenv "PATH"))
+       =$= (alternate_get_env "PATH"))
     )
       (return 25) (return 13)
   );
@@ -1049,8 +1055,8 @@ let () = add_tests @@ begin
         sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
       exits 5 ~name Genspio.EDSL.(
           let slist = List.map l ~f:string |> list in
-          let tmp = tmp_file "listitertest" in
-          let tmp2 = tmp_file "listserializationtest" in
+          let tmp = ksprintf tmp_file "listitertest%d" i in
+          let tmp2 = ksprintf tmp_file "listserializationtest%d" i in
           seq [
             tmp#set (string "");
             (* We serialize the list to `tmp2`: *)
