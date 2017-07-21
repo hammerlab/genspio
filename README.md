@@ -175,7 +175,7 @@ Tests can be tweaked with environment variables:
   (default: 5. seconds).
 
 Here is an example of configuration with 2 additional testing shells, one of
-them happening over SSH (the target hosts does not need OCaml).
+them happening over SSH (the target host does not need OCaml).
 
 ```
 export single_test_timeout=10
