@@ -174,15 +174,29 @@ Tests can be tweaked with environment variables:
 - `single_test_timeout`: the timeout for a signle test run
   (default: 5. seconds).
 
+Here is an example of configuration with 2 additional testing shells, one of
+them happening over SSH (the target host does not need OCaml).
+
 ```
+export single_test_timeout=10
 export add_shells='
 Local-sh, escape, <cmd>,
     sh -c <cmd>
 ++
-My-gcloud-freebsd-sh, escape, <command>,
-   printf "%s" <command> | gcloud compute ssh fbd01 --command "sh -x"
+My-freebsd-box, escape, <command>,
+   printf "%s" <command> | ssh fbd01 "sh -x"
 '
 ```
+
+Additional Documentation
+------------------------
+
+From here, one can explore:
+
+- Some implementation [notes](./doc/exec-return-issue.md).
+- More [information](./doc/extra-testing.md) on testing, e.g. on more exotic
+  operating systems.
+
 
 License
 -------
