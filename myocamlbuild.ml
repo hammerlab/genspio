@@ -20,6 +20,7 @@ let test_deps = [
 let lib : Project.item =
   Project.lib project_name
     ~thread:()
+    ~safe_string:()
     ~findlib_deps:lib_deps
     ~dir:"src/lib"
     ~style:(`Pack project_name)
@@ -33,6 +34,7 @@ let test : Project.item list =
       Project.lib name
         ~thread:()
         ~findlib_deps:(lib_deps @ test_deps)
+        ~safe_string:()
         ~dir:"src/test-lib/"
         ~style:(`Pack "tests")
         ~install:`No
@@ -42,11 +44,13 @@ let test : Project.item list =
       test_lib;
       Project.app (project_name ^ "-test")
         ~thread:()
+        ~safe_string:()
         ~file:"src/test/main.ml"
         ~install:`No
         ~internal_deps:[lib; test_lib];
       Project.app (project_name ^ "-examples")
         ~thread:()
+        ~safe_string:()
         ~file:"src/test/examples.ml"
         ~install:`No
         ~internal_deps:[lib; test_lib];
