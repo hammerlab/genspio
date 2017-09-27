@@ -4,15 +4,19 @@
 type 'a t = 'a Language.t
 (** The type of a Genspio expression. *)
 
+type c_string
+type byte_array
+
 (** {3 Literals } *)
 
-val string : string -> string t
+val string : string -> c_string t
+val byte_array : string -> byte_array t
 val int : int -> int t
 val bool : bool -> bool t
 
 (** {3 Basic system Commands} *)
 
-val call : string t list -> unit t
+val call : c_string t list -> unit t
 (** Call a command from its list of “arguments” (including the first
     argument being the actual command).
 
@@ -29,14 +33,14 @@ val exec : string list -> unit t
     actually [call [string "a"; string "b"]] which is the usual shell command
     ["a b"] (with proper escaping). *)
 
-val getenv: string t -> string t
+val getenv: c_string t -> c_string t
 (** Get the value of an environment variable as a string;
     it returns the empty string when the variable is not defined.
     If the argument is not a valid variable name, behavior is
     undefined.
  *)
 
-val setenv: var:string t -> string t -> unit t
+val setenv: var:c_string t -> c_string t -> unit t
 (** Set the value of an environment variable as a string;
     it returns the empty string is the variable is not defined.
 
@@ -49,29 +53,35 @@ val setenv: var:string t -> string t -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val not : bool t -> bool t
-val ( =$= ) : string t -> string t -> bool t
-val ( <$> ) : string t -> string t -> bool t
+val ( =$= ) : c_string t -> c_string t -> bool t
+val ( <$> ) : c_string t -> c_string t -> bool t
+module Byte_array : sig
+  val ( =$= ) : byte_array t -> byte_array t -> bool t
+  val ( <$> ) : byte_array t -> byte_array t -> bool t
+end
 
 val returns: 'a t -> value: int -> bool t
 (** Check the return value of a command/expression/script. *)
 
 module Bool: sig
-  val to_string : bool t -> string t
-  val of_string : string t -> bool t
+  val to_string : bool t -> c_string t
+  val of_string : c_string t -> bool t
 end
 
     
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
 
-val file_exists : string t -> bool t
+val file_exists : c_string t -> bool t
 
 
 (** {3 Integer Arithmetic} *)
 
 module Integer : sig
-  val to_string : int t -> string t
-  val of_string : string t -> int t
+  val to_string : int t -> c_string t
+  val to_byte_array : int t -> byte_array t
+  val of_string : c_string t -> int t
+  val of_byte_array : byte_array t -> int t
   val bin_op : int t -> [ `Div | `Minus | `Mult | `Plus | `Mod ] -> int t -> int t
   val add : int t -> int t -> int t
   val ( + ) : int t -> int t -> int t
@@ -106,26 +116,29 @@ val list_append: 'a list t -> 'a list t -> 'a list t
 
 val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
 
-val list_to_string: 'a list t -> f:('a t -> string t) -> string t
+val list_to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
 
-val list_of_string: string t -> f:(string t -> 'a t) -> 'a list t
+val list_of_string: byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
 
 (** {3 String Manipulation} *)
 
-val output_as_string : unit t -> string t
+val to_byte_array: c_string t -> byte_array t
+val to_c_string: byte_array t -> c_string t
 
-val feed : string:string t -> unit t -> unit t
+val output_as_string : unit t -> byte_array t
+
+val feed : string:byte_array t -> unit t -> unit t
 (** Feed some content ([~string]) into the ["stdin"] filedescriptor of
     a [unit t] expression. *)
 
-val ( >> ) : string t -> unit t -> unit t
+val ( >> ) : byte_array t -> unit t -> unit t
 (** [str >> cmd] is [feed ~string:str cmd]. *)
 
-val string_concat: string t list -> string t
-(** Concatenate an (OCaml) list of [string t] values. *)
+val string_concat: c_string t list -> c_string t
+(** Concatenate an (OCaml) list of [c_string t] values. *)
 
-val string_concat_list: string list t -> string t
-(** Concatenate a Genspio list of strings [string list t]. *)
+val string_concat_list: c_string list t -> c_string t
+(** Concatenate a Genspio list of strings [c_string list t]. *)
 
 (** {3 Control Flow} *)
 
@@ -182,7 +195,7 @@ type fd_redirection
 val to_fd: int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
 
-val to_file: int t -> string t -> fd_redirection
+val to_file: int t -> c_string t -> fd_redirection
 (** Create a file-descriptor to file redirection. *)
 
 val with_redirections:
@@ -223,13 +236,13 @@ val with_redirections:
 *)
 
 val write_output :
-  ?stdout:string t ->
-  ?stderr:string t ->
-  ?return_value:string t -> unit t -> unit t
+  ?stdout:c_string t ->
+  ?stderr:c_string t ->
+  ?return_value:c_string t -> unit t -> unit t
 (** Redirect selected streams or the return value to files ([stdout],
     [stderr], [return_value] are paths). *)
 
-val write_stdout : path: string t -> unit t -> unit t
+val write_stdout : path: c_string t -> unit t -> unit t
 (** [write_stdout ~path expr] is [write_output expr ~stdout:path]. *)
 
 val pipe: unit t list -> unit t
@@ -239,10 +252,10 @@ val pipe: unit t list -> unit t
 val (||>) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
-val printf : string t -> string t list -> unit t
+val printf : c_string t -> c_string t list -> unit t
 (**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
 
-val eprintf : string t -> string t list -> unit t
+val eprintf : c_string t -> c_string t list -> unit t
 (** Like {!printf} but redirected to ["stderr"]. *)
 
 (** {3 Escaping The Execution Flow } *)
@@ -288,7 +301,9 @@ val with_signal:
 *)
 
 val with_failwith:
-  ((message:string Language.t -> return:int Language.t -> unit Language.t) ->
+  ((message:byte_array Language.t ->
+    return:int Language.t ->
+    unit Language.t) ->
    unit Language.t) ->
   unit Language.t
 (** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
@@ -298,16 +313,17 @@ val with_failwith:
 (** {3 Temporary Files} *)
 
 type file = <
-  get : string t;
-  set : string t -> unit t;
-  append : string t -> unit t;
+  get : byte_array t;
+  get_c : c_string t;
+  set : byte_array t -> unit t;
+  append : byte_array t -> unit t;
   delete: unit t;
-  path: string t;
+  path: c_string t;
 >
 (** Abstraction of a file, cf. {!tmp_file}. *)
 
 
-val tmp_file: ?tmp_dir: string t -> string -> file
+val tmp_file: ?tmp_dir: c_string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values).
     
@@ -385,7 +401,7 @@ module Command_line: sig
 
   type _ option_spec =
       Opt_flag : bool t cli_option -> bool t option_spec
-    | Opt_string : string t cli_option -> string t option_spec
+    | Opt_string : c_string t cli_option -> c_string t option_spec
   and (_, _) cli_options =
       Opt_end : string -> ('a, 'a) cli_options
     | Opt_cons : 'c option_spec *
@@ -394,7 +410,7 @@ module Command_line: sig
   module Arg :
     sig
       val string :
-        ?default:string t -> doc:string -> string list -> string t option_spec
+        ?default:c_string t -> doc:string -> string list -> c_string t option_spec
       val flag :
         ?default:bool t -> doc:string -> string list -> bool t option_spec
       val ( & ) :
@@ -402,7 +418,7 @@ module Command_line: sig
       val usage : string -> ('a, 'a) cli_options
     end
 
-  val parse : ('a, unit t) cli_options -> (anon: string list t -> 'a) -> unit t
+  val parse : ('a, unit t) cli_options -> (anon: c_string list t -> 'a) -> unit t
 end
 
 

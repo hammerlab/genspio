@@ -1,11 +1,16 @@
 
 open Common
-    
+
+type c_string = C_string
+type byte_array = Byte_Array
+
 module Literal = struct
   type _ t =
     | Int: int -> int t
-    | String: string -> string t
+    | String: string -> byte_array t
     | Bool: bool -> bool t
+
+  (** Compile a literal to the internal representation. *)
   let to_shell: type a. a t -> string =
     function
     | Int i -> sprintf "%d" i
@@ -19,6 +24,7 @@ module Literal = struct
     | Bool false -> "false"
 
   module String = struct
+
     let easy_to_escape s =
       String.for_all s
         ~f:(function
@@ -27,54 +33,59 @@ module Literal = struct
           | '~' | '`' | '\\' | '|' | '?' | '>' | '<' | '.' | ',' | ':' | ';'
           | '{' | '}' | '(' | ')' | '[' | ']' -> true
           | other -> false)
+
     let impossible_to_escape_for_variable = String.exists ~f:((=) '\x00')
+
   end
 
 end
 
 type fd_redirection = {
   take: int t;
-  redirect_to: [ `Path of string t | `Fd of int t (* | `Input_of of unit t *) ];
+  redirect_to: [ `Path of c_string t | `Fd of int t (* | `Input_of of unit t *) ];
 }
 and _ t =
-  | Exec: string t list -> unit t
+  | Exec: c_string t list -> unit t
   | Raw_cmd: string -> 'a t
   | Bool_operator: bool t * [ `And | `Or ] * bool t -> bool t
-  | String_operator: string t * [ `Eq | `Neq ] * string t -> bool t
+  | String_operator: byte_array t * [ `Eq | `Neq ] * byte_array t -> bool t
   | Not: bool t -> bool t
   | Returns: {expr: 'a t; value: int} -> bool t
   | No_op: unit t
   | If: bool t * unit t * unit t -> unit t
   | Seq: unit t list -> unit t
   | Literal: 'a Literal.t -> 'a t
-  | Output_as_string: unit t -> string t
+  | Output_as_string: unit t -> byte_array t
   | Redirect_output: unit t * fd_redirection list -> unit t
   | Write_output: {
       expr: unit t;
-      stdout: string t option;
-      stderr: string t option;
-      return_value: string t option;
+      stdout: c_string t option;
+      stderr: c_string t option;
+      return_value: c_string t option;
     } -> unit t
-  | Feed: string t * unit t -> unit t
+  | Feed: byte_array t * unit t -> unit t
   | Pipe: unit t list -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
   | Fail: unit t
-  | Int_to_string: int t -> string t
-  | String_to_int: string t -> int t
-  | Bool_to_string: bool t -> string t
-  | String_to_bool: string t -> bool t
-  | List_to_string: 'a list t * ('a t -> string t) -> string t
-  | String_to_list: string t * (string t -> 'a t) -> 'a list t
+  | Int_to_string: int t -> c_string t
+  | String_to_int: c_string t -> int t
+  | Bool_to_string: bool t -> c_string t
+  | String_to_bool: c_string t -> bool t
+  | List_to_string: 'a list t * ('a t -> byte_array t) -> byte_array t
+  | String_to_list: byte_array t * (byte_array t -> 'a t) -> 'a list t
   | List: 'a t list -> 'a list t
-  | String_concat: string list t -> string t
+  | C_string_concat: c_string list t -> c_string t
+  | Byte_array_concat: byte_array list t -> byte_array t
   | List_append: ('a list t * 'a list t) -> 'a list t
   | List_iter: 'a list t * ((unit -> 'a t) -> unit t) -> unit t
+  | Byte_array_to_c_string: byte_array t -> c_string t
+  | C_string_to_byte_array: c_string t -> byte_array t
   | Int_bin_op:
       int t * [ `Plus | `Minus | `Mult | `Div | `Mod ] * int t -> int t
   | Int_bin_comparison:
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
-  | Getenv: string t -> string t
-  | Setenv: string t * string t -> unit t 
+  | Getenv: c_string t -> c_string t (* See [man execve]. *)
+  | Setenv: c_string t * c_string t -> unit t 
   | With_signal: {
       signal_name: string;
       catch: unit t;
@@ -82,12 +93,27 @@ and _ t =
     } -> unit t
 
 module Construct = struct
-  let exec l = Exec (List.map l ~f:(fun s -> Literal (Literal.String s)))
+  let to_c_string ba = Byte_array_to_c_string ba
+  let to_byte_array c = C_string_to_byte_array c
+
+  let literal l = Literal l
+  let byte_array s = Literal.String s |> literal
+  let int s = Literal.Int s |> literal
+  let bool t = Literal.Bool t |> literal
+  let c_string s = byte_array s |> to_c_string
+  let string = c_string
+
+  let exec l = Exec (List.map l ~f:(fun s -> string s))
   let call l = Exec l
   let (&&&) a b = Bool_operator (a, `And, b)
   let (|||) a b = Bool_operator (a, `Or, b)
-  let (=$=) a b = String_operator (a, `Eq, b)
-  let (<$>) a b = String_operator (a, `Neq, b)
+  let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+  let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+  module Byte_array = struct
+    let (=$=) a b = String_operator (a, `Eq, b)
+    let (<$>) a b = String_operator (a, `Neq, b)
+    let of_c s = to_byte_array s
+  end
 
   let returns expr ~value = Returns {expr; value}
 
@@ -120,13 +146,8 @@ module Construct = struct
   let with_redirections cmd l =
     Redirect_output (cmd, l)
 
-  let literal l = Literal l
-  let string s = Literal.String s |> literal
-  let int s = Literal.Int s |> literal
-  let bool t = Literal.Bool t |> literal
-
   let file_exists p =
-    call [string "test"; string "-f"; p] |> succeeds
+    call [c_string "test"; c_string "-f"; p] |> succeeds
 
   let getenv v = Getenv v
   let setenv ~var v = Setenv (var, v)
@@ -143,7 +164,8 @@ module Construct = struct
 
   let list l = List l
 
-  let string_concat_list l = String_concat l
+  let string_concat_list l = C_string_concat l
+  let byte_array_concat_list l = Byte_array_concat l
 
   let list_append la lb = List_append (la, lb)
 
@@ -159,7 +181,9 @@ module Construct = struct
 
   module Integer = struct
     let to_string i = Int_to_string i
+    let to_byte_array i = C_string_to_byte_array (Int_to_string i)
     let of_string s = String_to_int s
+    let of_byte_array s = String_to_int (Byte_array_to_c_string s)
     let bin_op a o b = Int_bin_op (a, o, b)
     let add a b = bin_op a `Plus b
     let (+) = add
@@ -224,20 +248,24 @@ let rec to_shell: type a. _ -> a t -> string =
           method argument = argument
         end in
       function
-      | `String (Literal (Literal.String s)) when Literal.String.easy_to_escape s ->
-        argument (Filename.quote s)
-      | `String (Literal (Literal.String s)) when
-          Literal.String.impossible_to_escape_for_variable s ->
-        ksprintf failwith "to_shell: sorry literal %S is impossible to \
-                           escape as `exec` argument" s
-      | `String v ->
-        let variable_name = Unique_name.variable varprefix in
-        let declaration =
-          sprintf "%s=$(%s; printf 'x')"
-            variable_name (continue v |> expand_octal)
-        in
-        argument ~variable_name ~declaration
-          (sprintf "\"${%s%%?}\"" variable_name)
+      | `C_string (c_str : c_string t) ->
+        begin match c_str with
+        | Byte_array_to_c_string (Literal (Literal.String s))
+          when Literal.String.easy_to_escape s ->
+          argument (Filename.quote s)
+        | Byte_array_to_c_string (Literal (Literal.String s))
+          when Literal.String.impossible_to_escape_for_variable s ->
+          ksprintf failwith "to_shell: sorry literal %S is impossible to \
+                             escape as `exec` argument" s
+        | other ->
+          let variable_name = Unique_name.variable varprefix in
+          let declaration =
+            sprintf "%s=$(%s; printf 'x')"
+              variable_name (continue other |> expand_octal)
+          in
+          argument ~variable_name ~declaration
+            (sprintf "\"${%s%%?}\"" variable_name)
+        end
       | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
       | `Int other ->
         let variable_name = Unique_name.variable varprefix in
@@ -251,7 +279,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let args =
         List.mapi l ~f:(fun index v ->
             let varname = sprintf "argument_%d" index in
-            let arg = to_argument varname (`String v) in
+            let arg = to_argument varname (`C_string v) in
             match arg#declaration with
             | None -> arg#argument
             | Some vardef ->
@@ -261,6 +289,8 @@ let rec to_shell: type a. _ -> a t -> string =
       |> String.concat ~sep:" "
       |> sprintf " { %s ; } "
     | Raw_cmd s -> s 
+    | Byte_array_to_c_string ba -> continue ba (* TODO do the check here !! *)
+    | C_string_to_byte_array c -> continue c
     | Returns {expr; value} ->
       sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
     | Bool_operator (a, op, b) ->
@@ -301,7 +331,7 @@ let rec to_shell: type a. _ -> a t -> string =
         let takearg = to_argument "redirection_take" (`Int take) in
         let retoarg =
           to_argument "redirection_to"
-            (match redirect_to with `Fd i -> `Int i | `Path p -> `String p) in
+            (match redirect_to with `Fd i -> `Int i | `Path p -> `C_string p) in
         let variables =
           takearg#export :: retoarg#export :: [] |> List.filter_opt in
         let exec =
@@ -328,7 +358,7 @@ let rec to_shell: type a. _ -> a t -> string =
       end
     | Write_output { expr; stdout; stderr; return_value } ->
       let ret_arg =
-        Option.map return_value ~f:(fun v -> to_argument "retval" (`String v))
+        Option.map return_value ~f:(fun v -> to_argument "retval" (`C_string v))
       in
       let var =
         Option.((ret_arg >>= fun ra -> ra#export) |> value ~default:"") in
@@ -366,10 +396,12 @@ let rec to_shell: type a. _ -> a t -> string =
     | String_to_bool s ->
       continue (
         If (
-          (String_operator (s, `Eq, Literal (Literal.String "true"))),
+          (String_operator (C_string_to_byte_array s,
+                            `Eq, Literal (Literal.String "true"))),
           (Raw_cmd "true"),
           If (
-            (String_operator (s, `Eq, Literal (Literal.String "false"))),
+            (String_operator (C_string_to_byte_array s,
+                              `Eq, Literal (Literal.String "false"))),
             (Raw_cmd "false"),
             (Fail))
         )
@@ -391,7 +423,10 @@ let rec to_shell: type a. _ -> a t -> string =
       continue (Output_as_string (Raw_cmd (continue l)))
     | String_to_list (s, f) ->
       continue s |> expand_octal |> sprintf "printf -- '%%s' \"$(%s)\""
-    | String_concat sl ->
+    | C_string_concat sl ->
+      let outputing_list = continue sl in
+      sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+    | Byte_array_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
     | List_append (la, lb) ->

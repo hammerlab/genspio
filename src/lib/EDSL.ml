@@ -1,4 +1,6 @@
 type 'a t = 'a Language.t
+type c_string = Language.c_string
+type byte_array = Language.byte_array
 type fd_redirection = Language.fd_redirection
 let (//) = Filename.concat
 
@@ -23,15 +25,16 @@ let switch l =
 let string_concat sl =
   string_concat_list (list sl)
 
-let string_list_to_string l = list_to_string ~f:(fun e -> e) l
-let string_list_of_string s = list_of_string ~f:(fun e -> e) s
+let string_list_to_string l = list_to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
+let string_list_of_string s = list_of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
 
 type file = <
-  get : string t;
-  set : string t -> unit t;
-  append : string t -> unit t;
+  get : byte_array t;
+  get_c : c_string t;
+  set : byte_array t -> unit t;
+  append : byte_array t -> unit t;
   delete: unit t;
-  path: string t;
+  path: c_string t;
 >
 let tmp_file ?tmp_dir name : file =
   let default_tmp_dir = "/tmp" in
@@ -40,10 +43,11 @@ let tmp_file ?tmp_dir name : file =
       ~default:begin
         output_as_string (
           (* https://en.wikipedia.org/wiki/TMPDIR *)
-          if_then_else (getenv (string "TMPDIR") <$> string "")
-            (call [string "printf"; string "%s"; getenv (string "TMPDIR")])
+          if_then_else (getenv (c_string "TMPDIR") <$> c_string "")
+            (call [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
             (exec ["printf"; "%s"; default_tmp_dir])
         )
+        |> to_c_string
       end
   in
   let path =
@@ -53,14 +57,15 @@ let tmp_file ?tmp_dir name : file =
         | other -> '_') in
     string_concat [
       get_tmp_dir;
-      string "/";
-      string
+      c_string "/";
+      c_string
         (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
     ]
   in
   let tmp = string_concat [path; string "-tmp"] in
-  object
+  object (self)
     method get = output_as_string (call [string "cat"; path])
+    method get_c = self#get |> to_c_string
     method path = path
     method set v =
       seq [
@@ -88,8 +93,8 @@ let with_failwith f =
   let varname = string "tttttt" in
   with_signal
     ~catch:(seq [
-        call [string "printf"; string "FAILURE: %s"; msg#get];
-        setenv varname ret#get;
+        call [string "printf"; string "FAILURE: %s"; to_c_string msg#get];
+        setenv varname (to_c_string ret#get);
         msg#delete;
         ret#delete;
         call [string "exit"; getenv varname];
@@ -98,7 +103,7 @@ let with_failwith f =
        f (fun ~message ~return ->
            seq [
              msg#set message;
-             ret#set (Integer.to_string return);
+             ret#set (Integer.to_string return |> to_byte_array);
           (* call [string "echo"; pid#get]; *)
           (* call [string "ps"; pid#get]; *)
              throw;
@@ -125,7 +130,7 @@ module Command_line = struct
   }
   type _ option_spec =
     | Opt_flag:   bool t cli_option -> bool t option_spec
-    | Opt_string: string t cli_option -> string t option_spec
+    | Opt_string: c_string t cli_option -> c_string t option_spec
   and (_, _) cli_options =
     | Opt_end: string -> ('a, 'a) cli_options
     | Opt_cons: 'c option_spec * ('a, 'b) cli_options -> ('c -> 'a, 'b) cli_options
@@ -143,7 +148,7 @@ module Command_line = struct
 
   let parse
       (options: ('a, unit t) cli_options)
-      (action: anon: string list t -> 'a) : unit t =
+      (action: anon: c_string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
     let variable {switches; doc;} =
       sprintf "%s_%s" prefix (String.concat ~sep:"" switches|> Digest.string |> Digest.to_hex) in
@@ -251,7 +256,7 @@ module Command_line = struct
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
                  p ||| (string s =$= getenv (string "1")))) [
             setenv help_flag_var (Bool.to_string (bool true));
-            string help_msg >>  exec ["cat"];
+            byte_array help_msg >>  exec ["cat"];
             exec ["break"];
           ]
         in
