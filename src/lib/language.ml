@@ -85,7 +85,7 @@ and _ t =
   | Int_bin_comparison:
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: c_string t -> c_string t (* See [man execve]. *)
-  | Setenv: c_string t * c_string t -> unit t 
+  | Setenv: c_string t * c_string t -> unit t
   | With_signal: {
       signal_name: string;
       catch: unit t;
@@ -271,7 +271,7 @@ let rec to_shell: type a. _ -> a t -> string =
         let variable_name = Unique_name.variable varprefix in
         let declaration = sprintf "%s=%s" variable_name (continue other) in
         argument ~variable_name ~declaration
-          (sprintf "\"${%s%%?}\"" variable_name) 
+          (sprintf "\"${%s%%?}\"" variable_name)
     in
     match e with
     | Exec l ->
@@ -321,11 +321,11 @@ let rec to_shell: type a. _ -> a t -> string =
     | Not t ->
       sprintf "! { %s ; }" (continue t)
     | Redirect_output (unit_t, redirections) ->
-      (* 
+      (*
          We're here compiling the redirections into `exec` statements which
          set up global redirections; we limit their scope with `( .. )`.
          E.g.
-         (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ; 
+         (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ;
       *)
       let make_redirection { take; redirect_to } =
         let takearg = to_argument "redirection_take" (`Int take) in
@@ -510,7 +510,7 @@ let rec to_shell: type a. _ -> a t -> string =
         ])
     | Fail -> die "EDSL.fail called"
 
-(* 
+(*
      POSIX does not have ["set -o pipefail"].
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
