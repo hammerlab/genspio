@@ -622,13 +622,16 @@ let () = add_tests @@ exits 27 Construct.(
   );
   ()
 
-let () = add_tests @@ exits 27 Construct.(
+(* This used to be a corner case test but with the string-schism,
+   it becomes just a `to_c_string` normal failure. *)
+let () = add_tests @@ exits 77 ~name:"Weird-env-variable" Construct.(
     if_then_else (
       (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
     )
       (return 12) (return 27)
   );
   ()
+
 let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
     let var = string "VVVVVVV" in
     let assert_or_return ret cond =
@@ -642,8 +645,8 @@ let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
       assert_or_return 29 (getenv var =$= string "Bouhh\nbah");
       setenv ~var (string "Bouhhh\nbah\n");
       assert_or_return 30 (getenv var =$= string "Bouhhh\nbah");
-      setenv ~var (string "Bouhoo\000bah\n");
-      assert_or_return 12 (getenv var =$= string "Bouhoobah");
+      setenv ~var (string "Bouhoo\001bah\n");
+      assert_or_return 12 (getenv var =$= string "Bouhoo\001bah");
       (* We check that the environment is affected in a brutal way:
          we mess up the $PATH:
          /bin/sh: 1: ls: not found
@@ -844,18 +847,20 @@ let () = add_tests @@ List.concat [
 
 
 let () = add_tests @@ List.concat [
-    exits 2 ~no_trap:true ~name:"no-trap" Genspio.EDSL.(return 2);
-    exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.(
-        seq [
-          with_failwith (fun die ->
-              seq [
-                tprintf "Dying now\n";
-                die
-                  ~message:(byte_array "HElllooo I'm dying!!\n") ~return:(int 2)
-              ]
-            );
-        ]
-      );
+    exits 2 ~name:"no-trap" Genspio.EDSL.(return 2);
+    (* Dying with error messages does not work without `trap` any more
+       (string-schism): *)
+    (* exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.( *)
+    (*     seq [ *)
+    (*       with_failwith (fun die -> *)
+    (*           seq [ *)
+    (*             (\* tprintf "Dying now\n"; *\) *)
+    (*             die *)
+    (*               ~message:(byte_array "HElllooo I'm dying!!\n") ~return:(int 2) *)
+    (*           ] *)
+    (*         ); *)
+    (*     ] *)
+    (*   ); *)
   ]
 
 let () = add_tests @@ exits 21 ~name:"empty-seq" Genspio.EDSL.(
@@ -1047,7 +1052,7 @@ let () = add_tests @@ exits 5 ~name:"list-append" Genspio.EDSL.(
       make_string_concat_test "test9"
         [] ["deiajd\ndedaeijl"; ""];
       make_string_concat_test "test10"
-        [] ["deiajd\ndeda\000eijl"; ":"];
+        [] ["deiajd\ndeda\001eijl"; ":"];
       return 5
     ]
   );
@@ -1094,7 +1099,7 @@ let () = add_tests @@ begin
       [""; ""];
       [""; "bouh"; ""; "bah"];
       ["deiajd\ndedaeijl"; ""];
-      ["deiajd\ndeda\000eijl"; ":"];
+      ["deiajd\ndeda\001eijl"; ":"]; (* Used `\001` because we convert to C-strings in the *)
     ]
   end
 
