@@ -293,14 +293,19 @@ let rec to_shell: type a. _ -> a t -> string =
       let bac = continue ba in
       let var =  Unique_name.variable "byte_array_to_c_string" in
       let value = sprintf "\"$%s\"" var in
+      let value_n = sprintf "\"$%s\n\"" var in
       (* We store the internal octal representation in a variable, then
          we use `sed` to check that there are no `'\000'` characters.
-         If OK we re-export with printf, if not we fail hard. *)
+         If OK we re-export with printf, if not we fail hard.
+         The initial attempt was 's/\(000\)\|\(.\{3\}\)/\1/g' but
+         BSD-ish `sed`s do not support “or”s in regular expressions.
+         Cf. http://pubs.opengroup.org/onlinepubs/9699919799/utilities/sed.html
+      *)
       sprintf "$(%s)" @@ seq [
         sprintf "export %s=%s" var bac;
         sprintf
-          {sh|if [ "$(printf -- %s | sed -e 's/\(000\)\|\(.\{3\}\)/\1/g')" = "" ]|sh}
-          value;
+          {sh|if [ "$(printf -- %s | sed -e 's/\(.\{3\}\)/@\1/g' | grep @000)" = "" ]|sh}
+          value_n;
         sprintf "then printf -- %s" value;
         sprintf "else %s"
           (die (sprintf "Byte_array_to_c_string: error, $%s is not a C string"
