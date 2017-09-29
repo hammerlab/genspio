@@ -71,7 +71,7 @@ genspio_examples=_build/src/test/genspio-examples.byte
 
 echo "================== TEST 0 ======================================================"
 export single_test_timeout=20.
-export verbose_tests=true
+#export verbose_tests=true
 if $gennspio_test
 then
     echo "Tests OK"
