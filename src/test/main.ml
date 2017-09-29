@@ -691,35 +691,35 @@ let () = add_tests @@ exits 28 Construct.(
   ()
 
 
-let () = add_tests @@ begin
+let f () = add_tests @@ begin
     let open Genspio.EDSL in
     let tmp = tmp_file "agglomeration" in
     let make ~jump =
       seq [
-        comment "Multi-trowing stuff: %b" jump;
+        (* comment "Multi-trowing stuff: %b" jump; *)
         setenv (string "TMPDIR") (string "/var/tmp/");
         tmp#set (byte_array "1");
-        tprintf "adding 1 !\n";
+        (* tprintf "adding 1 !\n"; *)
         with_signal
           ~catch:(seq [
-              tprintf "One Caught !\n";
-              tprintf "adding 5 !\n";
+              (* tprintf "One Caught !\n"; *)
+              (* tprintf "adding 5 !\n"; *)
               tmp#append (byte_array ",5");
             ])
           (fun throw_one ->
              seq [
                tmp#append (byte_array ",2");
-               tprintf "adding 2 !\n";
+               (* tprintf "adding 2 !\n"; *)
                with_signal
                  ~catch:(seq [
-                     tprintf "Two Caught !\n";
-                     tprintf "adding 4 !\n";
+                     (* tprintf "Two Caught !\n"; *)
+                     (* tprintf "adding 4 !\n"; *)
                      tmp#append (byte_array ",4");
                      throw_one;
                    ])
                  (fun throw_two ->
                     seq [
-                      tprintf "adding 3 !\n";
+                      (* tprintf "adding 3 !\n"; *)
                       tmp#append (byte_array ",3");
                       (if jump then throw_one else throw_two);
                     ]);
@@ -739,7 +739,7 @@ let () = add_tests @@ begin
   end;
   ()
 
-let () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
+let f () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
     let tmp = tmp_file "appender" in
     seq [
       tmp#set (byte_array "start");
@@ -760,7 +760,7 @@ let () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
   ()
 
 
-let () = add_tests @@ begin
+let f () = add_tests @@ begin
     let with_failwith_basic_test =
       Genspio.EDSL.(
         seq [
