@@ -124,9 +124,12 @@ module Shell_directory = struct
   let make_report_content t testlist =
     Genspio.EDSL.(
       let count_files dir =
-        exec ["ls"; "-1"; dir] ||> exec ["wc"; "-l"]
+        if_then_else (exec ["test"; "-d"; dir] |> succeeds)
+          (exec ["ls"; "-1"; dir] ||> exec ["wc"; "-l"])
+          (exec ["echo"; "No-dir"])
         ||> exec ["tr"; "-d"; "\\n"]
-        |> output_as_string |> to_c_string in
+        |> output_as_string |> to_c_string
+      in
       seq [
         exec ["printf";
               sprintf "* Shell: %s, total tests: %d\\n"
