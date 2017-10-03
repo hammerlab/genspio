@@ -293,7 +293,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let bac = continue ba in
       let var =  Unique_name.variable "byte_array_to_c_string" in
       let value = sprintf "\"$%s\"" var in
-      let value_n = sprintf "\"$%s\n\"" var in
+      let value_n = sprintf "\"$%s\\n\"" var in
       (* We store the internal octal representation in a variable, then
          we use `sed` to check that there are no `'\000'` characters.
          If OK we re-export with printf, if not we fail hard.
