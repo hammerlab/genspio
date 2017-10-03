@@ -1,50 +1,13 @@
 
 open Nonstd
 module String = Sosa.Native_string
-module Test = Tests.Test_lib
+
+open Tests.Test_lib
 
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL
 
-
-let check_size ?(name = "") ~ret str =
-  (*
-     Got the magic number on Linux/Ubuntu 16.04.
-     See `xargs --show-limits`.
-  *)
-  if String.length str > 131071
-  then (
-    eprintf "WARNING: Command %S (ret %d) is too big for `sh -c <>`\n%!" name ret;
-    None
-  ) else
-    Some str
-
-
-let exits ?no_trap ?name ?args n c =
-  let one_liner =
-    Compile.to_one_liner ?no_trap c |> check_size ?name ~ret:n in
-  let script =
-    Compile.to_many_lines ?no_trap c |> check_size ?name ~ret:n in
-  let tests =
-    [
-      Option.map one_liner ~f:(fun cmd ->
-          Test.command ?name:(Option.map name (sprintf "%s; one-liner"))
-            ?args cmd ~verifies:[`Exits_with n];
-        );
-      Option.map script ~f:(fun cmd ->
-          Test.command ?name:(Option.map name (sprintf "%s; multi-liner"))
-            ?args cmd ~verifies:[`Exits_with n];
-        );
-    ]
-    |> List.filter_opt
-  in
-  if tests = []
-  then
-    ksprintf failwith
-      "Test %S (ret %d) got no testing at all because of size limit"
-      (Option.value ~default:"No-name" name) n
-  else
-    tests
+let exits = Test.exits
 
 let shexit n = Construct.exec ["exit"; Int.to_string n]
 let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n]
@@ -56,8 +19,9 @@ let assert_or_fail name cond =
 
 let tests = ref []
 
-let add_tests t = tests := t @ !tests
+let add_tests t = tests := t :: !tests
 
+(*
 let () = add_tests @@ exits 0 Construct.(
     succeeds (exec ["ls"])
     &&& returns ~value:18 (seq [
@@ -71,7 +35,7 @@ let () = add_tests @@ exits 0 Construct.(
         exec ["ls"];
         exec ["sh"; "-c"; "exit 18"]])
   )
-
+*)
 let () = add_tests @@ exits 23 Construct.(
     seq [
       if_then_else (file_exists (string "/etc/passwd"))
@@ -691,7 +655,7 @@ let () = add_tests @@ exits 28 Construct.(
   ()
 
 
-let f () = add_tests @@ begin
+let () = add_tests @@ begin
     let open Genspio.EDSL in
     let tmp = tmp_file "agglomeration" in
     let make ~jump =
@@ -724,10 +688,10 @@ let f () = add_tests @@ begin
                       (if jump then throw_one else throw_two);
                     ]);
              ]);
-        call [string "printf"; string "Agglo: %s\\n"; to_c_string tmp#get;];
-        if_then_else (to_c_string tmp#get
+        (* call [string "printf"; string "Agglo: %s\\n"; to_c_string tmp#get;]; *)
+        if_then_else Byte_array.(tmp#get
                       =$=
-                      string (if jump then "1,2,3,5" else "1,2,3,4,5"))
+                      byte_array (if jump then "1,2,3,5" else "1,2,3,4,5"))
           (return 28)
           (return 29);
       ]
@@ -739,7 +703,7 @@ let f () = add_tests @@ begin
   end;
   ()
 
-let f () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
+let () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
     let tmp = tmp_file "appender" in
     seq [
       tmp#set (byte_array "start");
@@ -760,7 +724,7 @@ let f () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
   ()
 
 
-let f () = add_tests @@ begin
+let () = add_tests @@ begin
     let with_failwith_basic_test =
       Genspio.EDSL.(
         seq [
@@ -1216,66 +1180,26 @@ let () = add_tests @@ begin
   end
 
 
+
 let () =
-  let test_filters =
-    try Sys.getenv "filter_tests" |> String.split ~on:(`Character ',')
-    with _ -> [] in
-  let important_shells =
-    try Sys.getenv "important_shells" |> String.split ~on:(`Character ',')
-    with _ -> ["bash"; "dash"] in
-  let only_dash =
-    try Sys.getenv "only_dash" = "true" with _ -> false in
-  let all_tests = !tests in
-  let tests =
-    if test_filters = [] then all_tests else
-      all_tests |> List.filter ~f:(function
-        | `Command (Some n,_,_,_) when
-            List.exists test_filters ~f:(fun prefix ->
-                String.is_prefix n ~prefix) -> true
-        | `Command (Some n,_,_,_) ->
-          eprintf "NAME: %S filtered out\n%!" n; false
-        | _ -> false)
-  in
-  let additional_shells =
-    begin try
-      Sys.getenv "add_shells"  |> String.split ~on:(`String "++")
-      |> List.map ~f:(fun spec ->
-          match
-            String.split spec ~on:(`Character ',')
-            |> List.map ~f:String.strip
-          with
-          | name :: "escape" :: cmd_arg :: cmd_format :: [] ->
-            Test.make_shell name
-              ~command:(fun c args ->
-                  let fun_name = "askjdeidjiedjjjdjekjdeijjjidejdejlksi" in
-                  let sep =
-                    String.concat ~sep:" " (
-                      [fun_name; "() {"; c ; " ; } ; "; fun_name ]
-                      @ List.map ~f:Filename.quote args
-                    )
-                    |> Filename.quote
-                  in
-                  String.split cmd_format ~on:(`String cmd_arg)
-                  |> String.concat ~sep
-                )
-              ~get_version:"", "Command-line"
-          | other ->
-            failwith "Nope"
-        )
-    with
-      _ -> []
-    end
-  in
-  begin match
-    Lwt_main.run
-      (Test.run ~only_dash ~important_shells ~additional_shells tests)
-  with
-  | `Ok (`Succeeded) -> Printf.printf "Success! \\o/.\n%!"; exit 0
-  | `Ok (`Failed msg) -> Printf.printf "Test failed: %s.\n%!" msg; exit 5
-  | `Error (`IO _ as e) ->
-    eprintf "IO-ERROR:\n  %s\n%!" (Pvem_lwt_unix.IO.error_to_string e);
-    exit 2
-  | `Error (`Shell (s, `Exn e)) ->
-    eprintf "SHELL-ERROR:\n  %s\n  %s\n%!" s (Printexc.to_string e);
-    exit 3
-  end
+  let path = Sys.argv.(1) in
+  let open Test in
+  let testlist = List.concat !tests in
+  List.iter Shell.(known_shells ()) ~f:begin fun shell ->
+    let comp = Shell_directory.{ shell; verbose = true } in
+    let to_do = Shell_directory.contents ~path comp testlist in
+    List.iter to_do ~f:begin function
+    | `File (p, v) ->
+      let mo = open_out p in
+      fprintf mo "%s\n" v;
+      close_out mo
+    | `Directory v ->
+      ksprintf Sys.command "mkdir -p '%s'" v |> ignore
+    end;
+  end;
+  ()
+
+
+
+
+

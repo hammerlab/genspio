@@ -13,8 +13,6 @@ let lib_deps = [
 ]
 
 let test_deps = [
-  "pvem_lwt_unix";
-  "ppx_deriving.std";
 ]
 
 let lib : Project.item =
