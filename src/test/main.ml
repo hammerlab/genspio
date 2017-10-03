@@ -176,7 +176,7 @@ let () = add_tests @@ exits 11 ~name:"write-output-as-string" Construct.(
     ]);
   ()
 
-let () = add_tests @@ exits 12 Construct.(
+let () = add_tests @@ exits ~name:"Basic strings" 12 Construct.(
     (* This looks dumb but finding an encoding of strings that makes
        this work was pretty hard using CRAZIX shell *)
     if_then_else (
@@ -187,7 +187,7 @@ let () = add_tests @@ exits 12 Construct.(
   );
   ()
 
-let () = add_tests @@ exits 11 Construct.(
+let () = add_tests @@ exits  ~name:"more Basic strings" 11 Construct.(
     if_then_else (
       string "some" =$=
       (output_as_string (
@@ -217,7 +217,7 @@ let () = add_tests @@ exits 11 ~name:"empty-string" Construct.(
   );
   ()
 
-let () = add_tests @@ exits 10 Construct.(
+let () = add_tests @@ exits 10 ~name:"byte array comparison" Construct.(
     if_then_else
       Byte_array.(
         (byte_array "b\x00ouh\nbah\n" >> exec ["cat"] |> output_as_string)
@@ -1185,17 +1185,19 @@ let () =
   let path = Sys.argv.(1) in
   let open Test in
   let testlist = List.concat !tests in
-  List.iter Shell.(known_shells ()) ~f:begin fun shell ->
-    let comp = Shell_directory.{ shell; verbose = true } in
-    let to_do = Shell_directory.contents ~path comp testlist in
-    List.iter to_do ~f:begin function
-    | `File (p, v) ->
-      let mo = open_out p in
-      fprintf mo "%s\n" v;
-      close_out mo
-    | `Directory v ->
-      ksprintf Sys.command "mkdir -p '%s'" v |> ignore
-    end;
+  let testdir =
+    Test_directory.{ shells = Shell.(known_shells ()); verbose = true} in
+  let todo = Test_directory.contents testdir ~path testlist in
+  (* List.iter  ~f:begin fun shell -> *)
+  (*   let comp = Shell_directory.{ shell; verbose = true } in *)
+  (*   let to_do = Shell_directory.contents ~path comp testlist in *)
+  List.iter todo ~f:begin function
+  | `File (p, v) ->
+    let mo = open_out p in
+    fprintf mo "%s\n" v;
+    close_out mo
+  | `Directory v ->
+    ksprintf Sys.command "mkdir -p '%s'" v |> ignore
   end;
   ()
 

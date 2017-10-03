@@ -1,6 +1,7 @@
 
 open Nonstd
 module String = Sosa.Native_string
+let (//) = Filename.concat
 
 module Test = struct
   type t =
@@ -64,18 +65,20 @@ module Shell_directory = struct
     shell: Shell.t;
     verbose: bool;
   }
-  let (//) = Filename.concat
 
   let unique_name =
     function
     | Exits { no_trap; name; args; returns; script } ->
       sprintf "test-%s-%s-A%d-R%d-%s"
         (if no_trap then "noT" else "T")
-        (String.map name ~f:begin function
+        (let long =
+           String.map name ~f:begin function
           | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' as c -> c
           | _ -> '_'
-          end
-         |> String.drop ~index:40)
+          end in
+         if String.length long > 30
+         then String.sub_exn long ~index:0 ~length:30
+         else long)
         (List.length args)
         returns
         (Marshal.to_string script [Marshal.Closures] |> Digest.string
@@ -145,7 +148,7 @@ module Shell_directory = struct
       (List.map testlist ~f:(success_path)
        |> String.concat ~sep:" ")
     :: sprintf "clean:\n\trm -fr _success _failure _log\n\n"
-    :: sprintf "report:\n\t@sh %s\n\n" (make_report_path t)
+    :: sprintf "report:\n\t@sh %s > report.md\n\n" (make_report_path t)
     :: sprintf "check:\n\t@test $$(ls -1 _success | wc -l) -eq %d\n\n"
       (List.length testlist)
     ::
@@ -166,7 +169,7 @@ module Shell_directory = struct
         ])
 
   let contents t ~path testlist =
-    let test_path = sprintf "%s/%s" path (Shell.to_string t.shell) in
+    let test_path = path in
     let makefile_path = sprintf "%s/Makefile" test_path in
     [
       `Directory test_path;
@@ -176,5 +179,65 @@ module Shell_directory = struct
     ]
     @ List.map (scripts t testlist) ~f:(fun (spath, content) ->
         `File (sprintf "%s/%s" test_path spath, content))
+
+end
+
+module Test_directory = struct
+  type t = {
+    shells: Shell.t list;
+    verbose: bool;
+  }
+
+  let help t =
+    let shell_names = List.map t.shells ~f:Shell.to_string in
+    sprintf
+    "Genspio Tests Master Makefile\n\
+     =============================\n\n\
+     Type `make` to see this help.\n\n\
+     Other targets include:\n\n\
+     * `make run-<shell-name>` where `shell-name` can be one of %s.\n\
+     * `make run-all` to attempt to run all the tests on all the shells.\n\
+     * `make report` generate the `report.md` file.\n\
+    "
+    (String.concat ~sep:", " shell_names)
+
+  let makefile t =
+    let shell_reports =
+      List.map t.shells ~f:(fun sh -> Shell.to_string sh // "report.md")
+      |> String.concat ~sep:" " in
+    let shell_names = List.map t.shells ~f:Shell.to_string in
+    let shell_run_targets =
+      List.map shell_names ~f:(sprintf "run-%s")|> String.concat ~sep:" " in
+    [
+      sprintf ".PHONY: run-all all clean clean-reports report check %s\n" shell_run_targets;
+      sprintf "all:\n\t@cat help.md";
+      "report: report.md";
+      sprintf "report.md: %s\n\tcat %s > report.md"
+        shell_reports shell_reports;
+      sprintf "clean-reports:\n\t@rm report.md %s" shell_reports;
+      sprintf "clean: clean-reports\n\t@%s"
+        (List.map shell_names ~f:(sprintf "( cd %s ; make clean ; )")
+         |> String.concat ~sep:" ; ");
+      sprintf "run-all: %s" shell_run_targets;
+    ]
+    @ List.concat_map t.shells ~f:(fun sh ->
+        let dir =  Shell.to_string sh in
+        [
+          sprintf "%s/report.md:\n\t@ ( cd %s ; make report ; )" dir dir;
+          sprintf "run-%s:\n\t@ ( cd %s ; make ; )" dir dir;
+        ])
+    |> String.concat ~sep:"\n"
+
+  let contents t ~path testlist =
+    [
+      `Directory path;
+      `File (path // "help.md", help t);
+      `File (path // "Makefile", makefile t);
+    ]
+    @
+    List.concat_map t.shells ~f:(fun shell ->
+        let comp = Shell_directory.{ shell; verbose = t.verbose } in
+        Shell_directory.contents
+          comp ~path:(path // Shell.to_string shell) testlist)
 
 end
