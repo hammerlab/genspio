@@ -1,6 +1,12 @@
 /_build/
-/genspio.byte
 /.merlin
 /.ocamlinit
-/genspio-examples.byte
-/genspio-test.byte
+genspio.install
+src/examples/.merlin
+src/examples/jbuild
+src/lib/.merlin
+src/lib/jbuild
+src/test-lib/.merlin
+src/test-lib/jbuild
+src/test/.merlin
+src/test/jbuild
