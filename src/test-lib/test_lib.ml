@@ -23,14 +23,13 @@ open Test
 
 module Shell = struct
   type t = {
-    executable: string;
+    name: string;
     command: string -> string list -> string list;
     get_version: string;
   }
-  let make_shell executable ~command ~get_version =
-    {executable; command; get_version}
+  let make_shell name ~command ~get_version = {name; command; get_version}
 
-  let to_string t = t.executable
+  let to_string t = t.name
 
   let known_shells () =
     (* let exec l = *)
@@ -218,16 +217,22 @@ module Test_directory = struct
 
   let help t =
     let shell_names = List.map t.shells ~f:Shell.to_string in
+    let code_list l =
+      List.map l ~f:(sprintf "`%s`") |> String.concat ~sep:", " in
     sprintf
-    "Genspio Tests Master Makefile\n\
-     =============================\n\n\
-     Type `make` to see this help.\n\n\
-     Other targets include:\n\n\
-     * `make run-<shell-name>` where `shell-name` can be one of %s.\n\
-     * `make run-all` to attempt to run all the tests on all the shells.\n\
-     * `make report` generate the `report.md` file.\n\
-    "
-    (String.concat ~sep:", " shell_names)
+      "Genspio Tests Master Makefile\n\
+       =============================\n\n\
+       Type `make` to see this help.\n\n\
+       Other targets include:\n\n\
+       * `make run-<shell-name>` where `shell-name` can be one of:\n\
+      \  %s.\n\
+       * `make run-all` to attempt to run all the tests on all the shells.\n\
+       * `make report` generate the `report.md` file.\n\
+       * `make check`: check the success of the test for all the important \n\
+      \  shells (%s).\n\
+      "
+      (code_list shell_names)
+      (code_list t.important_shells)
 
   let makefile t =
     let shell_reports =
@@ -247,16 +252,16 @@ module Test_directory = struct
         shell_reports shell_reports;
       sprintf "clean-reports:\n\t@rm report.md %s" shell_reports;
       sprintf "clean: clean-reports\n\t@%s"
-        (List.map shell_names ~f:(sprintf "( cd %s ; make clean ; )")
+        (List.map shell_names ~f:(sprintf "( cd %s ; $(MAKE) clean ; )")
          |> String.concat ~sep:" ; ");
       sprintf "run-all: %s" shell_run_targets;
     ]
     @ List.concat_map t.shells ~f:(fun sh ->
         let dir =  Shell.to_string sh in
         [
-          sprintf "%s/report.md:\n\t@ ( cd %s ; make report ; )" dir dir;
-          sprintf "run-%s:\n\t@ ( cd %s ; make ; )" dir dir;
-          sprintf "check-%s:\n\t@ ( cd %s ; make check ; )" dir dir;
+          sprintf "%s/report.md:\n\t@ ( cd %s ; $(MAKE) report ; )" dir dir;
+          sprintf "run-%s:\n\t@ ( cd %s ; $(MAKE) ; )" dir dir;
+          sprintf "check-%s:\n\t@ ( cd %s ; $(MAKE) check ; )" dir dir;
         ])
     |> String.concat ~sep:"\n"
 
