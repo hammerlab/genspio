@@ -71,7 +71,7 @@ jbuilder build $genspio_examples
 
 echo "================== TESTS ======================================================="
 
-$genspio_test _test/
+$genspio_test --important-shells $important_shells _test/
 (
     cd _test
     make run-all

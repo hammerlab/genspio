@@ -1182,19 +1182,35 @@ let () = add_tests @@ begin
 
 
 let () =
-  let path = Sys.argv.(1) in
+  let anon = ref [] in
+  let usage = "$0 [-help] <path>" in
+  let important_shells = ref ["bash"; "dash"; "busybox"] in
+  let failf fmt =
+    ksprintf (fun s -> eprintf "Error: %s\nUsage: %s\n%!" s usage; exit 1) fmt in
+  let anon_fun = fun p -> anon := p :: !anon in
+  let args = Arg.align [
+      "--important-shells", Arg.String (fun s ->
+          important_shells := String.split ~on:(`Character ',') s),
+      sprintf "<comma-sep-list> Set the shells that are considered “important”\n\t(default: '%s')"
+        (String.concat ~sep:"," !important_shells);
+      "--", Rest anon_fun,
+      "<args> Arguments following are not interpreted as CL options.";
+    ] in
+  Arg.parse args anon_fun usage;
+  let path =
+    match !anon with
+    | [one] -> one
+    | [] -> failf "Missing <path> argument."
+    | moar -> failf "Too many arguments: %s" (String.concat ~sep:", " moar) in
   let open Test in
   let testlist = List.concat !tests in
   let testdir =
     Test_directory.{
       shells = Shell.(known_shells ());
-      important_shells = ["dash"; "bash"];
+      important_shells = !important_shells;
       verbose = true;
     } in
   let todo = Test_directory.contents testdir ~path testlist in
-  (* List.iter  ~f:begin fun shell -> *)
-  (*   let comp = Shell_directory.{ shell; verbose = true } in *)
-  (*   let to_do = Shell_directory.contents ~path comp testlist in *)
   List.iter todo ~f:begin function
   | `File (p, v) ->
     let mo = open_out p in
