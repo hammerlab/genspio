@@ -95,23 +95,42 @@ module Shell_directory = struct
   let run_test_script t =
     function
     | Exits { no_trap; name; args; returns; script } as test ->
+      let fill_result_file which =
+        let echos = [
+          sprintf "- Returns $RRR (expected: %d)." returns;
+          sprintf "- Script: \\`%s\\`" (script_path test);
+          sprintf "- Test-runner: \\`%s\\`" (run_test_path test);
+          sprintf "- STDOUT: \\`%s\\`" (stdout_path test);
+          sprintf "- STDERR: \\`%s\\`" (stderr_path test);
+        ] in
+        let file, first_line =
+          match which with
+          | `OK -> success_path test, sprintf "- **OK**: \\`%s\\`" (unique_name test)
+          | `KO -> failure_path test, sprintf "- **KO**: \\`%s\\`" (unique_name test)
+        in
+        let lines =
+          sprintf "echo \"%s\" > %s" first_line file
+          ::
+          List.map echos ~f:(fun l -> sprintf "echo \"    %s\" >> %s" l file)
+        in
+        String.concat ~sep:"\n" lines in
       sprintf "mkdir -p _success _failure %s\n\
                %s > %s 2> %s\n\
                export RRR=$?\n\
                if [ $RRR -eq %d ] ; then\n\
-               echo 'ok' > %s\n\
+               %s\n\
                else\n\
-               echo \"returns $RRR\" > %s\n\
                %s
-                 fi\n"
+               %s\n\
+               fi\n"
         (stdout_path test |> Filename.dirname)
         (t.shell.Shell.command (script_path test) args
          |> List.map ~f:Filename.quote |> String.concat ~sep:" ")
         (stdout_path test)
         (stderr_path test)
         returns
-        (success_path test)
-        (failure_path test)
+        (fill_result_file `OK)
+        (fill_result_file `KO)
         (if t.verbose
          then
            sprintf "printf 'Test %s with [%s] FAILED\\n' >&2"
@@ -137,8 +156,12 @@ module Shell_directory = struct
         exec ["printf";
               sprintf "* Shell: %s, total tests: %d\\n"
                 (Shell.to_string t.shell) (List.length testlist)];
-        call [string "printf"; string "    * Failures: %s\\n"; count_files "_failure/"];
-        call [string "printf"; string "    * Successes: %s\\n"; count_files "_success"];
+        call [string "printf";
+              string "    * Failures: %s.\\n";
+              count_files "_failure/"];
+        call [string "printf";
+              string "    * Successes: %s.\\n";
+              count_files "_success"];
       ]
     )
     |> Genspio.Compile.to_many_lines
@@ -148,9 +171,13 @@ module Shell_directory = struct
       (List.map testlist ~f:(success_path)
        |> String.concat ~sep:" ")
     :: sprintf "clean:\n\trm -fr _success _failure _log\n\n"
-    :: sprintf "report:\n\t@sh %s > report.md\n\n" (make_report_path t)
-    :: sprintf "check:\n\t@test $$(ls -1 _success | wc -l) -eq %d\n\n"
-      (List.length testlist)
+    :: sprintf "failures.md:\n\t@{ cat _failure/* ; echo '' ; } > failures.md\n\n"
+    :: sprintf "successes.md:\n\t@{ cat _success/* ; echo '' ; } > successes.md\n\n"
+    :: sprintf "report: failures.md successes.md\n\t@sh %s > report.md\n\n"
+      (make_report_path t)
+    :: sprintf "check:\n\t@%s\n\n"
+      (List.map testlist ~f:(fun tst -> sprintf "test -f '%s'" (success_path tst))
+       |> String.concat ~sep:" \\\n      && ")
     ::
     (List.map testlist ~f:(fun test ->
          sprintf "# Test %s with %s\n%s:\n\t%ssh %s"
@@ -185,6 +212,7 @@ end
 module Test_directory = struct
   type t = {
     shells: Shell.t list;
+    important_shells: string list;
     verbose: bool;
   }
 
@@ -211,6 +239,9 @@ module Test_directory = struct
     [
       sprintf ".PHONY: run-all all clean clean-reports report check %s\n" shell_run_targets;
       sprintf "all:\n\t@cat help.md";
+      sprintf "check: %s\n"
+        (List.map t.important_shells ~f:(sprintf "check-%s")
+         |> String.concat ~sep:" ");
       "report: report.md";
       sprintf "report.md: %s\n\tcat %s > report.md"
         shell_reports shell_reports;
@@ -225,6 +256,7 @@ module Test_directory = struct
         [
           sprintf "%s/report.md:\n\t@ ( cd %s ; make report ; )" dir dir;
           sprintf "run-%s:\n\t@ ( cd %s ; make ; )" dir dir;
+          sprintf "check-%s:\n\t@ ( cd %s ; make check ; )" dir dir;
         ])
     |> String.concat ~sep:"\n"
 

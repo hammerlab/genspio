@@ -743,7 +743,7 @@ let () = add_tests @@ begin
       exits ~name:"with_failwith" 23 with_failwith_basic_test;
       exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
           let tmpextra = tmp_file "extratmp" in
-          let tmpdir = Filename.temp_file "genspio" "test" in
+          let tmpdir = "/tmp/genspio-with-failwith-tst/" in
           seq [
             comment "Test with failwith and check that files go away";
             exec ["rm"; "-f"; tmpdir];
@@ -1186,7 +1186,11 @@ let () =
   let open Test in
   let testlist = List.concat !tests in
   let testdir =
-    Test_directory.{ shells = Shell.(known_shells ()); verbose = true} in
+    Test_directory.{
+      shells = Shell.(known_shells ());
+      important_shells = ["dash"; "busybox"; "bash"];
+      verbose = true;
+    } in
   let todo = Test_directory.contents testdir ~path testlist in
   (* List.iter  ~f:begin fun shell -> *)
   (*   let comp = Shell_directory.{ shell; verbose = true } in *)
