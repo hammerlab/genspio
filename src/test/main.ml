@@ -1188,7 +1188,7 @@ let () =
   let testdir =
     Test_directory.{
       shells = Shell.(known_shells ());
-      important_shells = ["dash"; "busybox"; "bash"];
+      important_shells = ["dash"; "bash"];
       verbose = true;
     } in
   let todo = Test_directory.contents testdir ~path testlist in
