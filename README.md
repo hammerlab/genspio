@@ -35,7 +35,7 @@ You need OCaml ≥ 4.03.0 together with
 [`sosa`](http://www.hammerlab.org/docs/sosa/master/index.html), and
 [`jbuilder`](https://github.com/janestreet/jbuilder):
 
-    make
+    jbuilder build @install
     
 Getting Started
 ---------------
