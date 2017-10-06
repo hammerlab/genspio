@@ -103,10 +103,10 @@ let rec pp: type a. Format.formatter -> a t -> unit =
   let open Format in
   fun fmt -> function
   | Exec l ->
-    fprintf fmt "@[(exec@ %a)@]"
+    fprintf fmt "@[<hov 2>(exec@ %a)@]"
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
   | Raw_cmd s ->
-    fprintf fmt "@[(raw_cmd@,%S)@]" s
+    fprintf fmt "@[<hov 2>(raw_cmd@ %S)@]" s
   | Bool_operator (a, op, b) ->
     fprintf fmt "@[(%a@ %s@ %a)@]"
       pp a (match op with `And -> "&&" | `Or -> "||") pp b
@@ -131,13 +131,13 @@ let rec pp: type a. Format.formatter -> a t -> unit =
     fprintf fmt "@[(%a@ → %d)@]" pp expr value
   | No_op -> fprintf fmt "noop"
   | If (c, t, e) ->
-    fprintf fmt "@[(if@ %a@ then:@ %a@ else:@ %a)@]" pp c pp t pp e
+    fprintf fmt "@[<hov 2>(if@ %a@ then:  %a@ else: %a)@]" pp c pp t pp e
   | Seq l ->
-    fprintf fmt "@[{%a}@]"
+    fprintf fmt "@[<hov 2>{%a}@]"
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")  pp) l
   | Literal l -> Literal.pp fmt l
   | Output_as_string u ->
-    fprintf fmt "@[$(%a)@]" pp u
+    fprintf fmt "@[<hov 2>$(%a)@]" pp u
   | Redirect_output (u, l) ->
     let redirs fmt {take; redirect_to} =
       fprintf fmt "@[(%a@ >@ %a)@]"
@@ -149,7 +149,12 @@ let rec pp: type a. Format.formatter -> a t -> unit =
     fprintf fmt "@[(redirect@ %a@ %a)@]" pp u
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  redirs) l
   | Write_output {expr; stdout; stderr; return_value} ->
-    fprintf fmt "@[(write_output@ %a@ TODO)@]" pp expr
+    let o name fmt opt =
+      match opt with
+      | None -> ()
+      | Some c -> fprintf fmt "@ @[<hov 2>(%s→ %a)@]" name pp c in
+    fprintf fmt "@[<hov 2>(write-output@ %a%a%a%a)@]" pp expr
+      (o "stdout") stdout (o "stderr") stderr (o "return-value") return_value
   | Feed (s, u) ->
     fprintf fmt "@[(%a@ >>@ %a)@]" pp s pp u
   | Pipe l ->
@@ -179,7 +184,9 @@ let rec pp: type a. Format.formatter -> a t -> unit =
     fprintf fmt "@[(list-append@ %a@ %a)@]" pp la pp lb
   (* : byte_array t * (byte_array t -> 'a t) -> 'a list t *)
   | List_iter (l, f) ->
-    fprintf fmt "@[(list-iter@ %a@ TODO)@]" pp l
+    let body = f (fun () -> Raw_cmd "VARIABLE") in
+    fprintf fmt "@[<hov 2>(list-iter@ %a@ f:@[<hov 2>(fun VARIABLE ->@ %a)@])@]"
+      pp l pp body
   (* : 'a list t * ((unit -> 'a t) -> unit t) -> unit t *)
   | Byte_array_to_c_string ba ->
     fprintf fmt "@[(byte-array-to-c-string@ %a)@]" pp ba
