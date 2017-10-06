@@ -66,16 +66,17 @@ let downloader () =
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
-    string >> exec (["grep"; "-q"] @ options) |> succeeds in
+    string |> to_byte_array >> exec (["grep"; "-q"] @ options) |> succeeds in
 
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      string_concat [input; string "\n"]
+      string_concat [input; string "\n"] |> to_byte_array
       >> exec ["sed"; expr]
       |> output_as_string
     in
     with_potential_newline >> exec ["tr"; "-d"; "\\n"]
     |> output_as_string
+    |> to_c_string
   in
 
   let module Unwrapper = struct
@@ -96,49 +97,50 @@ let downloader () =
     let to_switch name_variable t_list =
       let make_case t =
         case (string_matches_any
-                name_variable#get [sprintf "\\.%s$" t.extension]) [
-          say [ksprintf string "%s: " t.verb; name_variable#get];
+                name_variable#get_c [sprintf "\\.%s$" t.extension]) [
+          say [ksprintf string "%s: " t.verb; name_variable#get_c];
           succeed_in_silence_or_fail
             ~name:(sprintf "%s-%s" t.verb t.extension)
             (t.commands name_variable);
           name_variable#set
-            (remove_suffix name_variable#get (sprintf "\\.%s" t.extension));
+            (remove_suffix name_variable#get_c (sprintf "\\.%s" t.extension)
+             |> to_byte_array);
         ] in
       seq [
-        say [string "Extract loop: "; name_variable#get];
+        say [string "Extract loop: "; name_variable#get_c];
         switch (List.map t_list ~f:make_case)
       ]
 
     let to_loop name_variable t_list =
       loop_while
-        (string_matches_any name_variable#get
+        (string_matches_any name_variable#get_c
            (List.map t_list (fun t -> sprintf "\\.%s$" t.extension)))
         ~body:(to_switch name_variable t_list)
 
     let all = [
       make ~ext:"gz" ~verb:"Gunzipping" (fun current_name -> [
-            call [string "gunzip"; string "-f"; current_name#get];
+            call [string "gunzip"; string "-f"; current_name#get_c];
           ]);
       make ~ext:"bz2" ~verb:"Bunzip2-ing" (fun current_name -> [
-            call [string "bunzip2"; string "-f"; current_name#get];
+            call [string "bunzip2"; string "-f"; current_name#get_c];
           ]);
       make ~ext:"zip" ~verb:"Unzipping" (fun current_name -> [
-            call [string "unzip"; current_name#get];
+            call [string "unzip"; current_name#get_c];
           ]);
       make ~ext:"tar" ~verb:"Untarring" (fun current_name -> [
-            call [string "tar"; string "xf"; current_name#get];
+            call [string "tar"; string "xf"; current_name#get_c];
           ]);
       make ~ext:"tgz" ~verb:"Untar-gzip-ing" (fun name -> [
-            call [string "tar"; string "zxf"; name#get];
+            call [string "tar"; string "zxf"; name#get_c];
           ]);
       make ~ext:"tbz2" ~verb:"Untar-bzip2-ing" (fun name -> [
-            call [string "tar"; string "xfj"; name#get];
+            call [string "tar"; string "xfj"; name#get_c];
           ]);
       make ~ext:"gpg" ~verb:"Decyphering" (fun name -> [
             call [string "gpg";
                   string "--output";
-                  (remove_suffix name#get "\\.gpg");
-                  string "-d"; name#get;];
+                  (remove_suffix name#get_c "\\.gpg");
+                  string "-d"; name#get_c;];
           ]);
     ]
   end in
@@ -167,12 +169,12 @@ let downloader () =
             let filename =
               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
             let output_path =
-              string_concat [tmp_dir; string "/"; filename] in
+              string_concat [tmp_dir; string "/"; filename] |> to_byte_array in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              string_concat [tmp_dir; string "/"; filename_ov] in
+              string_concat [tmp_dir; string "/"; filename_ov] |> to_byte_array in
             [current_name#set output_path]
           end
       in
@@ -186,8 +188,8 @@ let downloader () =
           (string_matches_any url ["^http://"; "^https://"; "^ftp://"])
           (seq [
               set_output_of_download ();
-              download ~url ~output:current_name#get;
-              say [string "Downloaded "; current_name#get];
+              download ~url ~output:current_name#get_c;
+              say [string "Downloaded "; current_name#get_c];
               Unwrapper.to_loop current_name Unwrapper.all
             ])
           (seq [
