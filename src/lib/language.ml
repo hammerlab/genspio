@@ -318,6 +318,7 @@ end
 type output_parameters = {
   statement_separator: string;
   die_command: (string -> string) option;
+  max_argument_length: int option;
 }
 let rec to_shell: type a. _ -> a t -> string =
   fun params e ->
@@ -338,7 +339,7 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf
         {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
-    let to_argument varprefix =
+    let to_argument ~error_loc varprefix =
       let argument ?declaration ?variable_name argument =
         object
           method declaration = declaration
@@ -346,12 +347,24 @@ let rec to_shell: type a. _ -> a t -> string =
           method variable_name = variable_name
           method argument = argument
         end in
+      let check_length s =
+        match params.max_argument_length with
+        | None -> s
+        | Some m when String.length s > m ->
+          ksprintf failwith
+            "Hit maximal argument length: %d > %d\n\
+             String: %S…\nExpr: %s"
+            (String.length s) m
+            (String.sub_exn s 0 42)
+            (Format.asprintf "%a" pp error_loc)
+        | Some _ -> s
+      in
       function
       | `C_string (c_str : c_string t) ->
         begin match c_str with
         | Byte_array_to_c_string (Literal (Literal.String s))
           when Literal.String.easy_to_escape s ->
-          argument (Filename.quote s)
+          argument (Filename.quote s |> check_length)
         | Byte_array_to_c_string (Literal (Literal.String s))
           when Literal.String.impossible_to_escape_for_variable s ->
           ksprintf failwith "to_shell: sorry literal %S is impossible to \
@@ -360,7 +373,7 @@ let rec to_shell: type a. _ -> a t -> string =
           let variable_name = Unique_name.variable varprefix in
           let declaration =
             sprintf "%s=$(%s; printf 'x')"
-              variable_name (continue other |> expand_octal)
+              variable_name (continue other |> expand_octal |> check_length)
           in
           argument ~variable_name ~declaration
             (sprintf "\"${%s%%?}\"" variable_name)
@@ -368,7 +381,8 @@ let rec to_shell: type a. _ -> a t -> string =
       | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
       | `Int other ->
         let variable_name = Unique_name.variable varprefix in
-        let declaration = sprintf "%s=%s" variable_name (continue other) in
+        let declaration =
+          sprintf "%s=%s" variable_name (continue other |> check_length) in
         argument ~variable_name ~declaration
           (sprintf "\"${%s%%?}\"" variable_name)
     in
@@ -378,7 +392,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let args =
         List.mapi l ~f:(fun index v ->
             let varname = sprintf "argument_%d" index in
-            let arg = to_argument varname (`C_string v) in
+            let arg = to_argument ~error_loc:e varname (`C_string v) in
             match arg#declaration with
             | None -> arg#argument
             | Some vardef ->
@@ -449,9 +463,9 @@ let rec to_shell: type a. _ -> a t -> string =
          (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ;
       *)
       let make_redirection { take; redirect_to } =
-        let takearg = to_argument "redirection_take" (`Int take) in
+        let takearg = to_argument ~error_loc:e "redirection_take" (`Int take) in
         let retoarg =
-          to_argument "redirection_to"
+          to_argument ~error_loc:e "redirection_to"
             (match redirect_to with `Fd i -> `Int i | `Path p -> `C_string p) in
         let variables =
           takearg#export :: retoarg#export :: [] |> List.filter_opt in
@@ -479,7 +493,8 @@ let rec to_shell: type a. _ -> a t -> string =
       end
     | Write_output { expr; stdout; stderr; return_value } ->
       let ret_arg =
-        Option.map return_value ~f:(fun v -> to_argument "retval" (`C_string v))
+        Option.map return_value ~f:(fun v ->
+            to_argument ~error_loc:e "retval" (`C_string v))
       in
       let var =
         Option.((ret_arg >>= fun ra -> ra#export) |> value ~default:"") in
@@ -646,18 +661,24 @@ let with_trap ~statement_separator ~exit_with script =
     script ~die;
   ]
 
-let compile ~statement_separator ?(no_trap = false) e =
+let compile ~statement_separator ?(no_trap = false) ~max_argument_length e =
   match no_trap with
   | false ->
     with_trap ~statement_separator ~exit_with:77
-      (fun ~die -> to_shell {statement_separator; die_command = Some die} e)
+      (fun ~die ->
+         to_shell {statement_separator; die_command = Some die;
+                   max_argument_length} e)
   | true ->
-    to_shell {statement_separator; die_command = None} e
+    to_shell {statement_separator; die_command = None; max_argument_length} e
 
-let to_one_liner ?no_trap e =
+let default_max_argument_length = Some 100_000
+
+let to_one_liner
+    ?(max_argument_length = default_max_argument_length) ?no_trap e =
   let statement_separator = " ; " in
-  compile ~statement_separator ?no_trap e
+  compile ~statement_separator ?no_trap e ~max_argument_length
 
-let to_many_lines ?no_trap e =
+let to_many_lines
+    ?(max_argument_length = default_max_argument_length) ?no_trap e =
   let statement_separator = " \n " in
-  compile ~statement_separator ?no_trap e
+  compile ~statement_separator ?no_trap e ~max_argument_length

@@ -655,7 +655,7 @@ let () = add_tests @@ exits 28 Construct.(
   ()
 
 
-let () = add_tests @@ begin
+let f () = add_tests @@ begin
     let open Genspio.EDSL in
     let tmp = tmp_file "agglomeration" in
     let make ~jump =
