@@ -35,3 +35,9 @@ val to_many_lines :
 (** Compile a Genspio expression to a multi-line POSIX shell script,
     slightly more readable than {!to_one_liner}.
 *)
+
+val pp_hum: Format.formatter -> 'a EDSL.t -> unit
+(** Pretty print a Genspio expression with the {!Format} module. *)
+
+val to_string_hum: 'a EDSL.t -> string
+(** Pretty print a Genspio expression to [string]. *)
