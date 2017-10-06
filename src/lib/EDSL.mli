@@ -271,6 +271,7 @@ val eprintf : c_string t -> c_string t list -> unit t
 val fail: unit t
 (** Expression that aborts the whole script/command immediately. *)
 
+(*
 val with_signal:
   ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
 (** Use a UNIX signal (default ["USR2"]) to create a “jump.”
@@ -317,7 +318,8 @@ val with_failwith:
 (** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
     with a function that exits the flow of execution and displays
     [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
-
+    *)
+          
 (** {3 Temporary Files} *)
 
 type file = <

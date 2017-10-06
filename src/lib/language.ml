@@ -93,11 +93,6 @@ and _ t =
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: c_string t -> c_string t (* See [man execve]. *)
   | Setenv: c_string t * c_string t -> unit t
-  | With_signal: {
-      signal_name: string;
-      catch: unit t;
-      run: unit t -> unit t;
-    } -> unit t
 
 let rec pp: type a. Format.formatter -> a t -> unit =
   let open Format in
@@ -196,7 +191,6 @@ let rec pp: type a. Format.formatter -> a t -> unit =
     fprintf fmt "@[(getenv@ %a)@]" pp s
   | Setenv (s, v) ->
     fprintf fmt "@[(setenv@ %a@ %a)@]" pp s pp v
-  | With_signal _ -> fprintf fmt "@[with-signal TODO@]"
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
@@ -231,9 +225,6 @@ module Construct = struct
   let seq l = Seq l
 
   let not t = Not t
-
-  let with_signal ?(signal_name = "USR2") ~catch run =
-    With_signal {signal_name; catch; run}
 
   let fail = Fail
 
@@ -636,21 +627,6 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | With_signal {signal_name; catch; run} ->
-      let var = Unique_name.variable "with_signal" in
-      let value = sprintf "\"$%s\"" var in
-      continue Construct.(seq [
-          Raw_cmd (sprintf "export %s=$$" var);
-          exec ["trap"; continue catch; signal_name];
-          exec [
-            (* We need the `sh -c ...` in order to properly create a subprocess,
-               if not we break when `With_signal` are enclosed, the kill
-               command does not wake up the right process. *)
-            "sh"; "-c";
-            run (Raw_cmd (sprintf " kill -s %s %s ; kill $$ " signal_name value))
-            |> continue
-          ];
-        ])
     | Fail -> die "EDSL.fail called"
 
 (*

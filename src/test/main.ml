@@ -623,169 +623,6 @@ let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
   );
   ()
 
-
-let () = add_tests @@ exits 32 Construct.(
-    seq [
-      with_signal
-        ~catch:(seq [tprintf "Caught !"; shexit 32])
-        (fun throw ->
-           seq [
-             tprintf "Throwing";
-             throw;
-             return 42;
-           ]);
-      return 28;
-    ]
-  );
-  ()
-
-
-let () = add_tests @@ exits 28 Construct.(
-    seq [
-      comment "trowing once stuff";
-      with_signal
-        ~catch:(seq [tprintf "Caught !"; shexit 32])
-        (fun throw ->
-           seq [
-             tprintf "Not Throwing";
-           ]);
-      return 28;
-    ]
-  );
-  ()
-
-
-let f () = add_tests @@ begin
-    let open Genspio.EDSL in
-    let tmp = tmp_file "agglomeration" in
-    let make ~jump =
-      seq [
-        (* comment "Multi-trowing stuff: %b" jump; *)
-        setenv (string "TMPDIR") (string "/var/tmp/");
-        tmp#set (byte_array "1");
-        (* tprintf "adding 1 !\n"; *)
-        with_signal
-          ~catch:(seq [
-              (* tprintf "One Caught !\n"; *)
-              (* tprintf "adding 5 !\n"; *)
-              tmp#append (byte_array ",5");
-            ])
-          (fun throw_one ->
-             seq [
-               tmp#append (byte_array ",2");
-               (* tprintf "adding 2 !\n"; *)
-               with_signal
-                 ~catch:(seq [
-                     (* tprintf "Two Caught !\n"; *)
-                     (* tprintf "adding 4 !\n"; *)
-                     tmp#append (byte_array ",4");
-                     throw_one;
-                   ])
-                 (fun throw_two ->
-                    seq [
-                      (* tprintf "adding 3 !\n"; *)
-                      tmp#append (byte_array ",3");
-                      (if jump then throw_one else throw_two);
-                    ]);
-             ]);
-        (* call [string "printf"; string "Agglo: %s\\n"; to_c_string tmp#get;]; *)
-        if_then_else Byte_array.(tmp#get
-                      =$=
-                      byte_array (if jump then "1,2,3,5" else "1,2,3,4,5"))
-          (return 28)
-          (return 29);
-      ]
-    in
-    List.concat [
-      exits ~name:"multijump" 28 (make ~jump:true);
-      exits ~name:"multijump" 28 (make ~jump:false);
-    ]
-  end;
-  ()
-
-let () = add_tests @@ exits 0 ~name:"with_signal_example" Genspio.EDSL.(
-    let tmp = tmp_file "appender" in
-    seq [
-      tmp#set (byte_array "start");
-      with_signal (fun signal ->
-          seq [
-            tmp#append (byte_array "-signal");
-            signal;
-            tmp#append (byte_array "-WRONG");
-          ])
-        ~catch:(seq [
-            tmp#append (byte_array "-caught")
-          ]);
-      call [string "printf"; string "tmp: %s\\n"; to_c_string tmp#get];
-      assert_or_fail "Timeline-of-tmp"
-        (tmp#get_c =$= string "start-signal-caught");
-    ]
-  );
-  ()
-
-
-let () = add_tests @@ begin
-    let with_failwith_basic_test =
-      Genspio.EDSL.(
-        seq [
-          comment "Test with failwith";
-          with_failwith (fun die ->
-              seq [
-                comment "Test with failwith: just before dying";
-                tprintf "Dying now\n";
-                die
-                  ~message:(byte_array "HElllooo I'm dying!!\n") ~return:(int 23)
-              ]
-            );
-        ]
-      ) in
-    List.concat [
-      exits ~name:"with_failwith" 23 with_failwith_basic_test;
-      exits ~name:"with_failwith-and-more" 37 Genspio.EDSL.(
-          let tmpextra = tmp_file "extratmp" in
-          let tmpdir = "/tmp/genspio-with-failwith-tst/" in
-          seq [
-            comment "Test with failwith and check that files go away";
-            exec ["rm"; "-f"; tmpdir];
-            exec ["mkdir"; "-p"; tmpdir];
-            setenv (string "TMPDIR") (string tmpdir);
-            tmpextra#set (byte_array "");
-            assert_or_fail "tmpfile-in-tmpdir"
-              begin
-                (tmpextra#path |> to_byte_array) >>
-                call [string "grep"; string tmpdir]
-                |> returns ~value:0
-              end;
-            write_output
-              ~return_value:tmpextra#path
-              begin
-                seq [
-                  exec [
-                    "sh"; "-c"; (* Soooo meta *)
-                    Genspio.Language.to_one_liner with_failwith_basic_test;
-                  ]
-                ]
-              end;
-            assert_or_fail "with_failwith:ret23"
-              (tmpextra#get_c |> Integer.of_string |> Integer.eq (int 23));
-            tmpextra#delete;
-            call [
-              string "echo";
-              call [string "find"; string tmpdir] |> output_as_string |> to_c_string
-            ];
-            assert_or_fail "with_failwith:no-files-in-tmpdir"
-              begin
-                call [string "find"; string tmpdir]
-                |> output_as_string |> to_c_string
-                   =$= ksprintf string "%s\n" tmpdir
-              end;
-            return 37;
-          ]
-        );
-    ];
-  end
-
-
 let () = add_tests @@ List.concat [
     exits ~name:"tmp#basic" 23 Genspio.EDSL.(
         let tmp = tmp_file "test" in
@@ -1149,6 +986,7 @@ let () = add_tests @@ begin
             return 42;
           ]
         );
+      (*
       exits 42 ~name:"pipe-escape" Genspio.EDSL.(
           let tmp1 = tmp_file "pipe-escape-1" in
           let tmp2 = tmp_file "pipe-escape-2" in
@@ -1176,6 +1014,7 @@ let () = add_tests @@ begin
             return 42;
           ]
         );
+         *)
     ]
   end
 
