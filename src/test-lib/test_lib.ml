@@ -84,12 +84,20 @@ module Shell_directory = struct
          |> Digest.to_hex |> String.sub_exn ~index:0 ~length:10)
 
   let script_path test = "script" // sprintf "%s-script.sh" (unique_name test)
-  let run_test_path test = "script" // sprintf "%s-run-test.sh" (unique_name test)
+  let run_test_path test =
+    "script" // sprintf "%s-run-test.sh" (unique_name test)
+  let script_display test =
+    "script" // sprintf "%s-display.scm" (unique_name test)
 
   let success_path test = sprintf "_success/%s.txt" @@ unique_name test
   let failure_path test = sprintf "_failure/%s.txt" @@ unique_name test
   let stdout_path test = sprintf "_log/%s/stdout.txt" @@ unique_name test
   let stderr_path test = sprintf "_log/%s/stderr.txt" @@ unique_name test
+
+  let display_script t =
+    function
+    | Exits { no_trap; name; args; returns; script } ->
+      Genspio.Compile.to_string_hum script
 
   let run_test_script t =
     function
@@ -108,9 +116,9 @@ module Shell_directory = struct
           | `KO -> failure_path test, sprintf "- **KO**: \\`%s\\`" (unique_name test)
         in
         let lines =
-          sprintf "echo \"%s\" > %s" first_line file
+          sprintf "printf -- \"%s\\n\" > %s" first_line file
           ::
-          List.map echos ~f:(fun l -> sprintf "echo \"    %s\" >> %s" l file)
+          List.map echos ~f:(fun l -> sprintf "printf -- \"    %s\\n\" >> %s" l file)
         in
         String.concat ~sep:"\n" lines in
       sprintf "mkdir -p _success _failure %s\n\
@@ -192,6 +200,7 @@ module Shell_directory = struct
         [
           script_path test, script_content test;
           run_test_path test, run_test_script t test;
+          script_display test, display_script t test;
         ])
 
   let contents t ~path testlist =
