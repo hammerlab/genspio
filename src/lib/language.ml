@@ -10,6 +10,13 @@ module Literal = struct
     | String: string -> byte_array t
     | Bool: bool -> bool t
 
+  let pp : type a. _ -> a t -> unit =
+    let open Format in
+    fun fmt -> function
+    | Int i -> fprintf fmt "@[(int@ %d)@]" i
+    | String s -> fprintf fmt "@[(string@ %S)@]" s
+    | Bool b -> fprintf fmt "@[(bool@ %b)@]" b
+
   (** Compile a literal to the internal representation. *)
   let to_shell: type a. a t -> string =
     function
@@ -91,6 +98,98 @@ and _ t =
       catch: unit t;
       run: unit t -> unit t;
     } -> unit t
+
+let rec pp: type a. Format.formatter -> a t -> unit =
+  let open Format in
+  fun fmt -> function
+  | Exec l ->
+    fprintf fmt "@[(exec@ %a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
+  | Raw_cmd s ->
+    fprintf fmt "@[(raw_cmd@,%S)@]" s
+  | Bool_operator (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a (match op with `And -> "&&" | `Or -> "||") pp b
+  | String_operator (baa, op, bab) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp baa (match op with `Eq -> "=$=" | `Neq -> "<$>") pp bab
+  | Int_bin_comparison (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a
+      (match op with
+      | `Eq -> "==" | `Ne -> "!=" | `Gt -> ">" | `Ge -> "≥"
+      | `Lt -> "<" | `Le -> "≤")
+      pp b
+  | Int_bin_op (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a
+      (match op with
+      | `Plus -> "+" | `Minus -> "-" | `Mult -> "×" | `Div -> "/" | `Mod -> "%")
+      pp b
+  | Not b -> fprintf fmt "@[(!%a)@]" pp b
+  | Returns {expr; value: int} ->
+    fprintf fmt "@[(%a@ → %d)@]" pp expr value
+  | No_op -> fprintf fmt "noop"
+  | If (c, t, e) ->
+    fprintf fmt "@[(if@ %a@ then:@ %a@ else:@ %a)@]" pp c pp t pp e
+  | Seq l ->
+    fprintf fmt "@[{%a}@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")  pp) l
+  | Literal l -> Literal.pp fmt l
+  | Output_as_string u ->
+    fprintf fmt "@[$(%a)@]" pp u
+  | Redirect_output (u, l) ->
+    let redirs fmt {take; redirect_to} =
+      fprintf fmt "@[(%a@ >@ %a)@]"
+        pp take
+        (fun fmt -> function
+         | `Fd f -> fprintf fmt "%a" pp f
+         | `Path f -> fprintf fmt "%a" pp f)
+        redirect_to in
+    fprintf fmt "@[(redirect@ %a@ %a)@]" pp u
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  redirs) l
+  | Write_output {expr; stdout; stderr; return_value} ->
+    fprintf fmt "@[(write_output@ %a@ TODO)@]" pp expr
+  | Feed (s, u) ->
+    fprintf fmt "@[(%a@ >>@ %a)@]" pp s pp u
+  | Pipe l ->
+    fprintf fmt "@[(%a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ")  pp) l
+  | While {condition; body} ->
+    fprintf fmt "@[(while@ %a@ do@ %a)@]" pp condition pp body
+  | Fail ->
+    fprintf fmt "@[(FAIL)@]"
+  | Int_to_string i -> fprintf fmt "@[(int-to-string@ %a)@]" pp i
+  | String_to_int i -> fprintf fmt "@[(string-to-int@ %a)@]" pp i
+  | Bool_to_string b -> fprintf fmt "@[(bool-to-string@ %a)@]" pp b
+  | String_to_bool b -> fprintf fmt "@[(string-to-bool@ %a)@]" pp b
+  | List_to_string (l, f) ->
+    fprintf fmt "@[(list-to-string@ %a)@]" pp l
+  (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
+  | String_to_list (s, f) ->
+    fprintf fmt "@[(string-to-list@ %a)@]" pp s
+  | List l ->
+    fprintf fmt "@[(list@ %a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
+  | C_string_concat t ->
+    fprintf fmt "@[(c-string-concat@ %a)@]" pp t
+  | Byte_array_concat t ->
+    fprintf fmt "@[(byte-array-concat@ %a)@]" pp t
+  | List_append (la, lb) ->
+    fprintf fmt "@[(list-append@ %a@ %a)@]" pp la pp lb
+  (* : byte_array t * (byte_array t -> 'a t) -> 'a list t *)
+  | List_iter (l, f) ->
+    fprintf fmt "@[(list-iter@ %a@ TODO)@]" pp l
+  (* : 'a list t * ((unit -> 'a t) -> unit t) -> unit t *)
+  | Byte_array_to_c_string ba ->
+    fprintf fmt "@[(byte-array-to-c-string@ %a)@]" pp ba
+  | C_string_to_byte_array c ->
+    fprintf fmt "@[(c-string-to-byte-array@ %a)@]" pp c
+  | Getenv s ->
+    fprintf fmt "@[(getenv@ %a)@]" pp s
+  | Setenv (s, v) ->
+    fprintf fmt "@[(setenv@ %a@ %a)@]" pp s pp v
+  | With_signal _ -> fprintf fmt "@[with-signal TODO@]"
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
