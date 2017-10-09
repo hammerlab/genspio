@@ -73,7 +73,7 @@ and _ t =
   | Feed: byte_array t * unit t -> unit t
   | Pipe: unit t list -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
-  | Fail: unit t
+  | Fail: string -> unit t
   | Int_to_string: int t -> c_string t
   | String_to_int: c_string t -> int t
   | Bool_to_string: bool t -> c_string t
@@ -157,8 +157,8 @@ let rec pp: type a. Format.formatter -> a t -> unit =
       (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ")  pp) l
   | While {condition; body} ->
     fprintf fmt "@[(while@ %a@ do@ %a)@]" pp condition pp body
-  | Fail ->
-    fprintf fmt "@[(FAIL)@]"
+  | Fail s ->
+    fprintf fmt "@[(FAIL %S)@]" s
   | Int_to_string i -> fprintf fmt "@[(int-to-string@ %a)@]" pp i
   | String_to_int i -> fprintf fmt "@[(string-to-int@ %a)@]" pp i
   | Bool_to_string b -> fprintf fmt "@[(bool-to-string@ %a)@]" pp b
@@ -226,7 +226,7 @@ module Construct = struct
 
   let not t = Not t
 
-  let fail = Fail
+  let fail s = Fail s
 
   let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
@@ -537,7 +537,7 @@ let rec to_shell: type a. _ -> a t -> string =
             (String_operator (C_string_to_byte_array s,
                               `Eq, Literal (Literal.String "false"))),
             (Raw_cmd "false"),
-            (Fail))
+            (Fail (sprintf "String_to_bool")))
         )
       )
     | List l ->
@@ -627,7 +627,7 @@ let rec to_shell: type a. _ -> a t -> string =
       sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | Fail -> die "EDSL.fail called"
+    | Fail s -> die s
 
 (*
      POSIX does not have ["set -o pipefail"].

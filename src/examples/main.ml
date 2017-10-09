@@ -19,7 +19,7 @@ let downloader () =
       )
   in
   let sayf fmt = ksprintf (fun s -> say [string s]) fmt in
-  let fail l = seq [say (string "ERROR: " :: l); fail] in
+  let fail l = seq [say (string "ERROR: " :: l); fail "fail-list"] in
   let failf fmt = ksprintf (fun s -> fail [string s]) fmt in
   let (//) = Filename.concat in
   let silent ~name unit =

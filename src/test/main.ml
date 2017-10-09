@@ -15,7 +15,7 @@ let tprintf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
 let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt
 let assert_or_fail name cond =
   let open Genspio.EDSL in
-  if_then_else cond nop (seq [tprintf "Fail: %s\n" name; fail])
+  if_then_else cond nop (seq [tprintf "Fail: %s\n" name; fail name])
 
 let tests = ref []
 
@@ -331,7 +331,7 @@ let () = add_tests @@ begin
 let () = add_tests @@ exits 77 ~name:"die in a sequence" Construct.(
     seq [
       tprintf "Going to die";
-      fail;
+      fail "die in sequence";
       return 42;
     ]
   );
@@ -343,7 +343,7 @@ let () = add_tests @@ exits 77 ~name:"cannot capture death itself" Construct.(
         ~return_value:(string "/tmp/dieretval")
         (seq [
             tprintf "Going to die\n";
-            fail;
+            fail "cannot capture death";
             return 42;
           ]);
       return 23;
@@ -356,7 +356,7 @@ let () = add_tests @@ exits 77 ~name:"cannot poison death either" Construct.(
       byte_array "dj ijdedej j42 ijde - '' "
       >> seq [
         tprintf "Going to die\n";
-        fail;
+        fail "cannot poison death";
         return 42;
       ];
       return 23;
@@ -433,7 +433,7 @@ let () = add_tests @@ exits 77 Construct.(
         nop
         (seq [
             tprintf "Failure !";
-            fail;
+            fail "succeed_or_die";
           ]) in
     seq [
       exec ["rm"; "-f"; tmp];
@@ -599,7 +599,8 @@ let () = add_tests @@ exits 77 ~name:"Weird-env-variable" Construct.(
 let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
     let var = string "VVVVVVV" in
     let assert_or_return ret cond =
-      if_then_else cond nop (seq [tprintf "Fail: %d" ret; fail]) in
+      if_then_else cond nop (seq [tprintf "Fail: %d" ret;
+                                  fail "assert_or_return"]) in
     seq [
       assert_or_return 27 (getenv var =$= string "");
       setenv ~var (string "Bouh");

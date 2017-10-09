@@ -182,7 +182,7 @@ module Command_line = struct
                     eprintf
                       (string "ERROR option '%s' requires an argument\\n")
                       [getenv (string "1")];
-                    fail;
+                    fail "Wrong command line";
                   ]
                   ~e:[
                     setenv (string var) (getenv (string "2"));
