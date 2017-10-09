@@ -987,35 +987,6 @@ let () = add_tests @@ begin
             return 42;
           ]
         );
-      (*
-      exits 42 ~name:"pipe-escape" Genspio.EDSL.(
-          let tmp1 = tmp_file "pipe-escape-1" in
-          let tmp2 = tmp_file "pipe-escape-2" in
-          let tubes =
-            with_signal
-              ~catch:(tmp1#set (byte_array "ok"))
-              (fun jump ->
-                 tmp2#set (
-                   pipe [
-                     exec ["echo"; "hello world"];
-                     jump;
-                     exec ["tr"; "-d"; " "];
-                   ]
-                   |> output_as_string
-                 )
-              )
-          in
-          seq [
-            tmp1#set (byte_array "init1");
-            tmp2#set (byte_array "init2");
-            tubes;
-            assert_or_fail "tmp1-ok" (tmp1#get_c =$= string "ok");
-            eprintf (string "Tmp2: %s.") [tmp2#get_c]; 
-            assert_or_fail "tmp2-init" (tmp2#get_c =$= string "init2");
-            return 42;
-          ]
-        );
-         *)
     ]
   end
 
@@ -1045,8 +1016,16 @@ let () =
   let open Test in
   let testlist = List.concat !tests in
   let testdir =
+    let tests =
+      List.concat_map Shell.(known_shells ()) ~f:(fun shell ->
+          let make compilation =
+            Shell_directory.{shell; verbose = true; compilation} in
+          [
+            make `Std_one_liner;
+            make `Std_multi_line;
+          ]) in
     Test_directory.{
-      shells = Shell.(known_shells ());
+      shell_tests = tests;
       important_shells = !important_shells;
       verbose = true;
     } in
