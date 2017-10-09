@@ -106,6 +106,7 @@ module Shell_directory = struct
         let echos = [
           sprintf "- Returns $RRR (expected: %d)." returns;
           sprintf "- Script: \\`%s\\`" (script_path test);
+          sprintf "- Pretty-printed: \\`%s\\`" (script_display test);
           sprintf "- Test-runner: \\`%s\\`" (run_test_path test);
           sprintf "- STDOUT: \\`%s\\`" (stdout_path test);
           sprintf "- STDERR: \\`%s\\`" (stderr_path test);
