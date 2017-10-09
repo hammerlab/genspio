@@ -634,34 +634,17 @@ let rec to_shell: type a. _ -> a t -> string =
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
   *)
-let with_trap ~statement_separator ~exit_with script =
+let with_die_function
+    ~statement_separator ~signal_name ?(trap = `Exit_with 77) script =
   let variable_name = Unique_name.variable "genspio_trap" in
   let die s =
-    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
+    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s %s ${%s} ; } "
+      s signal_name variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
-    sprintf "trap 'exit %d' USR1" exit_with;
+    begin match trap with
+    | `Exit_with ex -> sprintf "trap 'exit %d' %s" ex signal_name
+    | `None -> ": 'No Trap'"
+    end;
     script ~die;
   ]
-
-let compile ~statement_separator ?(no_trap = false) ~max_argument_length e =
-  match no_trap with
-  | false ->
-    with_trap ~statement_separator ~exit_with:77
-      (fun ~die ->
-         to_shell {statement_separator; die_command = Some die;
-                   max_argument_length} e)
-  | true ->
-    to_shell {statement_separator; die_command = None; max_argument_length} e
-
-let default_max_argument_length = Some 100_000
-
-let to_one_liner
-    ?(max_argument_length = default_max_argument_length) ?no_trap e =
-  let statement_separator = " ; " in
-  compile ~statement_separator ?no_trap e ~max_argument_length
-
-let to_many_lines
-    ?(max_argument_length = default_max_argument_length) ?no_trap e =
-  let statement_separator = " \n " in
-  compile ~statement_separator ?no_trap e ~max_argument_length
