@@ -996,7 +996,62 @@ let () = add_tests @@ begin
     ]
   end
 
-
+let compilation_error_tests () =
+  let results = ref [] in
+  let test ?options e expect =
+    let res = Genspio.Compile.To_posix.string ?options e in
+    results := (e, expect res, res) :: !results;
+  in
+  let open Genspio in
+  test
+    EDSL.("comment 0" %%% seq [
+        "comment 1" %%% exec ["echo"; "diej\000dejldsjie"]
+      ])
+    begin function
+    | Error {
+        Genspio.Compile.To_posix.error = `Not_a_c_string "diej\000dejldsjie";
+        code = Some _;
+        comment_backtrace = ["comment 1"; "comment 0"]
+      } -> true
+    | _ -> false
+    end;
+  let too_big = String.make 200_000 'B' in
+  test
+    EDSL.("comment 0" %%% seq [exec ["echo"; too_big]])
+    begin function
+    | Error {
+        Genspio.Compile.To_posix.error = `Max_argument_length that_one;
+        code = Some _;
+        comment_backtrace = ["comment 0"]
+      } when that_one = Filename.quote too_big -> true
+    | _ -> false
+    end;
+  let options = 
+    { Genspio.Compile.To_posix.multi_line with fail_with = `Nothing } in
+  test ~options
+    EDSL.("comment 0" %%% seq [exec ["echo"; "fail"];
+                               "cmt2" %%% fail "failure"])
+    begin function
+    | Error {
+        Genspio.Compile.To_posix.error = `No_fail_configured "failure";
+        code = None;
+        comment_backtrace = ["cmt2"; "comment 0"]
+      } -> true
+    | _ -> false
+    end;
+  printf "Compilation-error tests:\n%!";
+  List.iter (List.rev !results) ~f:(fun (expr, succ, res) ->
+      let expr_str = Genspio.Compile.to_string_hum expr in
+      let res_str =
+        match res with
+        | Ok s -> s
+        | Error e -> Genspio.Compile.To_posix.error_to_string e in
+      printf "* %s: %s\n%s\n%!%!"
+        (if succ then "SUCCESS" else "FAILURE")
+        (String.sub expr_str 0 60 |> Option.value ~default:expr_str)
+        res_str
+    );
+  (List.exists !results ~f:(fun (_, res, _) -> res = false))
 
 let () =
   let anon = ref [] in
@@ -1044,7 +1099,8 @@ let () =
   | `Directory v ->
     ksprintf Sys.command "mkdir -p '%s'" v |> ignore
   end;
-  ()
+  let errors = compilation_error_tests () in
+  exit (if errors then 23 else 0)
 
 
 
