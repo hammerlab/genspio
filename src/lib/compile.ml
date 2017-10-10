@@ -6,6 +6,18 @@ let default_max_argument_length = Some 100_000
 
 module To_posix = struct
 
+  type compilation_error = Language.compilation_error = {
+    error: [
+      | `No_fail_configured of string (* Argument of fail *)
+      | `Max_argument_length of string (* Incriminated argument *)
+      | `Not_a_c_string of string (* The actual string *)
+    ];
+    code: string option;
+    comment_backtrace: string list;
+  }
+  let pp_error = Language.pp_error
+  let error_to_string = Format.asprintf "%a" pp_error
+
   type parameters = {
     style: [ `One_liner | `Multi_line ];
     max_argument_length: int option;
@@ -24,7 +36,7 @@ module To_posix = struct
   let multi_line = {one_liner with style = `Multi_line }
   let default_options = one_liner
 
-  let string ?(options = default_options) term =
+  let string_exn ?(options = default_options) term =
     let statement_separator =
       match options.style with
       | `Multi_line -> "\n"
@@ -46,6 +58,12 @@ module To_posix = struct
            to_shell {statement_separator;
                      die_command = Some die;
                      max_argument_length} term)
+
+  let string ?options term =
+    match string_exn ?options term with
+    | s -> Ok s
+    | exception (Language.Compilation ce) -> Error ce
+
 end
 
 let to_legacy style
@@ -55,6 +73,10 @@ let to_legacy style
       if no_trap then `Nothing
       else `Trap_and_kill (77, "USR1")
     end}
+  |> function
+  | Ok s -> s
+  | Error e ->
+    failwith @@ To_posix.error_to_string e
 
 let to_one_liner ?max_argument_length ?no_trap e =
   to_legacy `One_liner

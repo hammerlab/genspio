@@ -333,9 +333,54 @@ let ir_to_shell =
   | List s -> s
   | Death s -> s
 
-let rec to_ir: type a. _ -> a t -> internal_representation =
-  fun params e ->
-    let continue_match e = to_ir params e in
+type compilation_error = {
+  error: [
+    | `No_fail_configured of string (* Argument of fail *)
+    | `Max_argument_length of string (* Incriminated argument *)
+    | `Not_a_c_string of string (* The actual string *)
+  ];
+  code: string option;
+  comment_backtrace: string list;
+}
+exception Compilation of compilation_error
+let error ?code ~comment_backtrace error =
+  raise (Compilation {code; comment_backtrace; error})
+
+let pp_error fmt {code; comment_backtrace; error} =
+  let open Format in
+  let summary s =
+    match String.sub s 0 70 with
+    | Some s -> s ^ " …"
+    | None -> s in
+  fprintf fmt "@[<2>";
+  fprintf fmt "Error:@ @[%a@]@ "
+    (fun fmt -> function
+     | `Max_argument_length s ->
+       fprintf fmt "Comand-line argument too long:@ %d bytes,@ %S."
+         (String.length s) (summary s)
+     | `Not_a_c_string s ->
+       fprintf fmt "String literal is not a valid/escapable C-string:@ %S."
+         (summary s)
+     | `No_fail_configured err ->
+       fprintf fmt "Call to `fail %S`@ while no “die” command is configured."
+         (summary err)
+    )
+    error;
+  fprintf fmt "Code:@ @[%s@]@ "
+    (match code with | None -> "NONE" | Some c -> summary c);
+  fprintf fmt "Comment-backtrace:@ @[<2>[%a]@]@ "
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+       (fun fmt -> fprintf fmt "%S"))
+    comment_backtrace;
+  fprintf fmt "@]";
+  ()
+
+let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
+  fun comments params e ->
+    let continue_match ?add_comment e =
+      let cmts =
+        match add_comment with Some c -> c :: comments | None -> comments in
+      to_ir cmts params e in
     let continue e = continue_match e |> ir_to_shell in
     let seq =
       function
@@ -344,11 +389,7 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
     let die s =
       match params.die_command with
       | Some f -> f s
-      | None ->
-        ksprintf failwith
-          "Die command not set: you cannot use the `fail` construct \
-           together with the `~no_trap:true` option (error message was: %S)" s
-    in
+      | None -> error ~comment_backtrace:comments (`No_fail_configured s) in
     let expand_octal s =
       sprintf
         {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
@@ -365,12 +406,8 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
         match params.max_argument_length with
         | None -> s
         | Some m when String.length s > m ->
-          ksprintf failwith
-            "Hit maximal argument length: %d > %d\n\
-             String: %S…\nExpr: %s"
-            (String.length s) m
-            (String.sub_exn s 0 42)
-            (Format.asprintf "%a" pp error_loc)
+          error ~comment_backtrace:comments (`Max_argument_length s)
+            ~code:(Format.asprintf "%a" pp error_loc)
         | Some _ -> s
       in
       function
@@ -381,8 +418,8 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
           argument (Filename.quote s |> check_length)
         | Byte_array_to_c_string (Literal (Literal.String s))
           when Literal.Str.impossible_to_escape_for_variable s ->
-          ksprintf failwith "to_shell: sorry literal %S is impossible to \
-                             escape as `exec` argument" s
+          error ~comment_backtrace:comments (`Not_a_c_string s)
+            ~code:(Format.asprintf "%a" pp error_loc)
         | other ->
           let variable_name = Unique_name.variable varprefix in
           let declaration =
@@ -678,7 +715,7 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
       |> ir_unit
     | Fail s -> die s |> ir_death
     | Comment (cmt, expr) ->
-      begin match continue_match expr with
+      begin match continue_match ~add_comment:cmt expr with
       | Unit u ->
         sprintf " { %s ; %s ; }" Construct.(exec [":";  cmt] |> continue) u
         |> ir_unit
@@ -689,7 +726,7 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
       | Death _ as d -> d
       end
 
-let to_shell options expr = to_ir options expr |> ir_to_shell
+let to_shell options expr = to_ir [] options expr |> ir_to_shell
 
 (*
      POSIX does not have ["set -o pipefail"].
