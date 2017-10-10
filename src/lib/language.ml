@@ -80,6 +80,7 @@ and _ t =
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: c_string t -> c_string t (* See [man execve]. *)
   | Setenv: c_string t * c_string t -> unit t
+  | Comment: string * 'a t -> 'a t
 
 let rec pp: type a. Format.formatter -> a t -> unit =
   let open Format in
@@ -178,6 +179,8 @@ let rec pp: type a. Format.formatter -> a t -> unit =
     fprintf fmt "@[(getenv@ %a)@]" pp s
   | Setenv (s, v) ->
     fprintf fmt "@[(setenv@ %a@ %a)@]" pp s pp v
+  | Comment (cmt, expr) ->
+    fprintf fmt "@[(comment@ %S@ %a)@]" cmt pp expr
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
@@ -214,6 +217,9 @@ module Construct = struct
   let not t = Not t
 
   let fail s = Fail s
+
+  let comment s u = Comment (s, u)
+  let (%%%) s u = comment s u
 
   let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
@@ -329,7 +335,8 @@ let ir_to_shell =
 
 let rec to_ir: type a. _ -> a t -> internal_representation =
   fun params e ->
-    let continue e = to_ir params e |> ir_to_shell in
+    let continue_match e = to_ir params e in
+    let continue e = continue_match e |> ir_to_shell in
     let seq =
       function
       | [] -> ":"
@@ -670,6 +677,17 @@ let rec to_ir: type a. _ -> a t -> internal_representation =
         (continue value |> expand_octal)
       |> ir_unit
     | Fail s -> die s |> ir_death
+    | Comment (cmt, expr) ->
+      begin match continue_match expr with
+      | Unit u ->
+        sprintf " { %s ; %s ; }" Construct.(exec [":";  cmt] |> continue) u
+        |> ir_unit
+      | Octostring _
+      | Int _
+      | Bool _
+      | List _
+      | Death _ as d -> d
+      end
 
 let to_shell options expr = to_ir options expr |> ir_to_shell
 

@@ -22,6 +22,11 @@ val byte_array : string -> byte_array t
 val int : int -> int t
 val bool : bool -> bool t
 
+(** {3 Comments} *)
+
+val comment: string -> 'a t -> 'a t
+val (%%%): string -> 'a t -> 'a t
+
 (** {3 Basic system Commands} *)
 
 val call : c_string t list -> unit t

@@ -964,13 +964,19 @@ let () = add_tests @@ begin
             ] |> output_as_string
             |> to_c_string in
           let fed =
-            bag |> to_byte_array >> pipe [
-              exec ["tr"; "H"; "B"];
-            ] |> output_as_string
-            |> to_c_string in
-          seq [
+            "let fed" %%% begin
+              bag |> to_byte_array >> pipe [
+                exec ["tr"; "H"; "B"];
+              ] |> output_as_string
+              |> to_c_string
+            end
+          in
+          "pipe-basic test" %%% seq [
             eprintf (string "Bag: %s") [bag];
-            assert_or_fail "pipe-basic1" (bag =$= string "HelloWorld");
+            "pipe-basic1 assertion" %%%
+            assert_or_fail "pipe-basic1" (
+              ("Bag in pipe-basic 1" %%% bag) =$= string "HelloWorld");
+            "pipe-basic2 assertion" %%%
             assert_or_fail "pipe-basic2" (fed =$= string "BelloWorld");
             return 13;
           ]
