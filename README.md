@@ -3,7 +3,7 @@ Genspio: Generate Shell Phrases In OCaml
 
 Genspio is a typed EDSL to generate shell scripts and commands from OCaml.
 
-The idea is to build values of type `Genspio.EDSL.t` with the
+The idea is to build values of type `'a EDSL.t` with the
 combinators in the `Genspio.EDSL` module, and compile them to POSIX
 shell scripts (or one-liners) with functions from `Genspio.Compile`.
 
