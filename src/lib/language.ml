@@ -17,20 +17,7 @@ module Literal = struct
     | String s -> fprintf fmt "@[(string@ %S)@]" s
     | Bool b -> fprintf fmt "@[(bool@ %b)@]" b
 
-  (** Compile a literal to the internal representation. *)
-  let to_shell: type a. a t -> string =
-    function
-    | Int i -> sprintf "%d" i
-    | String s ->
-      with_buffer begin fun str ->
-        String.iter s ~f:(fun c ->
-            Char.code c |> sprintf "%03o" |> str
-          );
-      end |> fst
-    | Bool true -> "true"
-    | Bool false -> "false"
-
-  module String = struct
+  module Str = struct
 
     let easy_to_escape s =
       String.for_all s
@@ -318,9 +305,31 @@ type output_parameters = {
   die_command: (string -> string) option;
   max_argument_length: int option;
 }
-let rec to_shell: type a. _ -> a t -> string =
+type internal_representation =
+  | Unit of string
+  | Octostring of string
+  | Int of string
+  | Bool of string
+  | List of string
+  | Death of string
+let ir_unit s = Unit s
+let ir_octostring s = Octostring s
+let ir_int s = Int s
+let ir_bool s = Bool s
+let ir_death s = Death s
+let ir_list s = List s
+let ir_to_shell =
+  function
+  | Unit s -> s
+  | Octostring s -> s
+  | Int s -> s
+  | Bool s -> s
+  | List s -> s
+  | Death s -> s
+
+let rec to_ir: type a. _ -> a t -> internal_representation =
   fun params e ->
-    let continue e = to_shell params e in
+    let continue e = to_ir params e |> ir_to_shell in
     let seq =
       function
       | [] -> ":"
@@ -361,10 +370,10 @@ let rec to_shell: type a. _ -> a t -> string =
       | `C_string (c_str : c_string t) ->
         begin match c_str with
         | Byte_array_to_c_string (Literal (Literal.String s))
-          when Literal.String.easy_to_escape s ->
+          when Literal.Str.easy_to_escape s ->
           argument (Filename.quote s |> check_length)
         | Byte_array_to_c_string (Literal (Literal.String s))
-          when Literal.String.impossible_to_escape_for_variable s ->
+          when Literal.Str.impossible_to_escape_for_variable s ->
           ksprintf failwith "to_shell: sorry literal %S is impossible to \
                              escape as `exec` argument" s
         | other ->
@@ -399,7 +408,8 @@ let rec to_shell: type a. _ -> a t -> string =
       (List.rev !variables) @ args
       |> String.concat ~sep:" "
       |> sprintf " { %s ; } "
-    | Raw_cmd s -> s
+      |> ir_unit
+    | Raw_cmd s -> s |> ir_unit
     | Byte_array_to_c_string ba ->
       let bac = continue ba in
       let var =  Unique_name.variable "byte_array_to_c_string" in
@@ -423,36 +433,39 @@ let rec to_shell: type a. _ -> a t -> string =
                   var));
         "fi"
       ]
-    | C_string_to_byte_array c -> continue c
+      |> ir_octostring
+    | C_string_to_byte_array c -> continue c |> ir_octostring
     | Returns {expr; value} ->
-      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
+      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value |> ir_bool
     | Bool_operator (a, op, b) ->
       sprintf "{ %s %s %s ; }"
         (continue a)
         (match op with `And -> "&&" | `Or -> "||")
         (continue b)
+      |> ir_bool
     | String_operator (a, op, b) ->
       sprintf "[ \"%s\" %s \"%s\" ]"
         (continue a)
         (match op with `Eq -> "=" | `Neq -> "!=")
         (continue b)
-    | No_op -> ":"
+      |> ir_bool
+    | No_op -> ":" |> ir_unit
     | If (c, t, e) ->
       seq [
         sprintf "if { %s ; }" (continue c);
         sprintf "then %s" (continue t);
         sprintf "else %s" (continue e);
         "fi";
-      ]
+      ] |> ir_unit
     | While {condition; body} ->
       seq [
         sprintf "while { %s ; }" (continue condition);
         sprintf "do %s" (continue body);
         "done"
-      ]
-    | Seq l -> seq (List.map l ~f:continue)
+      ] |> ir_unit
+    | Seq l -> seq (List.map l ~f:continue) |> ir_unit
     | Not t ->
-      sprintf "! { %s ; }" (continue t)
+      sprintf "! { %s ; }" (continue t) |> ir_bool
     | Redirect_output (unit_t, redirections) ->
       (*
          We're here compiling the redirections into `exec` statements which
@@ -489,6 +502,7 @@ let rec to_shell: type a. _ -> a t -> string =
             @ [ Raw_cmd ")" ]
           ))
       end
+      |> ir_unit
     | Write_output { expr; stdout; stderr; return_value } ->
       let ret_arg =
         Option.map return_value ~f:(fun v ->
@@ -507,12 +521,26 @@ let rec to_shell: type a. _ -> a t -> string =
             ~f:(fun p -> {take = Construct.int fd; redirect_to = `Path p}) in
         [make 1 stdout; make 2 stderr] |> List.filter_opt in
       continue (Redirect_output (Raw_cmd with_potential_return, redirections))
+      |> ir_unit
     | Literal lit ->
-      Literal.to_shell lit
+      let open Literal in
+      begin match lit with
+      | Int i -> sprintf "%d" i |> ir_int
+      | String s ->
+        with_buffer begin fun str ->
+          String.iter s ~f:(fun c ->
+              Char.code c |> sprintf "%03o" |> str
+            );
+        end |> fst |> ir_octostring
+      | Bool true -> ir_bool "true"
+      | Bool false -> ir_bool "false"
+      end
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
+      |> ir_octostring
     | Int_to_string i ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
+      |> ir_octostring
     | String_to_int s ->
       let var =  Unique_name.variable "string_to_int" in
       let value = sprintf "\"$%s\"" var in
@@ -524,9 +552,11 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue s |> expand_octal)
         value value value
         (die (sprintf "String_to_int: error, $%s is not an integer" var))
+      |> ir_int
     | Bool_to_string b ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
                                              (continue b))))
+      |> ir_octostring
     | String_to_bool s ->
       continue (
         If (
@@ -540,6 +570,7 @@ let rec to_shell: type a. _ -> a t -> string =
             (Fail (sprintf "String_to_bool")))
         )
       )
+      |> ir_bool
     | List l ->
       (* Lists are newline-separated internal represetations,
          prefixed by `G`. *)
@@ -552,19 +583,24 @@ let rec to_shell: type a. _ -> a t -> string =
         | one :: two :: t ->
           one :: "printf -- '\\n'" :: build (two :: t)
       in
-      (seq (build outputs))
+      (seq (build outputs)) |> ir_list
     | List_to_string (l, f) ->
       continue (Output_as_string (Raw_cmd (continue l)))
+      |> ir_octostring
     | String_to_list (s, f) ->
       continue s |> expand_octal |> sprintf "printf -- '%%s' \"$(%s)\""
+      |> ir_list
     | C_string_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      |> ir_octostring
     | Byte_array_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      |> ir_octostring
     | List_append (la, lb) ->
       seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
+      |> ir_list
     | List_iter (l, f) ->
       let variter = Unique_name.variable "list_iter_var" in
       let varlist = Unique_name.variable "list_iter_list" in
@@ -578,6 +614,7 @@ let rec to_shell: type a. _ -> a t -> string =
             Raw_cmd (sprintf "${%s#G}" variter)));
         "done";
       ]
+      |> ir_unit
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
@@ -589,6 +626,7 @@ let rec to_shell: type a. _ -> a t -> string =
         | `Mod -> "%"
         end
         (continue ib)
+      |> ir_int
     | Int_bin_comparison (ia, op, ib) ->
       sprintf "[ %s %s %s ]"
         (continue ia)
@@ -601,13 +639,15 @@ let rec to_shell: type a. _ -> a t -> string =
         | `Ne -> "-ne"
         end
         (continue ib)
+      |> ir_int
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
-    | Pipe [] -> ":"
+      |> ir_unit
+    | Pipe [] -> ":" |> ir_unit
     | Pipe l ->
-      sprintf " %s "
-        (List.map l ~f:continue |> String.concat ~sep:" | ")
+      sprintf " %s " (List.map l ~f:continue |> String.concat ~sep:" | ")
+      |> ir_unit
     | Getenv s ->
       let var = Unique_name.variable "getenv" in
       let value = sprintf "\"$%s\"" var in
@@ -623,11 +663,15 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf -- '%%s' %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
+      |> ir_octostring
     | Setenv (variable, value) ->
       sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | Fail s -> die s
+      |> ir_unit
+    | Fail s -> die s |> ir_death
+
+let to_shell options expr = to_ir options expr |> ir_to_shell
 
 (*
      POSIX does not have ["set -o pipefail"].
