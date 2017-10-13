@@ -1,3 +1,4 @@
+open Common
 
 type 'a t = 'a Language.t
 
@@ -6,9 +7,18 @@ let default_max_argument_length = Some 100_000
 
 module To_posix = struct
 
+  type internal_error_details = Language.internal_error_details =
+    {variable: string; content: string; code: string}
+  type death_message = Language.death_message =
+    | User of string
+    | C_string_failure of internal_error_details
+    | String_to_int_failure of internal_error_details
+  type death_function =
+    comment_stack: string list -> death_message -> string
+
   type compilation_error = Language.compilation_error = {
     error: [
-      | `No_fail_configured of string (* Argument of fail *)
+      | `No_fail_configured of death_message (* Argument of fail *)
       | `Max_argument_length of string (* Incriminated argument *)
       | `Not_a_c_string of string (* The actual string *)
     ];
@@ -26,12 +36,31 @@ module To_posix = struct
       | `Trap_and_kill of int * string
       | `Kill of string
     ];
+    print_failure: death_function;
   }
+
+  let failure_to_stderr : death_function = fun ~comment_stack msg ->
+    let summary s =
+      match String.sub s 0 65 with
+      | Some s -> s ^ " …"
+      | None -> s in
+    let open Format in
+    let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
+    let pp_msg fmt () =
+      fprintf fmt "%a%a"
+        (Language.pp_death_message ~big_string) msg
+        (pp_print_list
+          ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+          (fun fmt s -> fprintf fmt "@[`%s`@]" s))
+        comment_stack
+    in
+    asprintf " printf -- '%%s\\n' '%a' >&2 " pp_msg ()
 
   let one_liner = {
     style = `One_liner;
     max_argument_length = Some 100_000;
     fail_with = `Trap_and_kill (78, "USR2");
+    print_failure = failure_to_stderr;
   }
   let multi_line = {one_liner with style = `Multi_line }
   let default_options = one_liner
@@ -41,18 +70,18 @@ module To_posix = struct
       match options.style with
       | `Multi_line -> "\n"
       | `One_liner -> " ; " in
-    let {max_argument_length} = options in
+    let {max_argument_length; print_failure} = options in
     let open Language in
     match options.fail_with with
     | `Nothing ->
       to_shell {statement_separator; die_command = None; max_argument_length} term
     | `Kill signal_name ->
-      with_die_function ~statement_separator ~signal_name (fun ~die ->
+      with_die_function ~print_failure ~statement_separator ~signal_name (fun ~die ->
           to_shell {statement_separator;
                     die_command = Some die;
                     max_argument_length} term)
     | `Trap_and_kill (ret, signal) ->
-      with_die_function ~statement_separator ~signal_name:signal
+      with_die_function ~print_failure ~statement_separator ~signal_name:signal
         ~trap:(`Exit_with ret)
         (fun ~die ->
            to_shell {statement_separator;
@@ -68,11 +97,13 @@ end
 
 let to_legacy style
     ?(max_argument_length = default_max_argument_length) ?(no_trap = false) e =
-  To_posix.string e ~options:{style; max_argument_length;
+  To_posix.string e ~options:{
+    style; max_argument_length;
     fail_with = begin
-      if no_trap then `Nothing
-      else `Trap_and_kill (77, "USR1")
-    end}
+      if no_trap then `Nothing else `Trap_and_kill (77, "USR1")
+    end;
+    print_failure = To_posix.failure_to_stderr;
+  }
   |> function
   | Ok s -> s
   | Error e ->

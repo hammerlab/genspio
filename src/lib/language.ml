@@ -306,9 +306,34 @@ module Construct = struct
 
 end
 
+type internal_error_details =
+  {variable: string; content: string; code: string}
+let pp_internal_error_details ~big_string fmt {variable; content; code} =
+  let open Format in
+  fprintf fmt "@[<2>{variable:@ %a;@ content:@ %a;@ code:@ %a}@]"
+    big_string variable big_string content big_string code
+
+type death_message =
+  | User of string
+  | C_string_failure of internal_error_details
+  | String_to_int_failure of internal_error_details
+let pp_death_message ~big_string fmt =
+  let open Format in
+  function
+  | User s -> fprintf fmt "@[<2>(user@ %a)@]" big_string s
+  | C_string_failure ied ->
+    fprintf fmt "@[<2>(c-string-failure@ %a)@]"
+      (pp_internal_error_details ~big_string) ied
+  | String_to_int_failure ied ->
+    fprintf fmt "@[<2>(string-to-int-failure@ %a)@]"
+      (pp_internal_error_details ~big_string) ied
+
+type death_function =
+  comment_stack: string list -> death_message -> string
+ 
 type output_parameters = {
   statement_separator: string;
-  die_command: (string -> string) option;
+  die_command: death_function option;
   max_argument_length: int option;
 }
 type internal_representation =
@@ -335,7 +360,7 @@ let ir_to_shell =
 
 type compilation_error = {
   error: [
-    | `No_fail_configured of string (* Argument of fail *)
+    | `No_fail_configured of death_message (* Argument of fail *)
     | `Max_argument_length of string (* Incriminated argument *)
     | `Not_a_c_string of string (* The actual string *)
   ];
@@ -352,6 +377,8 @@ let pp_error fmt {code; comment_backtrace; error} =
     match String.sub s 0 70 with
     | Some s -> s ^ " …"
     | None -> s in
+  let big_string fmt s =
+    fprintf fmt "@[%s@]" (summary s) in
   fprintf fmt "@[<2>";
   fprintf fmt "Error:@ @[%a@]@ "
     (fun fmt -> function
@@ -361,9 +388,9 @@ let pp_error fmt {code; comment_backtrace; error} =
      | `Not_a_c_string s ->
        fprintf fmt "String literal is not a valid/escapable C-string:@ %S."
          (summary s)
-     | `No_fail_configured err ->
-       fprintf fmt "Call to `fail %S`@ while no “die” command is configured."
-         (summary err)
+     | `No_fail_configured msg ->
+       fprintf fmt "Call to `fail %a`@ while no “die” command is configured."
+         (pp_death_message ~big_string) msg
     )
     error;
   fprintf fmt "Code:@ @[%s@]@ "
@@ -388,8 +415,9 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
       | l -> String.concat  ~sep:params.statement_separator l in
     let die s =
       match params.die_command with
-      | Some f -> f s
-      | None -> error ~comment_backtrace:comments (`No_fail_configured s) in
+      | Some f -> f ~comment_stack:comments s
+      | None ->
+        error ~comment_backtrace:comments (`No_fail_configured s) in
     let expand_octal s =
       sprintf
         {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
@@ -472,9 +500,12 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
           {sh|if [ "$(printf -- %s | sed -e 's/\(.\{3\}\)/@\1/g' | grep @000)" = "" ]|sh}
           value_n;
         sprintf "then printf -- %s" value;
-        sprintf "else %s"
-          (die (sprintf "Byte_array_to_c_string: error, $%s is not a C string"
-                  var));
+        sprintf "else %s" (
+          die (C_string_failure {variable = var; content = bac;
+                                 code = (Format.asprintf "%a" pp ba)})
+        );
+        (* (sprintf "Byte_array_to_c_string: error, $%s is not a C string" *)
+        (*      var)); *)
         "fi"
       ]
       |> ir_octostring
@@ -588,14 +619,18 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
     | String_to_int s ->
       let var =  Unique_name.variable "string_to_int" in
       let value = sprintf "\"$%s\"" var in
+      let content = continue s |> expand_octal in
       (* We put the result of the string expression in a variable to
          evaluate it once; then we test that the result is an integer
          (i.e. ["test ... -eq ...."] parses it as an integer). *)
       sprintf " $( %s=$( %s ) ; if [ %s -eq %s ] ; then printf -- %s ; else %s ; fi ; ) "
         var
-        (continue s |> expand_octal)
+        content
         value value value
-        (die (sprintf "String_to_int: error, $%s is not an integer" var))
+        (
+          die (String_to_int_failure {variable = var; content;
+                                      code = (Format.asprintf "%a" pp s)})
+        )
       |> ir_int
     | Bool_to_string b ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
@@ -713,7 +748,7 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
       |> ir_unit
-    | Fail s -> die s |> ir_death
+    | Fail s -> die (User s) |> ir_death
     | Comment (cmt, expr) ->
       begin match continue_match ~add_comment:cmt expr with
       | Unit u ->
@@ -734,11 +769,12 @@ let to_shell options expr = to_ir [] options expr |> ir_to_shell
      ["trap"] to choose the exit status.
   *)
 let with_die_function
+    ~print_failure
     ~statement_separator ~signal_name ?(trap = `Exit_with 77) script =
   let variable_name = Unique_name.variable "genspio_trap" in
-  let die s =
-    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s %s ${%s} ; } "
-      s signal_name variable_name in
+  let die ~comment_stack s =
+    let pr = print_failure ~comment_stack s in
+    sprintf " { %s ; kill -s %s ${%s} ; } " pr signal_name variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
     begin match trap with
