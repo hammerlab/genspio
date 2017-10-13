@@ -87,29 +87,6 @@ let tmp_file ?tmp_dir name : file =
       call [string "rm"; string "-f"; path; tmp]
   end
 
-let with_failwith f =
-  let msg = tmp_file "msg" in
-  let ret = tmp_file "ret" in
-  let varname = string "tttttt" in
-  with_signal
-    ~catch:(seq [
-        call [string "printf"; string "FAILURE: %s"; to_c_string msg#get];
-        setenv varname (to_c_string ret#get);
-        msg#delete;
-        ret#delete;
-        call [string "exit"; getenv varname];
-      ])
-    (fun throw ->
-       f (fun ~message ~return ->
-           seq [
-             msg#set message;
-             ret#set (Integer.to_string return |> to_byte_array);
-          (* call [string "echo"; pid#get]; *)
-          (* call [string "ps"; pid#get]; *)
-             throw;
-             (* call [string "kill"; string "-s"; string "USR1"; pid#get] *)
-        ]))
-
 let if_seq ~t ?e c =
   match e with
   | None -> if_then c (seq t)
@@ -205,7 +182,7 @@ module Command_line = struct
                     eprintf
                       (string "ERROR option '%s' requires an argument\\n")
                       [getenv (string "1")];
-                    fail;
+                    fail "Wrong command line";
                   ]
                   ~e:[
                     setenv (string var) (getenv (string "2"));

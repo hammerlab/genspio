@@ -22,6 +22,11 @@ val byte_array : string -> byte_array t
 val int : int -> int t
 val bool : bool -> bool t
 
+(** {3 Comments} *)
+
+val comment: string -> 'a t -> 'a t
+val (%%%): string -> 'a t -> 'a t
+
 (** {3 Basic system Commands} *)
 
 val call : c_string t list -> unit t
@@ -268,55 +273,10 @@ val eprintf : c_string t -> c_string t list -> unit t
 
 (** {3 Escaping The Execution Flow } *)
 
-val fail: unit t
-(** Expression that aborts the whole script/command immediately. *)
-
-val with_signal:
-  ?signal_name:string -> catch:unit t -> (unit t -> unit t) -> unit t
-(** Use a UNIX signal (default ["USR2"]) to create a “jump.”
-
-    [with_signal ~catch (fun signal -> (* more_code *))]
-    executes [(* more_code *)] but if it uses [signal], the code behaves like
-    a raised exception, and the [catch] argument is executed.
-
-    See the example:
-
-    {[
-        let tmp = tmp_file "appender" in
-        seq [
-          tmp#set (string "start");
-          with_signal ~signal_name:"USR1" (fun signal ->
-               seq [
-                tmp#append (string "-signal");
-                signal;
-                tmp#append (string "-WRONG");
-              ])
-            ~catch:(seq [
-                tmp#append (string "-caught")
-              ]);
-          call [string "printf"; string "tmp: %s\\n"; tmp#get];
-          assert_or_fail "Timeline-of-tmp"
-            (tmp#get =$= string "start-signal-caught");
-        ]
-    ]}
-    
-    Note that by default, the compiler functions use the signal ["USR1"] and
-    having 2 calls to [trap] with the same signal in the same script
-    does not play well, so use [~signal_name:"USR1"] at your own risk.
-    
-    Moreover, for now this feature makes use of ["sh -c <>"] sub-shells; it
-    does not play well with arbitrary redirections.
-*)
-
-val with_failwith:
-  ((message:byte_array Language.t ->
-    return:int Language.t ->
-    unit Language.t) ->
-   unit Language.t) ->
-  unit Language.t
-(** [with_failwith f] uses !{tmp_file} and {!with_signal} to call [f]
-    with a function that exits the flow of execution and displays
-    [~message] and returns [~return] (a bit like {!Pervasives.failwith}). *)
+val fail: string -> unit t
+(** Expression that aborts the whole script/command immediately, it
+    will try to output its argument to [stderr] (but this may be
+    silent depending on the redirections active at a given time). *)
 
 (** {3 Temporary Files} *)
 

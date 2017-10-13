@@ -62,8 +62,18 @@ end
 module Shell_directory = struct
   type t = {
     shell: Shell.t;
+    compilation: [
+      | `Std_one_liner
+      | `Std_multi_line
+    ];
     verbose: bool;
   }
+  let name t =
+    sprintf "%s-%s"
+      (Shell.to_string t.shell)
+      (match t.compilation with
+      | `Std_multi_line -> "StdML"
+      | `Std_one_liner -> "Std1L")
 
   let unique_name =
     function
@@ -84,20 +94,30 @@ module Shell_directory = struct
          |> Digest.to_hex |> String.sub_exn ~index:0 ~length:10)
 
   let script_path test = "script" // sprintf "%s-script.sh" (unique_name test)
-  let run_test_path test = "script" // sprintf "%s-run-test.sh" (unique_name test)
+  let run_test_path test =
+    "script" // sprintf "%s-run-test.sh" (unique_name test)
+  let script_display test =
+    "script" // sprintf "%s-display.scm" (unique_name test)
 
   let success_path test = sprintf "_success/%s.txt" @@ unique_name test
   let failure_path test = sprintf "_failure/%s.txt" @@ unique_name test
   let stdout_path test = sprintf "_log/%s/stdout.txt" @@ unique_name test
   let stderr_path test = sprintf "_log/%s/stderr.txt" @@ unique_name test
 
+  let display_script t =
+    function
+    | Exits { no_trap; name; args; returns; script } ->
+      Genspio.Compile.to_string_hum script
+
   let run_test_script t =
+    let test_name = name t in
     function
     | Exits { no_trap; name; args; returns; script } as test ->
       let fill_result_file which =
         let echos = [
           sprintf "- Returns $RRR (expected: %d)." returns;
           sprintf "- Script: \\`%s\\`" (script_path test);
+          sprintf "- Pretty-printed: \\`%s\\`" (script_display test);
           sprintf "- Test-runner: \\`%s\\`" (run_test_path test);
           sprintf "- STDOUT: \\`%s\\`" (stdout_path test);
           sprintf "- STDERR: \\`%s\\`" (stderr_path test);
@@ -108,9 +128,9 @@ module Shell_directory = struct
           | `KO -> failure_path test, sprintf "- **KO**: \\`%s\\`" (unique_name test)
         in
         let lines =
-          sprintf "echo \"%s\" > %s" first_line file
+          sprintf "printf -- \"%s\\n\" > %s" first_line file
           ::
-          List.map echos ~f:(fun l -> sprintf "echo \"    %s\" >> %s" l file)
+          List.map echos ~f:(fun l -> sprintf "printf -- \"    %s\\n\" >> %s" l file)
         in
         String.concat ~sep:"\n" lines in
       sprintf "mkdir -p _success _failure %s\n\
@@ -132,14 +152,17 @@ module Shell_directory = struct
         (fill_result_file `KO)
         (if t.verbose
          then
-           sprintf "printf 'Test %s with [%s] FAILED\\n' >&2"
-             name (Shell.to_string t.shell)
+           sprintf "printf 'Test %s with [%s] FAILED\\n' >&2" name test_name
          else "")
 
-  let script_content =
+  let script_content t =
     function
     | Exits { no_trap; name; args; returns; script } ->
-      Genspio.Compile.to_many_lines ~no_trap script
+      match t.compilation with
+      | `Std_one_liner ->
+        Genspio.Compile.to_one_liner ~no_trap script
+      | `Std_multi_line ->
+        Genspio.Compile.to_many_lines ~no_trap script
 
   let make_report_path t = "script" // "make_report.sh"
   let make_report_content t testlist =
@@ -153,8 +176,12 @@ module Shell_directory = struct
       in
       seq [
         exec ["printf";
-              sprintf "* Shell: %s, total tests: %d\\n"
-                (Shell.to_string t.shell) (List.length testlist)];
+              sprintf "* Shell: %s, compilation; %s, total tests: %d\\n"
+                (Shell.to_string t.shell)
+                (match t.compilation with
+                | `Std_one_liner -> "Standard-one-liner"
+                | `Std_multi_line -> "Standard-multi-line")
+                (List.length testlist)];
         call [string "printf";
               string "    * Failures: %s.\\n";
               count_files "_failure/"];
@@ -190,8 +217,9 @@ module Shell_directory = struct
   let scripts t testlist =
     List.concat_map testlist ~f:(fun test ->
         [
-          script_path test, script_content test;
+          script_path test, script_content t test;
           run_test_path test, run_test_script t test;
+          script_display test, display_script t test;
         ])
 
   let contents t ~path testlist =
@@ -210,13 +238,14 @@ end
 
 module Test_directory = struct
   type t = {
-    shells: Shell.t list;
+    shell_tests: Shell_directory.t list;
     important_shells: string list;
     verbose: bool;
   }
 
   let help t =
-    let shell_names = List.map t.shells ~f:Shell.to_string in
+    let shell_names =
+      List.map t.shell_tests ~f:Shell_directory.name in
     let code_list l =
       List.map l ~f:(sprintf "`%s`") |> String.concat ~sep:", " in
     sprintf
@@ -224,7 +253,7 @@ module Test_directory = struct
        =============================\n\n\
        Type `make` to see this help.\n\n\
        Other targets include:\n\n\
-       * `make run-<shell-name>` where `shell-name` can be one of:\n\
+       * `make run-<shell-test>` where `shell-name` can be one of:\n\
       \  %s.\n\
        * `make run-all` to attempt to run all the tests on all the shells.\n\
        * `make report` generate the `report.md` file.\n\
@@ -236,16 +265,23 @@ module Test_directory = struct
 
   let makefile t =
     let shell_reports =
-      List.map t.shells ~f:(fun sh -> Shell.to_string sh // "report.md")
+      List.map t.shell_tests
+        ~f:(fun sh -> Shell_directory.name sh // "report.md")
       |> String.concat ~sep:" " in
-    let shell_names = List.map t.shells ~f:Shell.to_string in
+    let shell_names = List.map t.shell_tests ~f:Shell_directory.name in
     let shell_run_targets =
       List.map shell_names ~f:(sprintf "run-%s")|> String.concat ~sep:" " in
     [
-      sprintf ".PHONY: run-all all clean clean-reports report check %s\n" shell_run_targets;
+      sprintf ".PHONY: run-all all clean clean-reports report check %s\n"
+        shell_run_targets;
       sprintf "all:\n\t@cat help.md";
       sprintf "check: %s\n"
-        (List.map t.important_shells ~f:(sprintf "check-%s")
+        (List.filter_map t.shell_tests ~f:(fun sht ->
+             if List.mem
+                 ~set:t.important_shells
+                 (sht.Shell_directory.shell |> Shell.to_string)
+             then Some (sprintf "check-%s" (Shell_directory.name sht))
+             else None)
          |> String.concat ~sep:" ");
       "report: report.md";
       sprintf "report.md: %s\n\tcat %s > report.md"
@@ -256,8 +292,8 @@ module Test_directory = struct
          |> String.concat ~sep:" ; ");
       sprintf "run-all: %s" shell_run_targets;
     ]
-    @ List.concat_map t.shells ~f:(fun sh ->
-        let dir =  Shell.to_string sh in
+    @ List.concat_map t.shell_tests ~f:(fun shtest ->
+        let dir =  Shell_directory.name shtest in
         [
           sprintf "%s/report.md:\n\t@ ( cd %s ; $(MAKE) report ; )" dir dir;
           sprintf "run-%s:\n\t@ ( cd %s ; $(MAKE) ; )" dir dir;
@@ -272,9 +308,9 @@ module Test_directory = struct
       `File (path // "Makefile", makefile t);
     ]
     @
-    List.concat_map t.shells ~f:(fun shell ->
-        let comp = Shell_directory.{ shell; verbose = t.verbose } in
+    List.concat_map t.shell_tests ~f:(fun shtest ->
+        (* let comp = Shell_directory.{ shell; verbose = t.verbose } in *)
         Shell_directory.contents
-          comp ~path:(path // Shell.to_string shell) testlist)
+          shtest ~path:(path // Shell_directory.name shtest) testlist)
 
 end

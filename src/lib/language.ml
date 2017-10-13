@@ -10,20 +10,14 @@ module Literal = struct
     | String: string -> byte_array t
     | Bool: bool -> bool t
 
-  (** Compile a literal to the internal representation. *)
-  let to_shell: type a. a t -> string =
-    function
-    | Int i -> sprintf "%d" i
-    | String s ->
-      with_buffer begin fun str ->
-        String.iter s ~f:(fun c ->
-            Char.code c |> sprintf "%03o" |> str
-          );
-      end |> fst
-    | Bool true -> "true"
-    | Bool false -> "false"
+  let pp : type a. _ -> a t -> unit =
+    let open Format in
+    fun fmt -> function
+    | Int i -> fprintf fmt "@[(int@ %d)@]" i
+    | String s -> fprintf fmt "@[(string@ %S)@]" s
+    | Bool b -> fprintf fmt "@[(bool@ %b)@]" b
 
-  module String = struct
+  module Str = struct
 
     let easy_to_escape s =
       String.for_all s
@@ -66,7 +60,7 @@ and _ t =
   | Feed: byte_array t * unit t -> unit t
   | Pipe: unit t list -> unit t
   | While: {condition: bool t; body: unit t} -> unit t
-  | Fail: unit t
+  | Fail: string -> unit t
   | Int_to_string: int t -> c_string t
   | String_to_int: c_string t -> int t
   | Bool_to_string: bool t -> c_string t
@@ -86,11 +80,107 @@ and _ t =
       int t * [ `Eq | `Ne | `Gt | `Ge | `Lt | `Le ] * int t -> bool t
   | Getenv: c_string t -> c_string t (* See [man execve]. *)
   | Setenv: c_string t * c_string t -> unit t
-  | With_signal: {
-      signal_name: string;
-      catch: unit t;
-      run: unit t -> unit t;
-    } -> unit t
+  | Comment: string * 'a t -> 'a t
+
+let rec pp: type a. Format.formatter -> a t -> unit =
+  let open Format in
+  fun fmt -> function
+  | Exec l ->
+    fprintf fmt "@[<hov 2>(exec@ %a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
+  | Raw_cmd s ->
+    fprintf fmt "@[<hov 2>(raw_cmd@ %S)@]" s
+  | Bool_operator (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a (match op with `And -> "&&" | `Or -> "||") pp b
+  | String_operator (baa, op, bab) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp baa (match op with `Eq -> "=$=" | `Neq -> "<$>") pp bab
+  | Int_bin_comparison (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a
+      (match op with
+      | `Eq -> "==" | `Ne -> "!=" | `Gt -> ">" | `Ge -> "≥"
+      | `Lt -> "<" | `Le -> "≤")
+      pp b
+  | Int_bin_op (a, op, b) ->
+    fprintf fmt "@[(%a@ %s@ %a)@]"
+      pp a
+      (match op with
+      | `Plus -> "+" | `Minus -> "-" | `Mult -> "×" | `Div -> "/" | `Mod -> "%")
+      pp b
+  | Not b -> fprintf fmt "@[(!%a)@]" pp b
+  | Returns {expr; value: int} ->
+    fprintf fmt "@[(%a@ → %d)@]" pp expr value
+  | No_op -> fprintf fmt "noop"
+  | If (c, t, e) ->
+    fprintf fmt "@[<hov 2>(if@ %a@ then:  %a@ else: %a)@]" pp c pp t pp e
+  | Seq l ->
+    fprintf fmt "@[<hov 2>{%a}@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")  pp) l
+  | Literal l -> Literal.pp fmt l
+  | Output_as_string u ->
+    fprintf fmt "@[<hov 2>$(%a)@]" pp u
+  | Redirect_output (u, l) ->
+    let redirs fmt {take; redirect_to} =
+      fprintf fmt "@[(%a@ >@ %a)@]"
+        pp take
+        (fun fmt -> function
+         | `Fd f -> fprintf fmt "%a" pp f
+         | `Path f -> fprintf fmt "%a" pp f)
+        redirect_to in
+    fprintf fmt "@[(redirect@ %a@ %a)@]" pp u
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  redirs) l
+  | Write_output {expr; stdout; stderr; return_value} ->
+    let o name fmt opt =
+      match opt with
+      | None -> ()
+      | Some c -> fprintf fmt "@ @[<hov 2>(%s→ %a)@]" name pp c in
+    fprintf fmt "@[<hov 2>(write-output@ %a%a%a%a)@]" pp expr
+      (o "stdout") stdout (o "stderr") stderr (o "return-value") return_value
+  | Feed (s, u) ->
+    fprintf fmt "@[(%a@ >>@ %a)@]" pp s pp u
+  | Pipe l ->
+    fprintf fmt "@[(%a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ")  pp) l
+  | While {condition; body} ->
+    fprintf fmt "@[(while@ %a@ do@ %a)@]" pp condition pp body
+  | Fail s ->
+    fprintf fmt "@[(FAIL %S)@]" s
+  | Int_to_string i -> fprintf fmt "@[(int-to-string@ %a)@]" pp i
+  | String_to_int i -> fprintf fmt "@[(string-to-int@ %a)@]" pp i
+  | Bool_to_string b -> fprintf fmt "@[(bool-to-string@ %a)@]" pp b
+  | String_to_bool b -> fprintf fmt "@[(string-to-bool@ %a)@]" pp b
+  | List_to_string (l, f) ->
+    fprintf fmt "@[(list-to-string@ %a)@]" pp l
+  (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
+  | String_to_list (s, f) ->
+    fprintf fmt "@[(string-to-list@ %a)@]" pp s
+  | List l ->
+    fprintf fmt "@[(list@ %a)@]"
+      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
+  | C_string_concat t ->
+    fprintf fmt "@[(c-string-concat@ %a)@]" pp t
+  | Byte_array_concat t ->
+    fprintf fmt "@[(byte-array-concat@ %a)@]" pp t
+  | List_append (la, lb) ->
+    fprintf fmt "@[(list-append@ %a@ %a)@]" pp la pp lb
+  (* : byte_array t * (byte_array t -> 'a t) -> 'a list t *)
+  | List_iter (l, f) ->
+    let body = f (fun () -> Raw_cmd "VARIABLE") in
+    fprintf fmt "@[<hov 2>(list-iter@ %a@ f:@[<hov 2>(fun VARIABLE ->@ %a)@])@]"
+      pp l pp body
+  (* : 'a list t * ((unit -> 'a t) -> unit t) -> unit t *)
+  | Byte_array_to_c_string ba ->
+    fprintf fmt "@[(byte-array-to-c-string@ %a)@]" pp ba
+  | C_string_to_byte_array c ->
+    fprintf fmt "@[(c-string-to-byte-array@ %a)@]" pp c
+  | Getenv s ->
+    fprintf fmt "@[(getenv@ %a)@]" pp s
+  | Setenv (s, v) ->
+    fprintf fmt "@[(setenv@ %a@ %a)@]" pp s pp v
+  | Comment (cmt, expr) ->
+    fprintf fmt "@[(comment@ %S@ %a)@]" cmt pp expr
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
@@ -126,10 +216,10 @@ module Construct = struct
 
   let not t = Not t
 
-  let with_signal ?(signal_name = "USR2") ~catch run =
-    With_signal {signal_name; catch; run}
+  let fail s = Fail s
 
-  let fail = Fail
+  let comment s u = Comment (s, u)
+  let (%%%) s u = comment s u
 
   let make_switch: type a. (bool t * unit t) list -> default: unit t -> unit t =
     fun conds ~default ->
@@ -219,10 +309,79 @@ end
 type output_parameters = {
   statement_separator: string;
   die_command: (string -> string) option;
+  max_argument_length: int option;
 }
-let rec to_shell: type a. _ -> a t -> string =
-  fun params e ->
-    let continue e = to_shell params e in
+type internal_representation =
+  | Unit of string
+  | Octostring of string
+  | Int of string
+  | Bool of string
+  | List of string
+  | Death of string
+let ir_unit s = Unit s
+let ir_octostring s = Octostring s
+let ir_int s = Int s
+let ir_bool s = Bool s
+let ir_death s = Death s
+let ir_list s = List s
+let ir_to_shell =
+  function
+  | Unit s -> s
+  | Octostring s -> s
+  | Int s -> s
+  | Bool s -> s
+  | List s -> s
+  | Death s -> s
+
+type compilation_error = {
+  error: [
+    | `No_fail_configured of string (* Argument of fail *)
+    | `Max_argument_length of string (* Incriminated argument *)
+    | `Not_a_c_string of string (* The actual string *)
+  ];
+  code: string option;
+  comment_backtrace: string list;
+}
+exception Compilation of compilation_error
+let error ?code ~comment_backtrace error =
+  raise (Compilation {code; comment_backtrace; error})
+
+let pp_error fmt {code; comment_backtrace; error} =
+  let open Format in
+  let summary s =
+    match String.sub s 0 70 with
+    | Some s -> s ^ " …"
+    | None -> s in
+  fprintf fmt "@[<2>";
+  fprintf fmt "Error:@ @[%a@]@ "
+    (fun fmt -> function
+     | `Max_argument_length s ->
+       fprintf fmt "Comand-line argument too long:@ %d bytes,@ %S."
+         (String.length s) (summary s)
+     | `Not_a_c_string s ->
+       fprintf fmt "String literal is not a valid/escapable C-string:@ %S."
+         (summary s)
+     | `No_fail_configured err ->
+       fprintf fmt "Call to `fail %S`@ while no “die” command is configured."
+         (summary err)
+    )
+    error;
+  fprintf fmt "Code:@ @[%s@]@ "
+    (match code with | None -> "NONE" | Some c -> summary c);
+  fprintf fmt "Comment-backtrace:@ @[<2>[%a]@]@ "
+    (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
+       (fun fmt -> fprintf fmt "%S"))
+    comment_backtrace;
+  fprintf fmt "@]";
+  ()
+
+let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
+  fun comments params e ->
+    let continue_match ?add_comment e =
+      let cmts =
+        match add_comment with Some c -> c :: comments | None -> comments in
+      to_ir cmts params e in
+    let continue e = continue_match e |> ir_to_shell in
     let seq =
       function
       | [] -> ":"
@@ -230,16 +389,12 @@ let rec to_shell: type a. _ -> a t -> string =
     let die s =
       match params.die_command with
       | Some f -> f s
-      | None ->
-        ksprintf failwith
-          "Die command not set: you cannot use the `fail` construct \
-           together with the `~no_trap:true` option (error message was: %S)" s
-    in
+      | None -> error ~comment_backtrace:comments (`No_fail_configured s) in
     let expand_octal s =
       sprintf
         {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
-    let to_argument varprefix =
+    let to_argument ~error_loc varprefix =
       let argument ?declaration ?variable_name argument =
         object
           method declaration = declaration
@@ -247,21 +402,29 @@ let rec to_shell: type a. _ -> a t -> string =
           method variable_name = variable_name
           method argument = argument
         end in
+      let check_length s =
+        match params.max_argument_length with
+        | None -> s
+        | Some m when String.length s > m ->
+          error ~comment_backtrace:comments (`Max_argument_length s)
+            ~code:(Format.asprintf "%a" pp error_loc)
+        | Some _ -> s
+      in
       function
       | `C_string (c_str : c_string t) ->
         begin match c_str with
         | Byte_array_to_c_string (Literal (Literal.String s))
-          when Literal.String.easy_to_escape s ->
-          argument (Filename.quote s)
+          when Literal.Str.easy_to_escape s ->
+          argument (Filename.quote s |> check_length)
         | Byte_array_to_c_string (Literal (Literal.String s))
-          when Literal.String.impossible_to_escape_for_variable s ->
-          ksprintf failwith "to_shell: sorry literal %S is impossible to \
-                             escape as `exec` argument" s
+          when Literal.Str.impossible_to_escape_for_variable s ->
+          error ~comment_backtrace:comments (`Not_a_c_string s)
+            ~code:(Format.asprintf "%a" pp error_loc)
         | other ->
           let variable_name = Unique_name.variable varprefix in
           let declaration =
             sprintf "%s=$(%s; printf 'x')"
-              variable_name (continue other |> expand_octal)
+              variable_name (continue other |> expand_octal |> check_length)
           in
           argument ~variable_name ~declaration
             (sprintf "\"${%s%%?}\"" variable_name)
@@ -269,7 +432,8 @@ let rec to_shell: type a. _ -> a t -> string =
       | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
       | `Int other ->
         let variable_name = Unique_name.variable varprefix in
-        let declaration = sprintf "%s=%s" variable_name (continue other) in
+        let declaration =
+          sprintf "%s=%s" variable_name (continue other |> check_length) in
         argument ~variable_name ~declaration
           (sprintf "\"${%s%%?}\"" variable_name)
     in
@@ -279,7 +443,7 @@ let rec to_shell: type a. _ -> a t -> string =
       let args =
         List.mapi l ~f:(fun index v ->
             let varname = sprintf "argument_%d" index in
-            let arg = to_argument varname (`C_string v) in
+            let arg = to_argument ~error_loc:e varname (`C_string v) in
             match arg#declaration with
             | None -> arg#argument
             | Some vardef ->
@@ -288,7 +452,8 @@ let rec to_shell: type a. _ -> a t -> string =
       (List.rev !variables) @ args
       |> String.concat ~sep:" "
       |> sprintf " { %s ; } "
-    | Raw_cmd s -> s
+      |> ir_unit
+    | Raw_cmd s -> s |> ir_unit
     | Byte_array_to_c_string ba ->
       let bac = continue ba in
       let var =  Unique_name.variable "byte_array_to_c_string" in
@@ -312,36 +477,39 @@ let rec to_shell: type a. _ -> a t -> string =
                   var));
         "fi"
       ]
-    | C_string_to_byte_array c -> continue c
+      |> ir_octostring
+    | C_string_to_byte_array c -> continue c |> ir_octostring
     | Returns {expr; value} ->
-      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value
+      sprintf " { %s ; [ $? -eq %d ] ; }" (continue expr) value |> ir_bool
     | Bool_operator (a, op, b) ->
       sprintf "{ %s %s %s ; }"
         (continue a)
         (match op with `And -> "&&" | `Or -> "||")
         (continue b)
+      |> ir_bool
     | String_operator (a, op, b) ->
       sprintf "[ \"%s\" %s \"%s\" ]"
         (continue a)
         (match op with `Eq -> "=" | `Neq -> "!=")
         (continue b)
-    | No_op -> ":"
+      |> ir_bool
+    | No_op -> ":" |> ir_unit
     | If (c, t, e) ->
       seq [
         sprintf "if { %s ; }" (continue c);
         sprintf "then %s" (continue t);
         sprintf "else %s" (continue e);
         "fi";
-      ]
+      ] |> ir_unit
     | While {condition; body} ->
       seq [
         sprintf "while { %s ; }" (continue condition);
         sprintf "do %s" (continue body);
         "done"
-      ]
-    | Seq l -> seq (List.map l ~f:continue)
+      ] |> ir_unit
+    | Seq l -> seq (List.map l ~f:continue) |> ir_unit
     | Not t ->
-      sprintf "! { %s ; }" (continue t)
+      sprintf "! { %s ; }" (continue t) |> ir_bool
     | Redirect_output (unit_t, redirections) ->
       (*
          We're here compiling the redirections into `exec` statements which
@@ -350,9 +518,9 @@ let rec to_shell: type a. _ -> a t -> string =
          (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ;
       *)
       let make_redirection { take; redirect_to } =
-        let takearg = to_argument "redirection_take" (`Int take) in
+        let takearg = to_argument ~error_loc:e "redirection_take" (`Int take) in
         let retoarg =
-          to_argument "redirection_to"
+          to_argument ~error_loc:e "redirection_to"
             (match redirect_to with `Fd i -> `Int i | `Path p -> `C_string p) in
         let variables =
           takearg#export :: retoarg#export :: [] |> List.filter_opt in
@@ -378,9 +546,11 @@ let rec to_shell: type a. _ -> a t -> string =
             @ [ Raw_cmd ")" ]
           ))
       end
+      |> ir_unit
     | Write_output { expr; stdout; stderr; return_value } ->
       let ret_arg =
-        Option.map return_value ~f:(fun v -> to_argument "retval" (`C_string v))
+        Option.map return_value ~f:(fun v ->
+            to_argument ~error_loc:e "retval" (`C_string v))
       in
       let var =
         Option.((ret_arg >>= fun ra -> ra#export) |> value ~default:"") in
@@ -395,12 +565,26 @@ let rec to_shell: type a. _ -> a t -> string =
             ~f:(fun p -> {take = Construct.int fd; redirect_to = `Path p}) in
         [make 1 stdout; make 2 stderr] |> List.filter_opt in
       continue (Redirect_output (Raw_cmd with_potential_return, redirections))
+      |> ir_unit
     | Literal lit ->
-      Literal.to_shell lit
+      let open Literal in
+      begin match lit with
+      | Int i -> sprintf "%d" i |> ir_int
+      | String s ->
+        with_buffer begin fun str ->
+          String.iter s ~f:(fun c ->
+              Char.code c |> sprintf "%03o" |> str
+            );
+        end |> fst |> ir_octostring
+      | Bool true -> ir_bool "true"
+      | Bool false -> ir_bool "false"
+      end
     | Output_as_string e ->
       sprintf "\"$( { %s ; } | od -t o1 -An -v | tr -d ' \\n' )\"" (continue e)
+      |> ir_octostring
     | Int_to_string i ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
+      |> ir_octostring
     | String_to_int s ->
       let var =  Unique_name.variable "string_to_int" in
       let value = sprintf "\"$%s\"" var in
@@ -412,9 +596,11 @@ let rec to_shell: type a. _ -> a t -> string =
         (continue s |> expand_octal)
         value value value
         (die (sprintf "String_to_int: error, $%s is not an integer" var))
+      |> ir_int
     | Bool_to_string b ->
       continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
                                              (continue b))))
+      |> ir_octostring
     | String_to_bool s ->
       continue (
         If (
@@ -425,9 +611,10 @@ let rec to_shell: type a. _ -> a t -> string =
             (String_operator (C_string_to_byte_array s,
                               `Eq, Literal (Literal.String "false"))),
             (Raw_cmd "false"),
-            (Fail))
+            (Fail (sprintf "String_to_bool")))
         )
       )
+      |> ir_bool
     | List l ->
       (* Lists are newline-separated internal represetations,
          prefixed by `G`. *)
@@ -440,19 +627,24 @@ let rec to_shell: type a. _ -> a t -> string =
         | one :: two :: t ->
           one :: "printf -- '\\n'" :: build (two :: t)
       in
-      (seq (build outputs))
+      (seq (build outputs)) |> ir_list
     | List_to_string (l, f) ->
       continue (Output_as_string (Raw_cmd (continue l)))
+      |> ir_octostring
     | String_to_list (s, f) ->
       continue s |> expand_octal |> sprintf "printf -- '%%s' \"$(%s)\""
+      |> ir_list
     | C_string_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      |> ir_octostring
     | Byte_array_concat sl ->
       let outputing_list = continue sl in
       sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      |> ir_octostring
     | List_append (la, lb) ->
       seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
+      |> ir_list
     | List_iter (l, f) ->
       let variter = Unique_name.variable "list_iter_var" in
       let varlist = Unique_name.variable "list_iter_list" in
@@ -466,6 +658,7 @@ let rec to_shell: type a. _ -> a t -> string =
             Raw_cmd (sprintf "${%s#G}" variter)));
         "done";
       ]
+      |> ir_unit
     | Int_bin_op (ia, op, ib) ->
       sprintf "$(( %s %s %s ))"
         (continue ia)
@@ -477,6 +670,7 @@ let rec to_shell: type a. _ -> a t -> string =
         | `Mod -> "%"
         end
         (continue ib)
+      |> ir_int
     | Int_bin_comparison (ia, op, ib) ->
       sprintf "[ %s %s %s ]"
         (continue ia)
@@ -489,13 +683,15 @@ let rec to_shell: type a. _ -> a t -> string =
         | `Ne -> "-ne"
         end
         (continue ib)
+      |> ir_int
     | Feed (string, e) ->
       sprintf {sh|  %s | %s  |sh}
         (continue string |> expand_octal) (continue e)
-    | Pipe [] -> ":"
+      |> ir_unit
+    | Pipe [] -> ":" |> ir_unit
     | Pipe l ->
-      sprintf " %s "
-        (List.map l ~f:continue |> String.concat ~sep:" | ")
+      sprintf " %s " (List.map l ~f:continue |> String.concat ~sep:" | ")
+      |> ir_unit
     | Getenv s ->
       let var = Unique_name.variable "getenv" in
       let value = sprintf "\"$%s\"" var in
@@ -511,54 +707,43 @@ let rec to_shell: type a. _ -> a t -> string =
         sprintf "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf -- '%%s' %s\" ; } "
           var (continue s |> expand_octal) value in
       continue (Output_as_string (Raw_cmd cmd_outputs_value))
+      |> ir_octostring
     | Setenv (variable, value) ->
       sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
-    | With_signal {signal_name; catch; run} ->
-      let var = Unique_name.variable "with_signal" in
-      let value = sprintf "\"$%s\"" var in
-      continue Construct.(seq [
-          Raw_cmd (sprintf "export %s=$$" var);
-          exec ["trap"; continue catch; signal_name];
-          exec [
-            (* We need the `sh -c ...` in order to properly create a subprocess,
-               if not we break when `With_signal` are enclosed, the kill
-               command does not wake up the right process. *)
-            "sh"; "-c";
-            run (Raw_cmd (sprintf " kill -s %s %s ; kill $$ " signal_name value))
-            |> continue
-          ];
-        ])
-    | Fail -> die "EDSL.fail called"
+      |> ir_unit
+    | Fail s -> die s |> ir_death
+    | Comment (cmt, expr) ->
+      begin match continue_match ~add_comment:cmt expr with
+      | Unit u ->
+        sprintf " { %s ; %s ; }" Construct.(exec [":";  cmt] |> continue) u
+        |> ir_unit
+      | Octostring _
+      | Int _
+      | Bool _
+      | List _
+      | Death _ as d -> d
+      end
+
+let to_shell options expr = to_ir [] options expr |> ir_to_shell
 
 (*
      POSIX does not have ["set -o pipefail"].
      We implement it by killing the toplevel process with SIGUSR1, then we use
      ["trap"] to choose the exit status.
   *)
-let with_trap ~statement_separator ~exit_with script =
+let with_die_function
+    ~statement_separator ~signal_name ?(trap = `Exit_with 77) script =
   let variable_name = Unique_name.variable "genspio_trap" in
   let die s =
-    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s USR1 ${%s} ; } " s variable_name in
+    sprintf " { printf -- '%%s\\n' \"%s\" >&2 ; kill -s %s ${%s} ; } "
+      s signal_name variable_name in
   String.concat ~sep:statement_separator [
     sprintf "export %s=$$" variable_name;
-    sprintf "trap 'exit %d' USR1" exit_with;
+    begin match trap with
+    | `Exit_with ex -> sprintf "trap 'exit %d' %s" ex signal_name
+    | `None -> ": 'No Trap'"
+    end;
     script ~die;
   ]
-
-let compile ~statement_separator ?(no_trap = false) e =
-  match no_trap with
-  | false ->
-    with_trap ~statement_separator ~exit_with:77
-      (fun ~die -> to_shell {statement_separator; die_command = Some die} e)
-  | true ->
-    to_shell {statement_separator; die_command = None} e
-
-let to_one_liner ?no_trap e =
-  let statement_separator = " ; " in
-  compile ~statement_separator ?no_trap e
-
-let to_many_lines ?no_trap e =
-  let statement_separator = " \n " in
-  compile ~statement_separator ?no_trap e
