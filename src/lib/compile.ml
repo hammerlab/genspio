@@ -54,7 +54,8 @@ module To_posix = struct
           (fun fmt s -> fprintf fmt "@[`%s`@]" s))
         comment_stack
     in
-    asprintf " printf -- '%%s\\n' '%a' >&2 " pp_msg ()
+    let msg_str = Format.asprintf "%a" pp_msg () |> Filename.quote in
+    asprintf " printf -- '%%s\\n' %s >&2 " msg_str
 
   let one_liner = {
     style = `One_liner;
