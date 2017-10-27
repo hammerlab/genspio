@@ -46,15 +46,21 @@ module To_posix = struct
       | None -> s in
     let open Format in
     let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
-    let pp_msg fmt () =
-      fprintf fmt "%a%a"
-        (Language.pp_death_message ~big_string) msg
-        (pp_print_list
-          ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-          (fun fmt s -> fprintf fmt "@[`%s`@]" s))
-        comment_stack
+    let msg_str =
+      Format.asprintf "@[Error:@ @[%a@]%a@]"
+        (Language.pp_death_message ~style:`User ~big_string) msg
+        (fun fmt () ->
+           (match comment_stack with
+           | [] -> fprintf fmt ""
+           | more ->
+             fprintf fmt ";@ Comment-stack:@ @[[%a]@]"
+               (pp_print_list
+                  ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
+                  (fun fmt s -> fprintf fmt "@[`%s`@]" s))
+               more
+               )) ()
+      |> Filename.quote
     in
-    let msg_str = Format.asprintf "%a" pp_msg () |> Filename.quote in
     asprintf " printf -- '%%s\\n' %s >&2 " msg_str
 
   let one_liner = {

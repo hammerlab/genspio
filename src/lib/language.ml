@@ -82,45 +82,57 @@ and _ t =
   | Setenv: c_string t * c_string t -> unit t
   | Comment: string * 'a t -> 'a t
 
+let pp_in_expr fmt pp =
+  let open Format in
+  pp_open_box fmt 2;
+  fprintf fmt "(%a)" pp ();
+  pp_close_box fmt ();
+  ()
+let pp_fun_call fmt name pp_arg args =
+  let open Format in
+  pp_open_box fmt 2;
+  fprintf fmt "(%s@ %a)" name
+    (pp_print_list ~pp_sep:(fun fmt () -> pp_print_space fmt ())  pp_arg) args;
+  pp_close_box fmt ();
+  ()
+
 let rec pp: type a. Format.formatter -> a t -> unit =
   let open Format in
   fun fmt -> function
   | Exec l ->
-    fprintf fmt "@[<hov 2>(exec@ %a)@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
+    pp_fun_call fmt "exec" pp l
   | Raw_cmd s ->
-    fprintf fmt "@[<hov 2>(raw_cmd@ %S)@]" s
+    pp_fun_call fmt "raw-command" (fun fmt -> fprintf fmt "%S") [s]
   | Bool_operator (a, op, b) ->
-    fprintf fmt "@[(%a@ %s@ %a)@]"
-      pp a (match op with `And -> "&&" | `Or -> "||") pp b
-  | String_operator (baa, op, bab) ->
-    fprintf fmt "@[(%a@ %s@ %a)@]"
-      pp baa (match op with `Eq -> "=$=" | `Neq -> "<$>") pp bab
+    pp_fun_call fmt (match op with `And -> "and"| `Or -> "or") pp [a;b]
+  | String_operator (a, op, b) ->
+    pp_fun_call fmt (match op with `Eq -> "string-eq"| `Neq -> "string-neq") pp [a;b]
   | Int_bin_comparison (a, op, b) ->
-    fprintf fmt "@[(%a@ %s@ %a)@]"
-      pp a
-      (match op with
-      | `Eq -> "==" | `Ne -> "!=" | `Gt -> ">" | `Ge -> "≥"
-      | `Lt -> "<" | `Le -> "≤")
-      pp b
+    let sop =
+      match op with
+      | `Eq -> "int-eq" | `Ne -> "int-neq"
+      | `Gt -> "gt" | `Ge -> "ge"
+      | `Lt -> "lt" | `Le -> "le" in
+    pp_fun_call fmt sop pp [a;b]
   | Int_bin_op (a, op, b) ->
-    fprintf fmt "@[(%a@ %s@ %a)@]"
-      pp a
-      (match op with
-      | `Plus -> "+" | `Minus -> "-" | `Mult -> "×" | `Div -> "/" | `Mod -> "%")
-      pp b
-  | Not b -> fprintf fmt "@[(!%a)@]" pp b
+    let sop =
+      match op with
+      | `Plus -> "+" | `Minus -> "-" | `Mult -> "×" | `Div -> "÷" | `Mod -> "%"
+    in
+    pp_fun_call fmt sop pp [a;b]
+  | Not b -> pp_fun_call fmt "not" pp [b]
   | Returns {expr; value: int} ->
-    fprintf fmt "@[(%a@ → %d)@]" pp expr value
-  | No_op -> fprintf fmt "noop"
+    pp_fun_call fmt (sprintf "returns-{%d}" value) pp [expr]
+  | No_op -> fprintf fmt "(noop)"
   | If (c, t, e) ->
-    fprintf fmt "@[<hov 2>(if@ %a@ then:  %a@ else: %a)@]" pp c pp t pp e
+    pp_open_box fmt 1;
+    fprintf fmt "(if@ %a@ then: %a@ else: %a)" pp c pp t pp e;
+    pp_close_box fmt ();
   | Seq l ->
-    fprintf fmt "@[<hov 2>{%a}@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")  pp) l
+    pp_fun_call fmt "seq" pp l
   | Literal l -> Literal.pp fmt l
   | Output_as_string u ->
-    fprintf fmt "@[<hov 2>$(%a)@]" pp u
+    pp_fun_call fmt "as-string" pp [u]
   | Redirect_output (u, l) ->
     let redirs fmt {take; redirect_to} =
       fprintf fmt "@[(%a@ >@ %a)@]"
@@ -129,58 +141,61 @@ let rec pp: type a. Format.formatter -> a t -> unit =
          | `Fd f -> fprintf fmt "%a" pp f
          | `Path f -> fprintf fmt "%a" pp f)
         redirect_to in
-    fprintf fmt "@[(redirect@ %a@ %a)@]" pp u
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  redirs) l
+    pp_in_expr fmt (fun fmt () ->
+        fprintf fmt "redirect@ %a@ %a" pp u
+          (pp_print_list ~pp_sep:pp_print_space redirs) l
+      )
   | Write_output {expr; stdout; stderr; return_value} ->
     let o name fmt opt =
       match opt with
       | None -> ()
-      | Some c -> fprintf fmt "@ @[<hov 2>(%s→ %a)@]" name pp c in
-    fprintf fmt "@[<hov 2>(write-output@ %a%a%a%a)@]" pp expr
-      (o "stdout") stdout (o "stderr") stderr (o "return-value") return_value
+      | Some c ->
+        fprintf fmt "@ @[<hov 2>(%s → %a)@]" name pp c in
+    pp_in_expr fmt (fun fmt () ->
+        fprintf fmt "write-output@ %a%a%a%a" pp expr
+          (o "stdout") stdout
+          (o "stderr") stderr
+          (o "return-value") return_value
+      )
   | Feed (s, u) ->
-    fprintf fmt "@[(%a@ >>@ %a)@]" pp s pp u
+    pp_in_expr fmt (fun fmt () ->
+        fprintf fmt "%a@ >>@ %a" pp s pp u)
   | Pipe l ->
-    fprintf fmt "@[(%a)@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ")  pp) l
+    pp_in_expr fmt (fun fmt () ->
+        fprintf fmt "pipe:@ %a"
+          (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ")  pp) l)
   | While {condition; body} ->
-    fprintf fmt "@[(while@ %a@ do@ %a)@]" pp condition pp body
+    pp_in_expr fmt (fun fmt () ->
+        fprintf fmt "while@ %a@ do:@ %a" pp condition pp body)
   | Fail s ->
-    fprintf fmt "@[(FAIL %S)@]" s
-  | Int_to_string i -> fprintf fmt "@[(int-to-string@ %a)@]" pp i
-  | String_to_int i -> fprintf fmt "@[(string-to-int@ %a)@]" pp i
-  | Bool_to_string b -> fprintf fmt "@[(bool-to-string@ %a)@]" pp b
-  | String_to_bool b -> fprintf fmt "@[(string-to-bool@ %a)@]" pp b
+    pp_in_expr fmt (fun fmt () -> fprintf fmt "FAIL@ %S" s)
+  | Int_to_string i ->  pp_fun_call fmt "int-to-string" pp [i]
+  | String_to_int i ->  pp_fun_call fmt "string-to-int" pp [i]
+  | Bool_to_string b -> pp_fun_call fmt "bool-to-string" pp [b]
+  | String_to_bool b -> pp_fun_call fmt "string-to-bool" pp [b]
   | List_to_string (l, f) ->
-    fprintf fmt "@[(list-to-string@ %a)@]" pp l
+    pp_fun_call fmt "list-to-string" pp [l]
   (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
   | String_to_list (s, f) ->
-    fprintf fmt "@[(string-to-list@ %a)@]" pp s
-  | List l ->
-    fprintf fmt "@[(list@ %a)@]"
-      (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ ")  pp) l
-  | C_string_concat t ->
-    fprintf fmt "@[(c-string-concat@ %a)@]" pp t
-  | Byte_array_concat t ->
-    fprintf fmt "@[(byte-array-concat@ %a)@]" pp t
+    pp_fun_call fmt "string-to-list" pp [s]
+  | List l -> pp_fun_call fmt "list" pp l
+  | C_string_concat t -> pp_fun_call fmt "c-string-concat" pp [t]
+  | Byte_array_concat t -> pp_fun_call fmt "byte-array-concat" pp [t]
   | List_append (la, lb) ->
-    fprintf fmt "@[(list-append@ %a@ %a)@]" pp la pp lb
-  (* : byte_array t * (byte_array t -> 'a t) -> 'a list t *)
+    pp_fun_call fmt "list-append" pp [la; lb]
   | List_iter (l, f) ->
     let body = f (fun () -> Raw_cmd "VARIABLE") in
-    fprintf fmt "@[<hov 2>(list-iter@ %a@ f:@[<hov 2>(fun VARIABLE ->@ %a)@])@]"
-      pp l pp body
+    pp_open_box fmt 1;
+    fprintf fmt "(list-iter@ list: %a@ f: @[<hov 4>(fun VARIABLE ->@ %a)@])"
+      pp l pp body;
+    pp_close_box fmt ();
   (* : 'a list t * ((unit -> 'a t) -> unit t) -> unit t *)
-  | Byte_array_to_c_string ba ->
-    fprintf fmt "@[(byte-array-to-c-string@ %a)@]" pp ba
-  | C_string_to_byte_array c ->
-    fprintf fmt "@[(c-string-to-byte-array@ %a)@]" pp c
-  | Getenv s ->
-    fprintf fmt "@[(getenv@ %a)@]" pp s
-  | Setenv (s, v) ->
-    fprintf fmt "@[(setenv@ %a@ %a)@]" pp s pp v
+  | Byte_array_to_c_string ba -> pp_fun_call fmt "byte-array-to-c-string" pp [ba]
+  | C_string_to_byte_array c -> pp_fun_call fmt "c-string-to-byte-array" pp [c]
+  | Getenv s -> pp_fun_call fmt "getenv" pp [s]
+  | Setenv (s, v) -> pp_fun_call fmt "setenv" pp [s]
   | Comment (cmt, expr) ->
-    fprintf fmt "@[(comment@ %S@ %a)@]" cmt pp expr
+    fprintf fmt "@[<hov 1>(comment@ %S@ %a)@]" cmt pp expr
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
@@ -317,16 +332,30 @@ type death_message =
   | User of string
   | C_string_failure of internal_error_details
   | String_to_int_failure of internal_error_details
-let pp_death_message ~big_string fmt =
+let pp_death_message ?(style = `Lispy) ~big_string fmt dm =
   let open Format in
-  function
-  | User s -> fprintf fmt "@[<2>(user@ %a)@]" big_string s
-  | C_string_failure ied ->
-    fprintf fmt "@[<2>(c-string-failure@ %a)@]"
-      (pp_internal_error_details ~big_string) ied
-  | String_to_int_failure ied ->
-    fprintf fmt "@[<2>(string-to-int-failure@ %a)@]"
-      (pp_internal_error_details ~big_string) ied
+  match style with
+  | `Lispy ->
+    begin match dm with
+    | User s -> fprintf fmt "@[<hov 2>(user@ %a)@]" big_string s
+    | C_string_failure ied ->
+      fprintf fmt "@[<hov 2>(c-string-failure@ %a)@]"
+        (pp_internal_error_details ~big_string) ied
+    | String_to_int_failure ied ->
+      fprintf fmt "@[<hov 2>(string-to-int-failure@ %a)@]"
+        (pp_internal_error_details ~big_string) ied
+    end
+  | `User ->
+    begin match dm with
+    | User s -> fprintf fmt "@[<hov 2>%s@]" s
+    | C_string_failure ied ->
+      fprintf fmt "@[Byte-array cannot be converted to \
+                   a C-string:@ @[<2>%a@]@]"
+        (pp_internal_error_details ~big_string) ied
+    | String_to_int_failure ied ->
+      fprintf fmt "@[String cannot be converted to an Integer@ @[<2>%a@]@]"
+        (pp_internal_error_details ~big_string) ied
+    end
 
 type death_function =
   comment_stack: string list -> death_message -> string
@@ -379,8 +408,8 @@ let pp_error fmt {code; comment_backtrace; error} =
     | None -> s in
   let big_string fmt s =
     fprintf fmt "@[%s@]" (summary s) in
-  fprintf fmt "@[<2>";
-  fprintf fmt "Error:@ @[%a@]@ "
+  fprintf fmt "@[<hov 2>";
+  fprintf fmt "Error:@ @[%a@];@ "
     (fun fmt -> function
      | `Max_argument_length s ->
        fprintf fmt "Comand-line argument too long:@ %d bytes,@ %S."
@@ -390,12 +419,12 @@ let pp_error fmt {code; comment_backtrace; error} =
          (summary s)
      | `No_fail_configured msg ->
        fprintf fmt "Call to `fail %a`@ while no “die” command is configured."
-         (pp_death_message ~big_string) msg
+         (pp_death_message ~style:`Lispy ~big_string) msg
     )
     error;
-  fprintf fmt "Code:@ @[%s@]@ "
+  fprintf fmt "Code:@ @[%s@];@ "
     (match code with | None -> "NONE" | Some c -> summary c);
-  fprintf fmt "Comment-backtrace:@ @[<2>[%a]@]@ "
+  fprintf fmt "Comment-backtrace:@ @[[%a]@]@ "
     (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt ";@ ")
        (fun fmt -> fprintf fmt "%S"))
     comment_backtrace;
