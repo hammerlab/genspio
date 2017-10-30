@@ -14,10 +14,37 @@ val to_string_hum: 'a EDSL.t -> string
 (** Compiler from {!EDSL.t} to POSIX shell scripts. *)
 module To_posix : sig
 
+  type internal_error_details = Language.internal_error_details = {
+    variable: string; (** The incriminated issue was stored in a shell variable. *)
+    content: string; (** The shell-code that produced the [variable]. *)
+    code: string; (** Pretty-printed version of the above EDSL code. *)
+  }
+  (** When a compiled script runs into an error, these details are
+      accessible to the user.  *)
+   
+
+  type death_message = Language.death_message =
+    | User of string
+    (** The argument of the {!EDSL.fail} is the “user” case. *)
+    | C_string_failure of internal_error_details
+    (** The checking that a byte-array {i is} a C-String can fail when
+        the byte-array contains ['\x00']. *)
+    | String_to_int_failure of internal_error_details
+    (** {!string_to_int} can obviously fail.*)
+  (** The kinds of messages that can be output or stored before
+      exiting a script. *)
+
+  type death_function =
+    comment_stack: string list -> death_message -> string
+  (** When failing (either with {!EDSL.fail} or because of internal
+      reasons) the compiler uses a customizable function to output the “error”
+      message and then quiting the process. *)
+
   type compilation_error = Language.compilation_error = {
 
     error: [
-      | `No_fail_configured of string (** Argument of fail. *)
+      | `No_fail_configured of death_message (** Argument of the
+                                                 {!death_function}. *)
       | `Max_argument_length of string (** Incriminated argument. *)
       | `Not_a_c_string of string (** The actual problematic string. *)
     ];
@@ -69,8 +96,18 @@ module To_posix : sig
           [signal_name] {b and} the signal will be caught with the
           POSIX ["trap"] command in order to exit with [exit_status].
     *)
+
+    print_failure: death_function;
+    (** How to deal with the {!death_message} in case of failure.
+        The function should return a shell command, like the result of
+        compiling a [unit EDSL.t] expression or what {!Sys.command}
+        can work with. *)
   }
   (** Configuration of the compilation to POSIX shell scripts. *)
+
+
+  val failure_to_stderr : death_function
+  (** The default {!death_function} just prints to [stderr]. *)
 
   val one_liner : parameters
   (** The default parameters for one-liners: {[
@@ -78,6 +115,7 @@ module To_posix : sig
           style = `One_liner;
           max_argument_length = Some 100_000;
           fail_with = `Trap_and_kill (78, "USR2");
+          print_failure = failure_to_stderr;
         }]} *)
 
   val multi_line : parameters

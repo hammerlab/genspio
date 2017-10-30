@@ -40,10 +40,6 @@ You need OCaml ≥ 4.03.0 together with
 Getting Started
 ---------------
 
-The idea is to build values of type `Genspio.EDSL.t` (through the combinators in
-the [`Genspio.EDSL`](src/lib/EDSL.mli) module), and compile them with
-functions from [`Genspio.Compile`](src/lib/compile.mli).
-
 Here is a quick example:
 
 ```ocaml

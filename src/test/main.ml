@@ -1033,7 +1033,8 @@ let compilation_error_tests () =
                                "cmt2" %%% fail "failure"])
     begin function
     | Error {
-        Genspio.Compile.To_posix.error = `No_fail_configured "failure";
+        Genspio.Compile.To_posix.
+        error = `No_fail_configured (User "failure");
         code = None;
         comment_backtrace = ["cmt2"; "comment 0"]
       } -> true
