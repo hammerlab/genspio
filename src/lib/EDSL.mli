@@ -25,7 +25,11 @@ val bool : bool -> bool t
 (** {3 Comments} *)
 
 val comment: string -> 'a t -> 'a t
+(** Add a “comment” string to an expression (will be displayed in
+    error messages happening inside the expression). *)
+
 val (%%%): string -> 'a t -> 'a t
+(** ["Some comment" %%% expr] is an alias for [comment "Some comment" expr]. *)
 
 (** {3 Basic system Commands} *)
 

@@ -119,7 +119,7 @@ let files = [
       ~libraries:("genspio" :: "tests" :: main_libs);
   ];
   file "src/examples/jbuild" @@ jbuild [
-    executable ~name:"main" ~libraries:("genspio" :: main_libs);
+    executable ~name:"downloader" ~libraries:("genspio" :: main_libs);
   ];
   repo_file "genspio.opam" Opam.(make "genspio" ~deps:main_libs);
 ]
