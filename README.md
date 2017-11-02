@@ -80,10 +80,12 @@ Username matches: `smondet`
 - : int = 0
 ```
 
+**More examples:**
 
-See `src/test/examples.ml` for a (much) bigger example, and 
-[`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) for real-world,
-larger-scale use.
+- The file  `src/examples/downloader.ml` contains a (much) bigger example.
+- The project 
+  [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
+  larger-scale use of Genspio (for now using version 0.0.1).
 
 
 Testing
