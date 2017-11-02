@@ -61,13 +61,13 @@ opam install genspio
 export OCAMLPARAM='warn-error=Ad-58,_'
 
 genspio_test=_build/default/src/test/main.exe
-genspio_examples=_build/default/src/examples/main.exe
+genspio_downloader_maker=_build/default/src/examples/downloader.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.ml configure
 jbuilder build @install
 jbuilder build $genspio_test
-jbuilder build $genspio_examples
+jbuilder build $genspio_downloader_maker
 
 echo "================== TESTS ======================================================="
 
@@ -92,7 +92,7 @@ $genspio_test --important-shells $important_shells _test/
 
 echo "================== EXAMPLES: TEST 1 ============================================"
 genspio_downloader=/tmp/genspio-downloader
-$genspio_examples dl $genspio_downloader
+$genspio_downloader_maker make $genspio_downloader
 
 dash $genspio_downloader -h
 
