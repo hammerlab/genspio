@@ -62,12 +62,14 @@ export OCAMLPARAM='warn-error=Ad-58,_'
 
 genspio_test=_build/default/src/test/main.exe
 genspio_downloader_maker=_build/default/src/examples/downloader.exe
+genspio_small_examples=_build/default/src/examples/small_examples.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.ml configure
 jbuilder build @install
 jbuilder build $genspio_test
 jbuilder build $genspio_downloader_maker
+jbuilder build $genspio_small_examples
 
 echo "================== TESTS ======================================================="
 
@@ -115,6 +117,8 @@ dash $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3
 ls -la /tmp/test3
 test -f /tmp/test3/ketrew-ketrew.3.0.0/README.md
 
+echo "================== EXAMPLES: SMALL ONES ============================================"
 
+$genspio_small_examples
 
 

@@ -24,9 +24,10 @@ let jbuild l = [
   "(jbuild_version 1)";
 ] @ l
 
-let executable ~name ~libraries =
-  str "(executable ((name %s) (libraries (%s))))"
+let executable ?(single_module = false) ~libraries name =
+  str "(executable ((name %s) (libraries (%s))%s))"
     name (String.concat libraries ~sep:" ")
+    (if single_module then sprintf "(modules %s)" name else "")
 
 let rule ~targets ?(deps = []) actions =
     str "(rule (\
@@ -115,11 +116,17 @@ let files = [
     lib "tests" ~deps:("genspio" :: main_libs) ~internal:true;
   ];
   file "src/test/jbuild" @@ jbuild [
-    executable ~name:"main"
+    executable "main"
       ~libraries:("genspio" :: "tests" :: main_libs);
   ];
   file "src/examples/jbuild" @@ jbuild [
-    executable ~name:"downloader" ~libraries:("genspio" :: main_libs);
+    executable ~single_module:true "downloader" ~libraries:("genspio" :: main_libs);
+    executable ~single_module:true "small" ~libraries:("genspio" :: main_libs);
+    rule ~targets:["small_examples.ml"] ~deps:["small.exe"] [
+      sprintf "(run ./small.exe small_examples.ml)";
+    ];
+    executable ~single_module:true "small_examples"
+      ~libraries:("genspio" :: "tests" :: main_libs);
   ];
   repo_file "genspio.opam" Opam.(make "genspio" ~deps:main_libs);
 ]

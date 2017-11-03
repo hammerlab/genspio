@@ -82,7 +82,12 @@ Username matches: `smondet`
 
 **More examples:**
 
-- The file  `src/examples/downloader.ml` contains a (much) bigger example.
+- See the file 
+  [`src/examples/small.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/small.ml)
+  which generates a useful list of usage examples.
+- The file 
+  [`src/examples/downloader.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/downloader.ml)
+  contains a (much) bigger example.
 - The project 
   [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
   larger-scale use of Genspio (for now using version 0.0.1).
