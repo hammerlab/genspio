@@ -47,7 +47,10 @@ let () =
 Genspio.EDSL.(
   "This is a very simple comment" %%% seq [
     exec ["ls"; "-la"];
-    fail "asserting False ☺";
+    "This comment provides a more precise pseudo-location" %%% seq [
+       (* Here we use the `fail` EDSL facility: *)
+       fail "asserting False ☺";
+    ];
   ]
 )
 |ocaml}
@@ -56,7 +59,9 @@ let () =
   example "Call a command with C-Strings"
     ~show:"[`Stdout; `Pretty_printed]"
     "The `call` construct is a more general version of `exec` that can take \
-     any EDSL string."
+     any EDSL string. As with `exec` the string will be checked for C-String \
+     compatibilty, hence the calls to `byte-array-to-c-string` in the \
+     pretty-printed output."
 {ocaml|
 Genspio.EDSL.(
   call [
@@ -77,6 +82,66 @@ Genspio.EDSL.(
   ]
 )
 |ocaml}
+
+let () =
+  example "Playing with the output of a command"
+    ~show:"[`Pretty_printed; `Stdout]"
+{md|Here we use the constructs:
+
+```ocaml
+val output_as_string : unit t -> byte_array t
+val to_c_string: byte_array t -> c_string t
+val (||>) : unit t -> unit t -> unit t
+```
+
+We use `let (s : …) = …` to show the types; we see then that we need to “cast”
+the output to a C-String with `to_c_string` in order to pass it to `call`.
+Indeed, commands can output arbitrary byte-arrays but Unix commands
+only accept `NUL`-terminated strings.
+
+We then “pipe” the output to another `exec` call with `||>` (which is
+a 2-argument shortcut for `EDSL.pipe`).
+|md}
+{ocaml|
+Genspio.EDSL.(
+  let (s : byte_array t) = output_as_string (exec ["cat"; "README.md"]) in
+  call [string "printf"; string "%s"; to_c_string s] ||> exec ["wc"; "-l"];
+)
+|ocaml}
+
+let () =
+  example "Feeding a string to a command's stdin" ~show:"[`Pretty_printed; `Stdout]"
+    "The operator `>>` puts any byte-array into the `stdin` of any `unit t` \
+     expression."
+{ocaml|
+Genspio.EDSL.(
+  (* Let's see wether `wc -l` is fine with a NUL in the middle of a “line:” *)
+  byte_array "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
+)
+|ocaml}
+
+let () =
+  example "Comparing byte-arrays, using conditionals" ~show:"[`Pretty_printed; `Stdout]"
+    "We show that `byte-array >> cat` is not changing anything and we try \
+     `if_seq`; a version of `EDSL.if_then_else` more practical for \
+     sequences/imperative code."
+{ocaml|
+Genspio.EDSL.(
+    (* With a 🐱: *)
+  let original = byte_array "one\ntwo\nth\000ree\n" in
+  let full_cycle = original >> exec ["cat"] |> output_as_string in
+  if_seq
+    Byte_array.(full_cycle =$= original)
+    ~t:[
+      exec ["echo"; "They are the same"];
+    ]
+    ~e:[
+      exec ["echo"; "They are NOT the same"];
+    ]
+)
+|ocaml}
+  
+
 
 let () =
   let o = open_out Sys.argv.(1) in

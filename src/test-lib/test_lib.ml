@@ -366,14 +366,14 @@ module Example = struct
           ff fmt "Compiled to POSIX (%d bytes):@\n@\n" (String.length script);
           md_code_block "shell" script;
         end;
-        ff fmt "@[<hov 2>Running@ ";
+        ff fmt "@[<hov 2>Running@ *it*@ ";
         begin match result with
         | 0 -> ff fmt "**succeeds**."
         | other -> ff fmt "**fails**;@ returns %d." other
         end;
         ff fmt "@]@\n@\n";
-        if_show `Stdout begin fun () -> show_file "Standard output:" out end;
-        if_show `Stderr begin fun () -> show_file "Standard error:" err end;
+        if_show `Stdout begin fun () -> show_file "Standard output" out end;
+        if_show `Stderr begin fun () -> show_file "Standard error" err end;
       | Error e ->
         ff fmt "Compilation **fails** with:@\n@\n";
         md_code_block "" 
