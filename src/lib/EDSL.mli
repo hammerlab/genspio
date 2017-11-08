@@ -288,6 +288,7 @@ type file = <
   get : byte_array t;
   get_c : c_string t;
   set : byte_array t -> unit t;
+  set_c : c_string t -> unit t;
   append : byte_array t -> unit t;
   delete: unit t;
   path: c_string t;
