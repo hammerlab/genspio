@@ -221,27 +221,9 @@ val with_redirections:
    Run a [unit t] expression after applying a list of file-descriptor
    redirections.
 
-   The redirections are applied in the list's order.
-   
-   Cf. the example:
-   {[
-       with_redirections (exec ["printf"; "%s"; "hello"]) [
-         to_file (int 3) (string "/path/to/one");
-         to_file (int 3) (string "/path/to/two");
-         to_fd (int 2) (int 3);
-         to_fd (int 1) (int 2);
-       ];
-   ]}
-   
-   ["printf '%s' 'hello'"] will output to the file ["/path/to/two"],
-   because redirections are set in that order:
-
-   - file-descriptor [3] is set to output to ["/path/to/one"],
-   - file-descriptor [3] is set to output to ["/path/to/two"]
-     (overriding the previous redirection),
-   - file-descriptor [2] is redirected to file-descriptor [3],
-   - file-descriptor [1] is redirected to file-descriptor [2],
-   - then, ["printf"] outputs to [1].
+   The redirections are applied in the list's order (which means they
+   can be more easily {i followed} in reverse order), see the
+   “Arbitrary Redirections” example.
 
    Invalid cases, like redirecting to a file-descriptor has not been
    opened, lead to undefined behavior; see

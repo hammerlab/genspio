@@ -165,6 +165,36 @@ Genspio.EDSL.(
 )
 |ocaml}
 
+let () =
+  example "Arbitrary Redirections" ~show:"[`Pretty_printed; `Stdout]"
+    {md|The function `EDSL.with_redirections` follows POSIX's `exec`
+[semantics](http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#exec).
+
+The `printf` call will output to the file `/tmp/genspio-two` because
+redirections are set in that order:
+
+- file-descriptor `3` is set to output to `/tmp/genspio-one`,
+- file-descriptor `3` is *then* set to output to `/tmp/genspio-two`
+  (overriding the previous redirection),
+- file-descriptor `2` is redirected to file-descriptor `3`,
+- file-descriptor `1` is redirected to file-descriptor `2`,
+- then, `printf` outputs to `1`.
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  seq [
+    with_redirections (exec ["printf"; "%s"; "hello"]) [
+      to_file (int 3) (string "/tmp/genspio-one");
+      to_file (int 3) (string "/tmp/genspio-two");
+      to_fd (int 2) (int 3);
+      to_fd (int 1) (int 2);
+    ];
+    call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
+          exec ["cat"; "/tmp/genspio-one"] |> output_as_string |> to_c_string;
+          exec ["cat"; "/tmp/genspio-two"] |> output_as_string |> to_c_string];
+  ]
+)
+|ocaml}
 
 let () =
   let o = open_out Sys.argv.(1) in
