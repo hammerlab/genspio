@@ -300,9 +300,9 @@ val tmp_file: ?tmp_dir: c_string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values).
     
-    [tmp_file (string "foo")] points to a path that is a {b function}
+    [tmp_file "foo"] points to a path that is a {b function}
     of the string ["foo"]; it does not try to make temporary-files
-    unique, on the contrary two calls to [tmp_file (string "foo")] ensure that
+    unique, on the contrary: two calls to [tmp_file "foo"] ensure that
     it is the same file.
  *)
 
