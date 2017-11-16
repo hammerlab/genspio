@@ -96,7 +96,8 @@ Username matches: `smondet`
 Testing
 -------
 
-To run the tests you also need `make`, see:
+To run the tests you also need `make` and there is an additional dependency on
+the `uri` library, see:
 
     genspio_test=_build/default/src/test/main.exe
     jbuilder build $genspio_test

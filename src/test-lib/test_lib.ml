@@ -334,8 +334,13 @@ module Example = struct
       let md_code_block lang code =
         ff fmt "```%s@\n%s@\n```@\n@\n" lang (String.strip code) in
       let if_show s f = if List.mem s show then f () else () in
-      ff fmt "@\n%s@\n%s@\n@\n%s@\n@\n"
-        name (String.map name ~f:(fun _ -> '-')) description;
+      let try_url =
+        sprintf "https://smondet.gitlab.io/genspio-web-demo/genspio-master/\
+                 index.html?input=%s"
+         (Uri.pct_encode ocaml_code)
+      in
+      ff fmt "@\n%s@\n%s@\n@\n%s@ [[Try-Online](%s)]@\n@\n"
+        name (String.map name ~f:(fun _ -> '-')) description try_url;
       md_code_block "ocaml" ocaml_code;
       (* ff fmt "```ocaml@\n%s@\n```@\n@\n" (String.strip ocaml_code); *)
       if_show `Pretty_printed begin fun () ->

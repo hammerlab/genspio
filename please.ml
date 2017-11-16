@@ -113,7 +113,7 @@ let files = [
     lib "genspio" ~deps:main_libs;
   ];
   file "src/test-lib/jbuild" @@  jbuild [
-    lib "tests" ~deps:("genspio" :: main_libs) ~internal:true;
+    lib "tests" ~deps:("genspio" :: "uri" :: main_libs) ~internal:true;
   ];
   file "src/test/jbuild" @@ jbuild [
     executable "main"
