@@ -55,6 +55,9 @@ eval `opam config env`
 
 opam update
 
+# Extra dependency for the tests:
+opam install --yes uri
+
 opam pin add genspio .
 opam install genspio
 
@@ -67,6 +70,7 @@ genspio_small_examples=_build/default/src/examples/small_examples.exe
 echo "================== BUILD ALL ==================================================="
 ocaml please.ml configure
 jbuilder build @install
+
 jbuilder build $genspio_test
 jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
