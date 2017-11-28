@@ -204,7 +204,7 @@ let downloader () =
 
 let () =
   match Sys.argv |> Array.to_list |> List.tl_exn with
-  | "dl" :: path :: [] ->
+  | "make" :: path :: [] ->
     let script = Genspio.Compile.to_many_lines (downloader ()) in
     let content =
       sprintf
@@ -220,6 +220,6 @@ let () =
     eprintf "Wrong command line: [%s]\n"
       (List.map ~f:(sprintf "%S") other |> String.concat ~sep:"; ");
     eprintf "Usage:\n\
-             %s dl <path>\n\
+             %s make <path>\n\
             \   Create the downloader script.\n%!" Sys.argv.(0);
     exit 1

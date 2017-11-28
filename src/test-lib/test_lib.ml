@@ -314,3 +314,76 @@ module Test_directory = struct
           shtest ~path:(path // Shell_directory.name shtest) testlist)
 
 end
+
+module Example = struct
+  type t =
+      EDSL: {
+        name : string;
+        description: string;
+        code : 'a Genspio.EDSL.t;
+        ocaml_code: string;
+        show: [ `Stdout | `Stderr | `Pretty_printed | `Compiled ] list;
+      } -> t
+  let make ?(show = [`Pretty_printed]) ~ocaml name description code =
+    EDSL {name; description; code; show; ocaml_code = ocaml}
+
+  let run fmt =
+    let ff = Format.fprintf in
+    function
+    | EDSL {code; description; ocaml_code; name; show} ->
+      let md_code_block lang code =
+        ff fmt "```%s@\n%s@\n```@\n@\n" lang (String.strip code) in
+      let if_show s f = if List.mem s show then f () else () in
+      let try_url =
+        sprintf "https://smondet.gitlab.io/genspio-web-demo/genspio-master/\
+                 index.html?input=%s"
+         (Uri.pct_encode ocaml_code)
+      in
+      ff fmt "@\n%s@\n%s@\n@\n%s@ [[Try-Online](%s)]@\n@\n"
+        name (String.map name ~f:(fun _ -> '-')) description try_url;
+      md_code_block "ocaml" ocaml_code;
+      (* ff fmt "```ocaml@\n%s@\n```@\n@\n" (String.strip ocaml_code); *)
+      if_show `Pretty_printed begin fun () ->
+        ff fmt "Pretty-printed:@\n@\n";
+        md_code_block "scheme" (Genspio.Compile.to_string_hum code);
+      end;
+      begin match Genspio.Compile.To_posix.(string ~options:multi_line) code with
+      | Ok script ->
+        let tmp = Filename.temp_file "genspio-example" ".sh" in
+        let o = open_out tmp in
+        Printf.fprintf o "\n%s\n" script;
+        close_out o;
+        (* ff fmt "@[<hov 2>* Compiled:@ `%s`@ (%d bytes)@]@\n" tmp (String.length script); *)
+        let out = Filename.temp_file "genspio-example" ".out" in
+        let err = Filename.temp_file "genspio-example" ".err" in
+        let result = Sys.command (sprintf "bash %s > %s 2> %s" tmp out err) in
+        (* ff fmt "    *@[<hov 2> Std-OUT:@ `%s`@]@\n" out; *)
+        (* ff fmt "    *@[<hov 2> Std-ERR:@ `%s`@]@\n" err; *)
+        let show_file name path =
+          ff fmt "@\n%s:@\n@\n```@\n" name;
+          let i = open_in path in
+          let rec loop () =
+            try ff fmt "%c" @@ input_char i; loop ()
+            with _ -> () in
+          loop ();
+          ff fmt "@\n```@\n@\n" in
+        if_show `Compiled begin fun () ->
+          ff fmt "Compiled to POSIX (%d bytes):@\n@\n" (String.length script);
+          md_code_block "shell" script;
+        end;
+        ff fmt "@[<hov 2>Running@ *it*@ ";
+        begin match result with
+        | 0 -> ff fmt "**succeeds**."
+        | other -> ff fmt "**fails**;@ returns %d." other
+        end;
+        ff fmt "@]@\n@\n";
+        if_show `Stdout begin fun () -> show_file "Standard output" out end;
+        if_show `Stderr begin fun () -> show_file "Standard error" err end;
+      | Error e ->
+        ff fmt "Compilation **fails** with:@\n@\n";
+        md_code_block "" 
+          (Genspio.Compile.To_posix.error_to_string e)
+      end;
+      ff fmt "%!"
+
+end

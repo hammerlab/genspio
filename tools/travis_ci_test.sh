@@ -55,19 +55,25 @@ eval `opam config env`
 
 opam update
 
+# Extra dependency for the tests:
+opam install --yes uri
+
 opam pin add genspio .
 opam install genspio
 
 export OCAMLPARAM='warn-error=Ad-58,_'
 
 genspio_test=_build/default/src/test/main.exe
-genspio_examples=_build/default/src/examples/main.exe
+genspio_downloader_maker=_build/default/src/examples/downloader.exe
+genspio_small_examples=_build/default/src/examples/small_examples.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.ml configure
 jbuilder build @install
+
 jbuilder build $genspio_test
-jbuilder build $genspio_examples
+jbuilder build $genspio_downloader_maker
+jbuilder build $genspio_small_examples
 
 echo "================== TESTS ======================================================="
 
@@ -92,7 +98,7 @@ $genspio_test --important-shells $important_shells _test/
 
 echo "================== EXAMPLES: TEST 1 ============================================"
 genspio_downloader=/tmp/genspio-downloader
-$genspio_examples dl $genspio_downloader
+$genspio_downloader_maker make $genspio_downloader
 
 dash $genspio_downloader -h
 
@@ -109,12 +115,16 @@ test -f /tmp/genstest2/src/lib/EDSL.ml
 
 echo "================== EXAMPLES: TEST 3 ============================================"
 # like -t /tmp/test2, without -c (which is fragile w.r.t. tar)
-mkdir -p /tmp/test3
-cd /tmp/test3
-dash $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
-ls -la /tmp/test3
-test -f /tmp/test3/ketrew-ketrew.3.0.0/README.md
+(
+    mkdir -p /tmp/test3
+    cd /tmp/test3
+    dash $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
+    ls -la /tmp/test3
+    test -f /tmp/test3/ketrew-ketrew.3.0.0/README.md
+)
 
+echo "================== EXAMPLES: SMALL ONES ============================================"
 
+$genspio_small_examples
 
 

@@ -32,6 +32,7 @@ type file = <
   get : byte_array t;
   get_c : c_string t;
   set : byte_array t -> unit t;
+  set_c : c_string t -> unit t;
   append : byte_array t -> unit t;
   delete: unit t;
   path: c_string t;
@@ -75,6 +76,7 @@ let tmp_file ?tmp_dir name : file =
         v >> exec ["cat"] |> write_output ~stdout:tmp;
         call [string "mv"; string "-f"; tmp; path];
       ]
+    method set_c c = self#set (to_byte_array c)
     method append v =
       seq [
         seq [
