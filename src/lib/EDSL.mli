@@ -130,17 +130,21 @@ module Integer : sig
   val ( > ) : int t -> int t -> bool t
 end
 
-(** {3 Lists} *)
+(** {3 EDSL Lists} *)
 
-val list: 'a t list -> 'a list t
+module Elist : sig
 
-val list_append: 'a list t -> 'a list t -> 'a list t
+  val make: 'a t list -> 'a list t
 
-val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+  val append: 'a list t -> 'a list t -> 'a list t
 
-val list_to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
+  val iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
 
-val list_of_string: byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
+  val to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
+
+  val of_string: byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
+
+end
 
 (** {3 String Manipulation} *)
 

@@ -23,10 +23,10 @@ let switch l =
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 let string_concat sl =
-  string_concat_list (list sl)
+  string_concat_list (Elist.make sl)
 
-let string_list_to_string l = list_to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
-let string_list_of_string s = list_of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
+let string_list_to_string l = Elist.to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
+let string_list_of_string s = Elist.of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
 
 type file = <
   get : byte_array t;
@@ -224,9 +224,9 @@ module Command_line = struct
       let body =
         let append_anon_arg_to_list =
           setenv anonarg_var (
-            list_append
+            Elist.append
               (string_list_of_string (getenv anonarg_var))
-              (list [getenv (string "1")])
+              (Elist.make [getenv (string "1")])
             |> string_list_to_string
           ) in
         let help_case =
@@ -268,7 +268,7 @@ module Command_line = struct
     in
     seq [
       setenv help_flag_var (Bool.to_string (bool false));
-      setenv anonarg_var (string_list_to_string (list []));
+      setenv anonarg_var (string_list_to_string (Elist.make []));
       seq (List.rev !inits);
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))

@@ -270,17 +270,17 @@ module Construct = struct
 
   let loop_while condition ~body = While {condition; body}
 
-  let list l = List l
+  module Elist = struct
+    let make l = List l
+    let append la lb = List_append (la, lb)
+    let iter l ~f = List_iter (l, f)
+    let to_string l ~f = List_to_string (l, f)
+    let of_string l ~f = String_to_list (l, f)
+  end
 
   let string_concat_list l = C_string_concat l
   let byte_array_concat_list l = Byte_array_concat l
 
-  let list_append la lb = List_append (la, lb)
-
-  let list_iter l ~f = List_iter (l, f)
-
-  let list_to_string l ~f = List_to_string (l, f)
-  let list_of_string l ~f = String_to_list (l, f)
 
   module Bool = struct
     let of_string s = String_to_bool s

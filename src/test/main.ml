@@ -795,31 +795,31 @@ let () = add_tests @@ List.concat [
 let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
     seq [
       assert_or_fail "test1" C_string.(
-        (string_concat_list (list [string "one"; string "two"; string "three"]))
+        (string_concat_list (Elist.make [string "one"; string "two"; string "three"]))
         =$= string "onetwothree"
       );
       assert_or_fail "test2" C_string.(
-        (string_concat_list (list [string "one"; string "two"]))
+        (string_concat_list (Elist.make [string "one"; string "two"]))
         =$= string "onetwo"
       );
       assert_or_fail "test3" C_string.(
-        (string_concat_list (list [string "one"]))
+        (string_concat_list (Elist.make [string "one"]))
         =$= string "one"
       );
       assert_or_fail "test4" C_string.(
-        (string_concat_list (list []))
+        (string_concat_list (Elist.make []))
         =$= string ""
       );
       assert_or_fail "test5" C_string.(
-        (string_concat_list (list [string ""]))
+        (string_concat_list (Elist.make [string ""]))
         =$= string ""
       );
       assert_or_fail "test6" C_string.(
-        (string_concat_list (list [string "one"; string ""; string "three"]))
+        (string_concat_list (Elist.make [string "one"; string ""; string "three"]))
         =$= string "onethree"
       );
       assert_or_fail "test7" C_string.(
-        (string_concat_list (list [string "one"; string ""; string ""]))
+        (string_concat_list (Elist.make [string "one"; string ""; string ""]))
         =$= string "one"
       );
       return 5
@@ -830,9 +830,9 @@ let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
 
 let () = add_tests @@ exits 5 ~name:"list-append" Genspio.EDSL.(
     let make_string_concat_test name la lb =
-      let slist l = List.map l ~f:string |> list in
+      let slist l = List.map l ~f:string |> Elist.make in
       assert_or_fail name C_string.(
-        string_concat_list (list_append (slist la) (slist lb))
+        string_concat_list (Elist.append (slist la) (slist lb))
         =$=
         string (la @ lb |> String.concat ~sep:"")
       );
@@ -869,17 +869,17 @@ let () = add_tests @@ begin
       let name =
         sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
       exits 5 ~name Genspio.EDSL.(
-          let slist = List.map l ~f:byte_array |> list in
+          let slist = List.map l ~f:byte_array |> Elist.make in
           let tmp = ksprintf tmp_file "listitertest%d" i in
           let tmp2 = ksprintf tmp_file "listserializationtest%d" i in
           seq [
             tmp#set (byte_array "");
             (* We serialize the list to `tmp2`: *)
-            tmp2#set (list_to_string slist (fun e -> e));
+            tmp2#set (Elist.to_string slist (fun e -> e));
             (* We get back the serialized list from `tmp2`: *)
-            tmp2#get |> list_of_string ~f:(fun e -> e)
-            |> list_iter ~f:(fun v ->
-                (* list_iter slist ~f:(fun v -> *)
+            tmp2#get |> Elist.of_string ~f:(fun e -> e)
+            |> Elist.iter ~f:(fun v ->
+                (* Elist.iter slist ~f:(fun v -> *)
                 seq [
                   eprintf (string "Concatenating: '%s'\\n") [v () |> to_c_string];
                   tmp#set (string_concat [tmp#get_c; string ":"; v () |> to_c_string]
@@ -916,17 +916,17 @@ let () = add_tests @@ begin
         sprintf "list-iter-ints-%d-%s" i
           (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
       exits 5 ~name Genspio.EDSL.(
-          let ilist = List.map l ~f:int |> list in
+          let ilist = List.map l ~f:int |> Elist.make in
           let tmp = tmp_file "listitertest" in
           let tmp2 = tmp_file "listserializationtest" in
           (* Checking that implementing `fold` with `iter` does the `fold`: *)
           seq [
             (* We serialize the list to `tmp2`: *)
-            tmp2#set @@ list_to_string ilist Integer.to_byte_array;
+            tmp2#set @@ Elist.to_string ilist Integer.to_byte_array;
             tmp#set (int 0 |> Integer.to_byte_array);
             (* We get back the serialized list from `tmp2`: *)
-            tmp2#get |> list_of_string ~f:Integer.of_byte_array
-            |> list_iter ~f:(fun v ->
+            tmp2#get |> Elist.of_string ~f:Integer.of_byte_array
+            |> Elist.iter ~f:(fun v ->
                 seq [
                   eprintf (string "Adding: '%s'\\n") [v () |> Integer.to_string];
                   tmp#set
