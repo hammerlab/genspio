@@ -18,6 +18,7 @@ type c_string
 (** {3 Literals } *)
 
 val string : string -> c_string t
+val c_string : string -> c_string t
 val byte_array : string -> byte_array t
 val int : int -> int t
 val bool : bool -> bool t
@@ -70,11 +71,15 @@ val setenv: var:c_string t -> c_string t -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val not : bool t -> bool t
-val ( =$= ) : c_string t -> c_string t -> bool t
-val ( <$> ) : c_string t -> c_string t -> bool t
+module C_string : sig
+  val equals : c_string t -> c_string t -> bool t
+  val ( =$= ) : c_string t -> c_string t -> bool t
+  val ( <$> ) : c_string t -> c_string t -> bool t
+end
 module Byte_array : sig
   val ( =$= ) : byte_array t -> byte_array t -> bool t
   val ( <$> ) : byte_array t -> byte_array t -> bool t
+  val of_c : c_string t -> byte_array t
 end
 
 val returns: 'a t -> value: int -> bool t

@@ -44,7 +44,7 @@ let tmp_file ?tmp_dir name : file =
       ~default:begin
         output_as_string (
           (* https://en.wikipedia.org/wiki/TMPDIR *)
-          if_then_else (getenv (c_string "TMPDIR") <$> c_string "")
+          if_then_else C_string.(getenv (c_string "TMPDIR") <$> c_string "")
             (call [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
             (exec ["printf"; "%s"; default_tmp_dir])
         )
@@ -177,9 +177,9 @@ module Command_line = struct
             setenv (string var) x.default);
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                p ||| (string s =$= getenv (string "1"))))
+                p ||| C_string.(c_string s =$= getenv (c_string "1"))))
               [
-                if_seq (getenv (string "2") =$= string "")
+                if_seq C_string.(getenv (string "2") =$= string "")
                   ~t:[
                     eprintf
                       (string "ERROR option '%s' requires an argument\\n")
@@ -203,7 +203,7 @@ module Command_line = struct
           );
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                p ||| (string s =$= getenv (string "1"))))
+                p ||| (C_string.equals (string s) (getenv (string "1")))))
               [
                 setenv (string var) (Bool.to_string (bool true));
                 exec ["shift"];
@@ -233,16 +233,16 @@ module Command_line = struct
           let help_switches = ["-h"; "-help"; "--help"] in
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
-                 p ||| (string s =$= getenv (string "1")))) [
+                 p ||| C_string.(c_string s =$= getenv (c_string "1")))) [
             setenv help_flag_var (Bool.to_string (bool true));
             byte_array help_msg >>  exec ["cat"];
             exec ["break"];
           ]
         in
         let dash_dash_case =
-          case (getenv (string "1") =$= string "--") [
+          case C_string.(getenv (c_string "1") =$= c_string "--") [
             exec ["shift"];
-            loop_while (getenv (string "#") <$> string "0") ~body:begin
+            loop_while C_string.(getenv (c_string "#") <$> c_string "0") ~body:begin
               seq [
                 append_anon_arg_to_list;
                 exec ["shift"];
@@ -251,7 +251,7 @@ module Command_line = struct
             exec ["break"];
           ] in
         let anon_case =
-          case (getenv (string "#") <$> string "0") [
+          case C_string.(getenv (c_string "#") <$> c_string "0") [
             append_anon_arg_to_list;
             exec ["shift"];
           ] in

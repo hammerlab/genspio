@@ -99,7 +99,7 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
           ]);
       call [string "cat"; return_value];
       assert_or_fail "hello-1"
-        (call [string "cat"; return_value] |> output_as_string |> to_c_string =$= string "12");
+        C_string.(call [string "cat"; return_value] |> output_as_string |> to_c_string =$= string "12");
       write_output
         ~stderr ~return_value
         (seq [
@@ -122,8 +122,8 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
           ]);
       call [string "cat"; stdout];
       assert_or_fail "hello-2"
-        (call [string "cat"; stdout] |> output_as_string |> to_c_string
-         =$= string "helloooo");
+        C_string.(call [string "cat"; stdout] |> output_as_string |> to_c_string
+                  =$= string "helloooo");
       write_output
         (seq [
             tprintf "%s" "hello";
@@ -179,7 +179,7 @@ let () = add_tests @@ exits 11 ~name:"write-output-as-string" Construct.(
 let () = add_tests @@ exits ~name:"Basic strings" 12 Construct.(
     (* This looks dumb but finding an encoding of strings that makes
        this work was pretty hard using CRAZIX shell *)
-    if_then_else (
+    if_then_else C_string.(
       string "some" =$= string "some\n"
     )
       (return 11)
@@ -188,7 +188,7 @@ let () = add_tests @@ exits ~name:"Basic strings" 12 Construct.(
   ()
 
 let () = add_tests @@ exits  ~name:"more Basic strings" 11 Construct.(
-    if_then_else (
+    if_then_else C_string.(
       string "some" =$=
       (output_as_string (
           (if_then_else (string "bouh\n" =$= string "bouh")
@@ -203,7 +203,7 @@ let () = add_tests @@ exits  ~name:"more Basic strings" 11 Construct.(
   ()
 
 let () = add_tests @@ exits 11 ~name:"output-as-empty-string" Construct.(
-    if_then_else (
+    if_then_else C_string.(
       string "" =$=
       (output_as_string (exec ["printf"; ""]) |> to_c_string)
     )
@@ -213,7 +213,7 @@ let () = add_tests @@ exits 11 ~name:"output-as-empty-string" Construct.(
   ()
 
 let () = add_tests @@ exits 11 ~name:"empty-string" Construct.(
-    if_then_else (string "" =$= string "") (return 11) (return 12)
+    if_then_else C_string.(string "" =$= string "") (return 11) (return 12)
   );
   ()
 
@@ -273,35 +273,36 @@ let () = add_tests @@ begin
                   eprintf (string "one: '%s' two: '%s'\n") [one; two];
                   eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
                   switch [
-                    case (string single =$= string "-v") [
+                    case C_string.(string single =$= string "-v") [
                       assert_or_fail "bone-is-true" (
-                          bone &&&
-                          (string_concat_list anon
-                           =$= string (String.concat ~sep:"" [anon1; anon2; anon3]))
+                        bone &&&
+                        C_string.(string_concat_list anon
+                                  =$= string (String.concat ~sep:""
+                                                [anon1; anon2; anon3]))
                       )
                     ];
-                    case (string single =$= string "--") [
+                    case C_string.(string single =$= string "--") [
                       assert_or_fail "dash-dash" (
-                          not bone &&&
-                          (string_concat_list anon
-                           =$= string (String.concat ~sep:""
-                                         [anon1; "-g"; minus_g; anon2; anon3]))
+                        not bone &&&
+                        C_string.(string_concat_list anon
+                                  =$= string (String.concat ~sep:""
+                                                [anon1; "-g"; minus_g; anon2; anon3]))
                       )
                     ];
                     default [
                       assert_or_fail "single-is-anon" (
-                          not bone &&&
-                          (string_concat_list anon
-                           =$= string (String.concat ~sep:""
-                                         [single; anon1; anon2; anon3]))
+                        not bone &&&
+                        C_string.(string_concat_list anon
+                                  =$= string (String.concat ~sep:""
+                                                [single; anon1; anon2; anon3]))
                       )
                     ];
                   ];
                   if_then_else
-                    ((one =$= two) ||| bone)
+                    (C_string.(one =$= two) ||| bone)
                     (return 11)
                     (if_then_else
-                       (one =$= string minus_f) (* Should be always true *)
+                       C_string.(one =$= string minus_f) (* Should be always true *)
                        (return 12) (* i.e. we're testing that weird characters have good escaping *)
                        (return 44))
                 ]
@@ -386,8 +387,8 @@ let () = add_tests @@ begin
           if_then_else
             (seq [
                 tprintf "I aaam so complex!\n";
-                if_then_else (string "djsleidjs" =$=
-                              (output_as_string (tprintf "diejliejjj") |> to_c_string))
+                if_then_else C_string.(string "djsleidjs" =$=
+                                       (output_as_string (tprintf "diejliejjj") |> to_c_string))
                   (return 41)
                   (return 42);
               ]
@@ -405,7 +406,7 @@ let () = add_tests @@ exits 11 Construct.(
       exec ["rm"; "-f"; tmp];
       if_then_else
         (* cat <absent-file> |> to_string does not abort the script: *)
-        (cat_tmp |> output_as_string |> to_c_string =$= string "")
+        C_string.(cat_tmp |> output_as_string |> to_c_string =$= string "")
         (return 11)
         (return 12);
     ];
@@ -418,7 +419,7 @@ let () = add_tests @@ exits 11 Construct.(
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
-        (seq [tprintf "aaa"; cat_tmp] |> output_as_string |> to_c_string =$= string "aaa")
+        C_string.(seq [tprintf "aaa"; cat_tmp] |> output_as_string |> to_c_string =$= string "aaa")
         (return 11)
         (return 12);
     ];
@@ -438,8 +439,8 @@ let () = add_tests @@ exits 77 Construct.(
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
-        (seq [tprintf "aaa"; cat_tmp] |> succeed_or_die
-         |> output_as_string |> to_c_string =$= string "aaa")
+        C_string.(seq [tprintf "aaa"; cat_tmp] |> succeed_or_die
+                  |> output_as_string |> to_c_string =$= string "aaa")
         (return 11)
         (return 12);
     ];
@@ -469,7 +470,7 @@ let () = add_tests @@ List.concat [
           (bool true &&& not (bool false)) (return 16) (return 17)
       );
     exits 11 Construct.(
-        if_then_else (int 42 |> Integer.to_string =$= string "42")
+        if_then_else C_string.(int 42 |> Integer.to_string =$= string "42")
           (return 11)
           (return 13)
       );
@@ -478,40 +479,42 @@ let () = add_tests @@ List.concat [
 (* Bunch of Interger/arithmetic tests: *)
 let () = add_tests @@ List.concat [
     exits 12 Construct.(
-        if_then_else (int 42 |> Integer.to_string
-                      |> Integer.of_string |> Integer.to_string
-                                              =$= string "42")
+        if_then_else C_string.(int 42 |> Integer.to_string
+                               |> Integer.of_string |> Integer.to_string
+                                                       =$= string "42")
           (return 12)
           (return 13)
       );
     exits 12 Construct.(
-        if_then_else (int (-42) |> Integer.to_string
-                      |> Integer.of_string |> Integer.to_string
-                                              =$= string "-42")
+        if_then_else C_string.(int (-42) |> Integer.to_string
+                               |> Integer.of_string |> Integer.to_string
+                               =$= string "-42")
           (return 12)
           (return 13)
       );
     exits ~name:"failure-of-int-of-string" 77
       Construct.( (* It's not a string representing an integer: *)
-        if_then_else (string "87732b" |> Integer.of_string |> Integer.to_string
-                                                              =$= string "8877732")
+        if_then_else C_string.(string "87732b" |> Integer.of_string |> Integer.to_string
+                               =$= string "8877732")
           (return 12)
           (return 13)
       );
     exits 12 Construct.(
-        if_then_else (Integer.(int 22 + int 20) |> Integer.to_string
-                                                   =$= string "42")
+        if_then_else C_string.(Integer.(int 22 + int 20) |> Integer.to_string
+                               =$= string "42")
           (return 12)
           (return 13)
       );
     exits 12 Construct.(
-        if_then_else (Integer.(int 2 * (int 22 - int 20)) |> Integer.to_string
-                                                             =$= string "4")
+        if_then_else C_string.(Integer.(int 2 * (int 22 - int 20)) |> Integer.to_string
+                              =$= string "4")
           (return 12)
           (return 13)
       );
     exits 12 Construct.(
-        let trybin res b = b |> Integer.to_string =$= string (Int.to_string res) in
+        let trybin res b =
+          let open C_string in
+          b |> Integer.to_string =$= string (Int.to_string res) in
         if_then_else (
           trybin 1 Integer.(int 2 * (int 22 - int 20) / int 4)
           &&&
@@ -558,7 +561,7 @@ let () = add_tests @@ exits ~name:"getenv" 25 Construct.(
            ] |> output_as_string
       |> to_c_string
     in
-    if_then_else (
+    if_then_else C_string.(
       (getenv (string "HOME") =$= (alternate_get_env "HOME"))
       &&&
       (getenv (string "PATH") =$= (alternate_get_env "PATH"))
@@ -572,14 +575,14 @@ let () = add_tests @@ exits ~name:"getenv" 25 Construct.(
 
 
 let () = add_tests @@ exits 29 Construct.(
-    if_then_else (
+    if_then_else C_string.(
       (getenv (string "HOMEEEEEEEE")) =$= string ""
     )
       (return 29) (return 27)
   );
   ()
 let () = add_tests @@ exits 27 Construct.(
-    if_then_else (  (* Explicit test of a corner case: *)
+    if_then_else C_string.(  (* Explicit test of a corner case: *)
       (getenv (string "HOME\nME")) =$= string (Sys.getenv "HOME")
     )
       (return 12) (return 27)
@@ -589,7 +592,7 @@ let () = add_tests @@ exits 27 Construct.(
 (* This used to be a corner case test but with the string-schism,
    it becomes just a `to_c_string` normal failure. *)
 let () = add_tests @@ exits 77 ~name:"Weird-env-variable" Construct.(
-    if_then_else (
+    if_then_else C_string.(
       (getenv (string "HOME\000ME")) =$= string (Sys.getenv "HOME")
     )
       (return 12) (return 27)
@@ -602,16 +605,16 @@ let () = add_tests @@ exits 0 ~name:"setenv-getenv" Construct.(
       if_then_else cond nop (seq [tprintf "Fail: %d" ret;
                                   fail "assert_or_return"]) in
     seq [
-      assert_or_return 27 (getenv var =$= string "");
+      assert_or_return 27 C_string.(getenv var =$= string "");
       setenv ~var (string "Bouh");
-      assert_or_return 28 (getenv var =$= string "Bouh");
+      assert_or_return 28 C_string.(getenv var =$= string "Bouh");
       (* We also “record the undefined behavior” *)
       setenv ~var (string "Bouhh\nbah");
-      assert_or_return 29 (getenv var =$= string "Bouhh\nbah");
+      assert_or_return 29 C_string.(getenv var =$= string "Bouhh\nbah");
       setenv ~var (string "Bouhhh\nbah\n");
-      assert_or_return 30 (getenv var =$= string "Bouhhh\nbah");
+      assert_or_return 30 C_string.(getenv var =$= string "Bouhhh\nbah");
       setenv ~var (string "Bouhoo\001bah\n");
-      assert_or_return 12 (getenv var =$= string "Bouhoo\001bah");
+      assert_or_return 12 C_string.(getenv var =$= string "Bouhoo\001bah");
       (* We check that the environment is affected in a brutal way:
          we mess up the $PATH:
          /bin/sh: 1: ls: not found
@@ -637,11 +640,11 @@ let () = add_tests @@ List.concat [
         let s1 = byte_array "hello\000you" in
         seq [
           tmp#set (byte_array "");
-          assert_or_fail "tmp#get 1" (tmp#get_c =$= string "");
+          assert_or_fail "tmp#get 1" C_string.(tmp#get_c =$= string "");
           tmp#set s1;
           assert_or_fail "tmp#get 2" Byte_array.(tmp#get =$= s1);
           tmp#delete;
-          assert_or_fail "tmp#get 3" (tmp#get_c =$= string "");
+          assert_or_fail "tmp#get 3" C_string.(tmp#get_c =$= string "");
           return 23;
         ]
       );
@@ -691,7 +694,7 @@ let () = add_tests @@ List.concat [
                 to_fd (int 1) (int 2);
               ]
             end;
-          assert_or_fail "stdout-empty" (tmp1#get_c =$= empty);
+          assert_or_fail "stdout-empty" C_string.(tmp1#get_c =$= empty);
           assert_or_fail "stderr-hello"
             (* We can only test with grep because stderr contains a bunch of
                other stuff, especially since we use the
@@ -715,7 +718,7 @@ let () = add_tests @@ List.concat [
           ];
           call [string "cat"; tmp1#path];
           call [string "cat"; tmp2#path];
-          assert_or_fail "fd3-empty" (tmp1#get_c =$= string "");
+          assert_or_fail "fd3-empty" C_string.(tmp1#get_c =$= string "");
           assert_or_fail "fd3-other-recog"
             (* Again going through fd `2` we've grabbed some junk: *)
             (tmp2#get >> exec ["grep"; recognizable] |> succeeds);
@@ -744,18 +747,18 @@ let () = add_tests @@ List.concat [
           call [string "printf"; string "%s:\\n"; tmp2#path];
           call [string "cat"; tmp2#path];
           assert_or_fail "fd3" (
-            (tmp1#get_c =$= string "")
+            C_string.(tmp1#get_c =$= string "")
             |||
             (this_is_bash
              &&&
-             (tmp1#get_c =$= string recognizable))
+             C_string.(tmp1#get_c =$= string recognizable))
           );
           assert_or_fail "return-value" (
-            (tmp2#get_c =$= string "2")
+            C_string.(tmp2#get_c =$= string "2")
             |||
             (this_is_bash
              &&&
-             (tmp2#get_c =$= string "0"))
+             C_string.(tmp2#get_c =$= string "0"))
           );
           return 2
         ]
@@ -766,10 +769,10 @@ let () = add_tests @@ List.concat [
 let () = add_tests @@ List.concat [
     exits 2 ~name:"bool-string-conversions" Genspio.EDSL.(
         seq [
-          assert_or_fail "test1" (
+          assert_or_fail "test1" C_string.(
             (Bool.to_string (bool true)) =$= string "true"
           );
-          assert_or_fail "test2" (
+          assert_or_fail "test2" C_string.(
             (Bool.to_string (bool false)) =$= string "false"
           );
           assert_or_fail "test3" (
@@ -791,31 +794,31 @@ let () = add_tests @@ List.concat [
 
 let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
     seq [
-      assert_or_fail "test1" (
+      assert_or_fail "test1" C_string.(
         (string_concat_list (list [string "one"; string "two"; string "three"]))
         =$= string "onetwothree"
       );
-      assert_or_fail "test2" (
+      assert_or_fail "test2" C_string.(
         (string_concat_list (list [string "one"; string "two"]))
         =$= string "onetwo"
       );
-      assert_or_fail "test3" (
+      assert_or_fail "test3" C_string.(
         (string_concat_list (list [string "one"]))
         =$= string "one"
       );
-      assert_or_fail "test4" (
+      assert_or_fail "test4" C_string.(
         (string_concat_list (list []))
         =$= string ""
       );
-      assert_or_fail "test5" (
+      assert_or_fail "test5" C_string.(
         (string_concat_list (list [string ""]))
         =$= string ""
       );
-      assert_or_fail "test6" (
+      assert_or_fail "test6" C_string.(
         (string_concat_list (list [string "one"; string ""; string "three"]))
         =$= string "onethree"
       );
-      assert_or_fail "test7" (
+      assert_or_fail "test7" C_string.(
         (string_concat_list (list [string "one"; string ""; string ""]))
         =$= string "one"
       );
@@ -828,7 +831,7 @@ let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
 let () = add_tests @@ exits 5 ~name:"list-append" Genspio.EDSL.(
     let make_string_concat_test name la lb =
       let slist l = List.map l ~f:string |> list in
-      assert_or_fail name (
+      assert_or_fail name C_string.(
         string_concat_list (list_append (slist la) (slist lb))
         =$=
         string (la @ lb |> String.concat ~sep:"")
@@ -884,7 +887,7 @@ let () = add_tests @@ begin
                   (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
                 ]
               );
-            assert_or_fail name (
+            assert_or_fail name C_string.(
               tmp#get_c
               =$=
               string (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:"")
@@ -932,7 +935,7 @@ let () = add_tests @@ begin
                     );
                 ]
               );
-            assert_or_fail name (
+            assert_or_fail name C_string.(
               tmp#get_c
               =$=
               Integer.to_string (List.fold ~init:0 l ~f:((+)) |> int)
@@ -974,16 +977,16 @@ let () = add_tests @@ begin
           "pipe-basic test" %%% seq [
             eprintf (string "Bag: %s") [bag];
             "pipe-basic1 assertion" %%%
-            assert_or_fail "pipe-basic1" (
+            assert_or_fail "pipe-basic1" C_string.(
               ("Bag in pipe-basic 1" %%% bag) =$= string "HelloWorld");
             "pipe-basic2 assertion" %%%
-            assert_or_fail "pipe-basic2" (fed =$= string "BelloWorld");
+            assert_or_fail "pipe-basic2" C_string.(fed =$= string "BelloWorld");
             return 13;
           ]
         );
       exits 42 ~name:"pipe-xargs" Genspio.EDSL.(
           seq [
-            assert_or_fail "pipe-xargs-1" (
+            assert_or_fail "pipe-xargs-1" C_string.(
               output_as_string
                 (exec ["printf"; "1\\n2\\n3\\n"]
                  ||> exec ["xargs"; "printf"; "%02d:%02d:%02d"])

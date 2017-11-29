@@ -212,8 +212,11 @@ module Construct = struct
   let call l = Exec l
   let (&&&) a b = Bool_operator (a, `And, b)
   let (|||) a b = Bool_operator (a, `Or, b)
-  let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-  let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+  module C_string = struct
+    let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+    let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+    let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+  end
   module Byte_array = struct
     let (=$=) a b = String_operator (a, `Eq, b)
     let (<$>) a b = String_operator (a, `Neq, b)

@@ -164,7 +164,7 @@ let downloader () =
     begin fun ~anon url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
-        if_seq (filename_ov =$= no_value)
+        if_seq C_string.(filename_ov =$= no_value)
           ~t:begin
             let filename =
               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
@@ -182,7 +182,7 @@ let downloader () =
         call [string "mkdir"; string "-p"; tmp_dir];
         if_then all_in_tmp
           (seq [sayf "Going to the tmpdir"; call [string "cd"; tmp_dir]]);
-        if_then (url =$= no_value)
+        if_then C_string.(url =$= no_value)
           (failf "Argument URL is mandatory");
         if_then_else
           (string_matches_any url ["^http://"; "^https://"; "^ftp://"])

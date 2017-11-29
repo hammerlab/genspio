@@ -151,16 +151,16 @@ Genspio.EDSL.(
   let tmp = tmp_file "genspio-example" in
   let body =
     seq [
-      if_then_else (tmp#get_c =$= string "")
-         (tmp#set_c (string "magic-"))
-         (if_then_else (tmp#get_c =$= string "magic-")
-            (tmp#append (string "string" |> to_byte_array))
+      if_then_else C_string.(tmp#get_c =$= c_string "")
+         (tmp#set_c (c_string "magic-"))
+         (if_then_else C_string.(tmp#get_c =$= string "magic-")
+            (tmp#append (c_string "string" |> to_byte_array))
             nop);
       call [string "printf"; string "Currently '%s'\\n"; tmp#get_c];
     ] in
   seq [
     tmp#set (byte_array "");
-    loop_while (tmp#get_c <$> string "magic-string") ~body
+    loop_while C_string.(tmp#get_c <$> c_string "magic-string") ~body
   ]
 )
 |ocaml}
