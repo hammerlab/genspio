@@ -276,7 +276,7 @@ let () = add_tests @@ begin
                     case C_string.(string single =$= string "-v") [
                       assert_or_fail "bone-is-true" (
                         bone &&&
-                        C_string.(string_concat_list anon
+                        C_string.(concat_elist anon
                                   =$= string (String.concat ~sep:""
                                                 [anon1; anon2; anon3]))
                       )
@@ -284,7 +284,7 @@ let () = add_tests @@ begin
                     case C_string.(string single =$= string "--") [
                       assert_or_fail "dash-dash" (
                         not bone &&&
-                        C_string.(string_concat_list anon
+                        C_string.(concat_elist anon
                                   =$= string (String.concat ~sep:""
                                                 [anon1; "-g"; minus_g; anon2; anon3]))
                       )
@@ -292,7 +292,7 @@ let () = add_tests @@ begin
                     default [
                       assert_or_fail "single-is-anon" (
                         not bone &&&
-                        C_string.(string_concat_list anon
+                        C_string.(concat_elist anon
                                   =$= string (String.concat ~sep:""
                                                 [single; anon1; anon2; anon3]))
                       )
@@ -566,7 +566,7 @@ let () = add_tests @@ exits ~name:"getenv" 25 Construct.(
       &&&
       (getenv (string "PATH") =$= (alternate_get_env "PATH"))
       &&&
-      (getenv (string_concat [string "PA"; string "TH"])
+      (getenv (concat_list [string "PA"; string "TH"])
        =$= (alternate_get_env "PATH"))
     )
       (return 25) (return 13)
@@ -795,31 +795,31 @@ let () = add_tests @@ List.concat [
 let () = add_tests @@ exits 5 ~name:"list-string-stuff" Genspio.EDSL.(
     seq [
       assert_or_fail "test1" C_string.(
-        (string_concat_list (Elist.make [string "one"; string "two"; string "three"]))
+        (C_string.concat_elist (Elist.make [string "one"; string "two"; string "three"]))
         =$= string "onetwothree"
       );
       assert_or_fail "test2" C_string.(
-        (string_concat_list (Elist.make [string "one"; string "two"]))
+        (C_string.concat_elist (Elist.make [string "one"; string "two"]))
         =$= string "onetwo"
       );
       assert_or_fail "test3" C_string.(
-        (string_concat_list (Elist.make [string "one"]))
+        (C_string.concat_elist (Elist.make [string "one"]))
         =$= string "one"
       );
       assert_or_fail "test4" C_string.(
-        (string_concat_list (Elist.make []))
+        (C_string.concat_elist (Elist.make []))
         =$= string ""
       );
       assert_or_fail "test5" C_string.(
-        (string_concat_list (Elist.make [string ""]))
+        (C_string.concat_elist (Elist.make [string ""]))
         =$= string ""
       );
       assert_or_fail "test6" C_string.(
-        (string_concat_list (Elist.make [string "one"; string ""; string "three"]))
+        (C_string.concat_elist (Elist.make [string "one"; string ""; string "three"]))
         =$= string "onethree"
       );
       assert_or_fail "test7" C_string.(
-        (string_concat_list (Elist.make [string "one"; string ""; string ""]))
+        (C_string.concat_elist (Elist.make [string "one"; string ""; string ""]))
         =$= string "one"
       );
       return 5
@@ -832,7 +832,7 @@ let () = add_tests @@ exits 5 ~name:"list-append" Genspio.EDSL.(
     let make_string_concat_test name la lb =
       let slist l = List.map l ~f:string |> Elist.make in
       assert_or_fail name C_string.(
-        string_concat_list (Elist.append (slist la) (slist lb))
+        concat_elist (Elist.append (slist la) (slist lb))
         =$=
         string (la @ lb |> String.concat ~sep:"")
       );
@@ -882,7 +882,7 @@ let () = add_tests @@ begin
                 (* Elist.iter slist ~f:(fun v -> *)
                 seq [
                   eprintf (string "Concatenating: '%s'\\n") [v () |> to_c_string];
-                  tmp#set (string_concat [tmp#get_c; string ":"; v () |> to_c_string]
+                  tmp#set (C_string.concat_list [tmp#get_c; string ":"; v () |> to_c_string]
                            |> to_byte_array);
                   (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
                 ]

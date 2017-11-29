@@ -70,7 +70,7 @@ let downloader () =
 
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      string_concat [input; string "\n"] |> to_byte_array
+      C_string.concat_list [input; string "\n"] |> to_byte_array
       >> exec ["sed"; expr]
       |> output_as_string
     in
@@ -169,12 +169,12 @@ let downloader () =
             let filename =
               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
             let output_path =
-              string_concat [tmp_dir; string "/"; filename] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename] |> to_byte_array in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              string_concat [tmp_dir; string "/"; filename_ov] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename_ov] |> to_byte_array in
             [current_name#set output_path]
           end
       in

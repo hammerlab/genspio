@@ -22,8 +22,6 @@ let switch l =
   in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
-let string_concat sl =
-  string_concat_list (Elist.make sl)
 
 let string_list_to_string l = Elist.to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
 let string_list_of_string s = Elist.of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
@@ -56,14 +54,14 @@ let tmp_file ?tmp_dir name : file =
       String.map name ~f:(function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' as c -> c
         | other -> '_') in
-    string_concat [
+    C_string.concat_list [
       get_tmp_dir;
       c_string "/";
       c_string
         (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
     ]
   in
-  let tmp = string_concat [path; string "-tmp"] in
+  let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = output_as_string (call [string "cat"; path])
     method get_c = self#get |> to_c_string

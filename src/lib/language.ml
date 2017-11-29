@@ -216,6 +216,11 @@ module Construct = struct
     let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
     let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
     let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+
+    let concat_elist l = C_string_concat l
+    let concat_list sl =
+      concat_elist (List sl)
+
   end
   module Byte_array = struct
     let (=$=) a b = String_operator (a, `Eq, b)
@@ -278,7 +283,6 @@ module Construct = struct
     let of_string l ~f = String_to_list (l, f)
   end
 
-  let string_concat_list l = C_string_concat l
   let byte_array_concat_list l = Byte_array_concat l
 
 

@@ -66,7 +66,7 @@ let () =
 Genspio.EDSL.(
   call [
     string "echo";
-    string_concat [string "foo"; string "bar"]; (* A concatenation at run-time. *)
+    C_string.concat_list [string "foo"; string "bar"]; (* A concatenation at run-time. *)
   ]
 )
 |ocaml}

@@ -71,11 +71,7 @@ val setenv: var:c_string t -> c_string t -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val not : bool t -> bool t
-module C_string : sig
-  val equals : c_string t -> c_string t -> bool t
-  val ( =$= ) : c_string t -> c_string t -> bool t
-  val ( <$> ) : c_string t -> c_string t -> bool t
-end
+
 module Byte_array : sig
   val ( =$= ) : byte_array t -> byte_array t -> bool t
   val ( <$> ) : byte_array t -> byte_array t -> bool t
@@ -160,11 +156,17 @@ val feed : string:byte_array t -> unit t -> unit t
 val ( >> ) : byte_array t -> unit t -> unit t
 (** [str >> cmd] is [feed ~string:str cmd]. *)
 
-val string_concat: c_string t list -> c_string t
-(** Concatenate an (OCaml) list of [c_string t] values. *)
+module C_string : sig
+  val equals : c_string t -> c_string t -> bool t
+  val ( =$= ) : c_string t -> c_string t -> bool t
+  val ( <$> ) : c_string t -> c_string t -> bool t
 
-val string_concat_list: c_string list t -> c_string t
-(** Concatenate a Genspio list of strings [c_string list t]. *)
+  val concat_list: c_string t list -> c_string t
+  (** Concatenate an (OCaml) list of [c_string t] values. *)
+
+  val concat_elist: c_string list t -> c_string t
+  (** Concatenate a Genspio list of strings [c_string list t]. *)
+end
 
 (** {3 Control Flow} *)
 
