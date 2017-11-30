@@ -274,6 +274,7 @@ module Construct = struct
   let (||>) a b = Pipe [a; b]
 
   let loop_while condition ~body = While {condition; body}
+  let loop_seq_while condition body = While {condition; body = Seq body}
 
   module Elist = struct
     let make l = List l

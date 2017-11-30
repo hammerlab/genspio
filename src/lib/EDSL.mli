@@ -172,6 +172,11 @@ val seq : unit t list -> unit t
 (** Sequence a list of expressions into an expression. *)
 
 val loop_while : bool t -> body:unit t -> unit t
+(** Build a while loop. *)
+
+val loop_seq_while : bool t -> unit t list -> unit t
+(** [loop_seq_while condition body] is a shortcut for
+    [loop_while condition ~body:(seq body)]. *)
 
 val if_seq:
   t:unit t list ->
