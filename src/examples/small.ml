@@ -90,12 +90,12 @@ let () =
 
 ```ocaml
 val get_stdout : unit t -> byte_array t
-val to_c_string: byte_array t -> c_string t
+val Byte_array.to_c: byte_array t -> c_string t
 val (||>) : unit t -> unit t -> unit t
 ```
 
 We use `let (s : …) = …` to show the types; we see then that we need to “cast”
-the output to a C-String with `to_c_string` in order to pass it to `call`.
+the output to a C-String with `Byte_array.to_c` in order to pass it to `call`.
 Indeed, commands can output arbitrary byte-arrays but Unix commands
 only accept `NUL`-terminated strings.
 
@@ -105,7 +105,7 @@ a 2-argument shortcut for `EDSL.pipe`).
 {ocaml|
 Genspio.EDSL.(
   let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
-  call [string "printf"; string "%s"; to_c_string s] ||> exec ["wc"; "-l"];
+  call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
 )
 |ocaml}
 
@@ -154,7 +154,7 @@ Genspio.EDSL.(
       if_then_else C_string.(tmp#get_c =$= c_string "")
          (tmp#set_c (c_string "magic-"))
          (if_then_else C_string.(tmp#get_c =$= string "magic-")
-            (tmp#append (c_string "string" |> to_byte_array))
+            (tmp#append (c_string "string" |> C_string.to_bytes))
             nop);
       call [string "printf"; string "Currently '%s'\\n"; tmp#get_c];
     ] in
@@ -190,8 +190,8 @@ Genspio.EDSL.(
       to_fd (int 1) (int 2);
     ];
     call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
-          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> to_c_string;
-          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> to_c_string];
+          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> Byte_array.to_c;
+          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> Byte_array.to_c];
   ]
 )
 |ocaml}

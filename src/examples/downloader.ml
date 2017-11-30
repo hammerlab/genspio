@@ -66,17 +66,17 @@ let downloader () =
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
-    string |> to_byte_array >> exec (["grep"; "-q"] @ options) |> succeeds in
+    string |> C_string.to_bytes >> exec (["grep"; "-q"] @ options) |> succeeds in
 
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      C_string.concat_list [input; string "\n"] |> to_byte_array
+      C_string.concat_list [input; string "\n"] |> C_string.to_bytes
       >> exec ["sed"; expr]
       |> get_stdout
     in
     with_potential_newline >> exec ["tr"; "-d"; "\\n"]
     |> get_stdout
-    |> to_c_string
+    |> Byte_array.to_c
   in
 
   let module Unwrapper = struct
@@ -104,7 +104,7 @@ let downloader () =
             (t.commands name_variable);
           name_variable#set
             (remove_suffix name_variable#get_c (sprintf "\\.%s" t.extension)
-             |> to_byte_array);
+             |> C_string.to_bytes);
         ] in
       seq [
         say [string "Extract loop: "; name_variable#get_c];
@@ -169,12 +169,12 @@ let downloader () =
             let filename =
               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
             let output_path =
-              C_string.concat_list [tmp_dir; string "/"; filename] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename] |> C_string.to_bytes in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              C_string.concat_list [tmp_dir; string "/"; filename_ov] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename_ov] |> C_string.to_bytes in
             [current_name#set output_path]
           end
       in

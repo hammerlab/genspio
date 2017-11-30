@@ -216,6 +216,8 @@ module Construct = struct
     let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
     let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
     let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+    let to_byte_array c = C_string_to_byte_array c
+    let to_bytes c = C_string_to_byte_array c
 
     let concat_elist l = C_string_concat l
     let concat_list sl =
@@ -225,7 +227,8 @@ module Construct = struct
   module Byte_array = struct
     let (=$=) a b = String_operator (a, `Eq, b)
     let (<$>) a b = String_operator (a, `Neq, b)
-    let of_c s = to_byte_array s
+    let to_c_string ba = Byte_array_to_c_string ba
+    let to_c ba = Byte_array_to_c_string ba
   end
 
   let returns expr ~value = Returns {expr; value}
