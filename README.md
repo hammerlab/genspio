@@ -53,8 +53,8 @@ let c =
   let username_the_other_way : c_string t =
     (* The usual pipe operator is `||>` *)
     (exec ["whoami"] ||> exec ["tr"; "-d"; "\\n"])
-    (* `output_as_string` takes `stdout` from a `unit t` as a `byte_array t` *)
-    |> output_as_string
+    (* `get_stdout` takes `stdout` from a `unit t` as a `byte_array t` *)
+    |> get_stdout
     (* `to_c_string` checks that a `byte_array t` can be casted to a `c_string` *)
     |> to_c_string 
   in

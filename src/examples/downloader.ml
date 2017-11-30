@@ -72,10 +72,10 @@ let downloader () =
     let with_potential_newline =
       C_string.concat_list [input; string "\n"] |> to_byte_array
       >> exec ["sed"; expr]
-      |> output_as_string
+      |> get_stdout
     in
     with_potential_newline >> exec ["tr"; "-d"; "\\n"]
-    |> output_as_string
+    |> get_stdout
     |> to_c_string
   in
 

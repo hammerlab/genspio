@@ -172,7 +172,7 @@ module Shell_directory = struct
           (exec ["ls"; "-1"; dir] ||> exec ["wc"; "-l"])
           (exec ["echo"; "No-dir"])
         ||> exec ["tr"; "-d"; "\\n"]
-        |> output_as_string |> to_c_string
+        |> get_stdout |> to_c_string
       in
       seq [
         exec ["printf";

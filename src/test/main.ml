@@ -99,7 +99,7 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
           ]);
       call [string "cat"; return_value];
       assert_or_fail "hello-1"
-        C_string.(call [string "cat"; return_value] |> output_as_string |> to_c_string =$= string "12");
+        C_string.(call [string "cat"; return_value] |> get_stdout |> to_c_string =$= string "12");
       write_output
         ~stderr ~return_value
         (seq [
@@ -122,7 +122,7 @@ let () = add_tests @@ exits 42 ~name:"Variations-on-write-output" Construct.(
           ]);
       call [string "cat"; stdout];
       assert_or_fail "hello-2"
-        C_string.(call [string "cat"; stdout] |> output_as_string |> to_c_string
+        C_string.(call [string "cat"; stdout] |> get_stdout |> to_c_string
                   =$= string "helloooo");
       write_output
         (seq [
@@ -155,17 +155,17 @@ let () = add_tests @@ exits 11 ~name:"write-output-as-string" Construct.(
             return return_value_value;
           ]);
       if_then_else Byte_array.(
-        output_as_string (call [string "cat"; stdout])
+        get_stdout (call [string "cat"; stdout])
         =$= byte_array (will_be_escaped ^ will_not_be_escaped)
       )
         (
           if_then_else
-            Byte_array.(output_as_string (call [string "cat"; stderr])
+            Byte_array.(get_stdout (call [string "cat"; stderr])
                         <$> byte_array "err")
             (
               if_then_else
                 Byte_array.(
-                  output_as_string (call [string "cat"; return_value_path])
+                  get_stdout (call [string "cat"; return_value_path])
                   =$= ksprintf byte_array "%d" return_value_value)
                 (return 11)
                 (return 22)
@@ -190,7 +190,7 @@ let () = add_tests @@ exits ~name:"Basic strings" 12 Construct.(
 let () = add_tests @@ exits  ~name:"more Basic strings" 11 Construct.(
     if_then_else C_string.(
       string "some" =$=
-      (output_as_string (
+      (get_stdout (
           (if_then_else (string "bouh\n" =$= string "bouh")
              (tprintf "nnnooo")
              (tprintf "some"))
@@ -205,7 +205,7 @@ let () = add_tests @@ exits  ~name:"more Basic strings" 11 Construct.(
 let () = add_tests @@ exits 11 ~name:"output-as-empty-string" Construct.(
     if_then_else C_string.(
       string "" =$=
-      (output_as_string (exec ["printf"; ""]) |> to_c_string)
+      (get_stdout (exec ["printf"; ""]) |> to_c_string)
     )
       (return 11)
       (return 12)
@@ -220,7 +220,7 @@ let () = add_tests @@ exits 11 ~name:"empty-string" Construct.(
 let () = add_tests @@ exits 10 ~name:"byte array comparison" Construct.(
     if_then_else
       Byte_array.(
-        (byte_array "b\x00ouh\nbah\n" >> exec ["cat"] |> output_as_string)
+        (byte_array "b\x00ouh\nbah\n" >> exec ["cat"] |> get_stdout)
         =$=
         byte_array "b\x00ouh\nbah\n"
       )
@@ -239,7 +239,7 @@ let () = add_tests @@ exits 13 Construct.(
       exec ["rm"; "-f"; tmp];
       exec ["rm"; "-f"; tmp];
       loop_while
-        Byte_array.(cat_potentially_empty |> output_as_string
+        Byte_array.(cat_potentially_empty |> get_stdout
                     <$> byte_array "nnnn")
         ~body:begin
           exec ["sh"; "-c"; sprintf "printf n >> %s" tmp];
@@ -388,7 +388,7 @@ let () = add_tests @@ begin
             (seq [
                 tprintf "I aaam so complex!\n";
                 if_then_else C_string.(string "djsleidjs" =$=
-                                       (output_as_string (tprintf "diejliejjj") |> to_c_string))
+                                       (get_stdout (tprintf "diejliejjj") |> to_c_string))
                   (return 41)
                   (return 42);
               ]
@@ -400,13 +400,13 @@ let () = add_tests @@ begin
   end
 
 let () = add_tests @@ exits 11 Construct.(
-    let tmp = "/tmp/test_error_in_output_as_string" in
+    let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
         (* cat <absent-file> |> to_string does not abort the script: *)
-        C_string.(cat_tmp |> output_as_string |> to_c_string =$= string "")
+        C_string.(cat_tmp |> get_stdout |> to_c_string =$= string "")
         (return 11)
         (return 12);
     ];
@@ -414,12 +414,12 @@ let () = add_tests @@ exits 11 Construct.(
   ()
 
 let () = add_tests @@ exits 11 Construct.(
-    let tmp = "/tmp/test_error_in_output_as_string" in
+    let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     seq [
       exec ["rm"; "-f"; tmp];
       if_then_else
-        C_string.(seq [tprintf "aaa"; cat_tmp] |> output_as_string |> to_c_string =$= string "aaa")
+        C_string.(seq [tprintf "aaa"; cat_tmp] |> get_stdout |> to_c_string =$= string "aaa")
         (return 11)
         (return 12);
     ];
@@ -427,7 +427,7 @@ let () = add_tests @@ exits 11 Construct.(
   ()
 
 let () = add_tests @@ exits 77 Construct.(
-    let tmp = "/tmp/test_error_in_output_as_string" in
+    let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     let succeed_or_die ut =
       if_then_else (succeeds ut)
@@ -440,7 +440,7 @@ let () = add_tests @@ exits 77 Construct.(
       exec ["rm"; "-f"; tmp];
       if_then_else
         C_string.(seq [tprintf "aaa"; cat_tmp] |> succeed_or_die
-                  |> output_as_string |> to_c_string =$= string "aaa")
+                  |> get_stdout |> to_c_string =$= string "aaa")
         (return 11)
         (return 12);
     ];
@@ -451,7 +451,7 @@ let () = add_tests @@ (* Use of the `call` constructor: *)
   exits 28 Construct.(
       if_then_else
         (call [string "cat";
-               output_as_string (tprintf "/does not exist") |> to_c_string]
+               get_stdout (tprintf "/does not exist") |> to_c_string]
          |> succeeds)
         (return 11)
         (return 28);
@@ -558,7 +558,7 @@ let () = add_tests @@ exits ~name:"getenv" 25 Construct.(
          be run on a different host/system (through SSH or alike). *)
       exec ["sh"; "-c";
             sprintf "echo ${%s} | tr -d '\\n'" v
-           ] |> output_as_string
+           ] |> get_stdout
       |> to_c_string
     in
     if_then_else C_string.(
@@ -730,7 +730,7 @@ let () = add_tests @@ List.concat [
         let tmp2 = tmp_file "return" in
         let recognizable = "heelllloooooo" in
         let this_is_bash =
-          (exec ["ps"] |> output_as_string)
+          (exec ["ps"] |> get_stdout)
           >> exec ["grep"; "bash"]
           |> returns ~value:0 in
         seq [
@@ -964,13 +964,13 @@ let () = add_tests @@ begin
               exec ["sed"; "s/wo/Wo/"];
               exec ["sed"; "s/h/H/"];
               exec ["tr"; "-d"; "\\n"];
-            ] |> output_as_string
+            ] |> get_stdout
             |> to_c_string in
           let fed =
             "let fed" %%% begin
               bag |> to_byte_array >> pipe [
                 exec ["tr"; "H"; "B"];
-              ] |> output_as_string
+              ] |> get_stdout
               |> to_c_string
             end
           in
@@ -987,7 +987,7 @@ let () = add_tests @@ begin
       exits 42 ~name:"pipe-xargs" Genspio.EDSL.(
           seq [
             assert_or_fail "pipe-xargs-1" C_string.(
-              output_as_string
+              get_stdout
                 (exec ["printf"; "1\\n2\\n3\\n"]
                  ||> exec ["xargs"; "printf"; "%02d:%02d:%02d"])
               |> to_c_string

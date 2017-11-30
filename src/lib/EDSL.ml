@@ -40,7 +40,7 @@ let tmp_file ?tmp_dir name : file =
   let get_tmp_dir =
     Option.value tmp_dir
       ~default:begin
-        output_as_string (
+        get_stdout (
           (* https://en.wikipedia.org/wiki/TMPDIR *)
           if_then_else C_string.(getenv (c_string "TMPDIR") <$> c_string "")
             (call [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
@@ -63,7 +63,7 @@ let tmp_file ?tmp_dir name : file =
   in
   let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
-    method get = output_as_string (call [string "cat"; path])
+    method get = get_stdout (call [string "cat"; path])
     method get_c = self#get |> to_c_string
     method path = path
     method set v =

@@ -89,7 +89,7 @@ let () =
 {md|Here we use the constructs:
 
 ```ocaml
-val output_as_string : unit t -> byte_array t
+val get_stdout : unit t -> byte_array t
 val to_c_string: byte_array t -> c_string t
 val (||>) : unit t -> unit t -> unit t
 ```
@@ -104,7 +104,7 @@ a 2-argument shortcut for `EDSL.pipe`).
 |md}
 {ocaml|
 Genspio.EDSL.(
-  let (s : byte_array t) = output_as_string (exec ["cat"; "README.md"]) in
+  let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
   call [string "printf"; string "%s"; to_c_string s] ||> exec ["wc"; "-l"];
 )
 |ocaml}
@@ -129,7 +129,7 @@ let () =
 Genspio.EDSL.(
     (* With a 🐱: *)
   let original = byte_array "one\ntwo\nth\000ree\n" in
-  let full_cycle = original >> exec ["cat"] |> output_as_string in
+  let full_cycle = original >> exec ["cat"] |> get_stdout in
   if_seq
     Byte_array.(full_cycle =$= original)
     ~t:[
@@ -190,8 +190,8 @@ Genspio.EDSL.(
       to_fd (int 1) (int 2);
     ];
     call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
-          exec ["cat"; "/tmp/genspio-one"] |> output_as_string |> to_c_string;
-          exec ["cat"; "/tmp/genspio-two"] |> output_as_string |> to_c_string];
+          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> to_c_string;
+          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> to_c_string];
   ]
 )
 |ocaml}

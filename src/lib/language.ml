@@ -265,7 +265,7 @@ module Construct = struct
   let getenv v = Getenv v
   let setenv ~var v = Setenv (var, v)
 
-  let output_as_string e = Output_as_string e
+  let get_stdout e = Output_as_string e
 
   let feed ~string e = Feed (string, e)
   let (>>) string e = feed ~string e

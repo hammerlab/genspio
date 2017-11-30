@@ -147,15 +147,6 @@ end
 val to_byte_array: c_string t -> byte_array t
 val to_c_string: byte_array t -> c_string t
 
-val output_as_string : unit t -> byte_array t
-
-val feed : string:byte_array t -> unit t -> unit t
-(** Feed some content ([~string]) into the ["stdin"] filedescriptor of
-    a [unit t] expression. *)
-
-val ( >> ) : byte_array t -> unit t -> unit t
-(** [str >> cmd] is [feed ~string:str cmd]. *)
-
 module C_string : sig
   val equals : c_string t -> c_string t -> bool t
   val ( =$= ) : c_string t -> c_string t -> bool t
@@ -261,6 +252,16 @@ val pipe: unit t list -> unit t
 
 val (||>) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
+
+val get_stdout : unit t -> byte_array t
+
+val feed : string:byte_array t -> unit t -> unit t
+(** Feed some content ([~string]) into the ["stdin"] filedescriptor of
+    a [unit t] expression. *)
+
+val ( >> ) : byte_array t -> unit t -> unit t
+(** [str >> cmd] is [feed ~string:str cmd]. *)
+
 
 val printf : c_string t -> c_string t list -> unit t
 (**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
