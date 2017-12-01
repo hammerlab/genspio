@@ -197,6 +197,23 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
+  example "Lists" ~show:"[`Pretty_printed; `Stdout]"
+    {md|The module `EList` provides lists within the EDSL.
+
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  let l = Elist.make [
+    c_string "One";
+    c_string "Two";
+  ] in
+  Elist.iter l ~f:begin fun current ->
+    printf (c_string "Current: %s\\n") [current ()];
+  end
+)
+|ocaml}
+
+let () =
   let o = open_out Sys.argv.(1) in
   fprintf o "%s" {ocaml|
 open Nonstd
