@@ -75,16 +75,18 @@ val not : bool t -> bool t
 val returns: 'a t -> value: int -> bool t
 (** Check the return value of a command/expression/script. *)
 
-module Bool: sig
-  val to_string : bool t -> c_string t
-  val of_string : c_string t -> bool t
-end
-
-    
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
 
 val file_exists : c_string t -> bool t
+(** Check whether a file exists, i.e. a shortcut for
+    [call [c_string "test"; c_string "-f"; path] |> succeeds]. *)
+
+(** Conversions of the [bool t] type. *)
+module Bool: sig
+  val to_string : bool t -> c_string t
+  val of_string : c_string t -> bool t
+end
 
 
 (** {3 Integer Arithmetic} *)
@@ -125,10 +127,13 @@ end
 module Elist : sig
 
   val make: 'a t list -> 'a list t
+  (** Make an EDSL list out of an OCaml list. *)
 
   val append: 'a list t -> 'a list t -> 'a list t
 
   val iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+  (** Iterate over a list, the body of the loop [~f] takes as argument
+      function that returns the current eletment at the EDSL level. *)
 
   val to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
 
@@ -187,8 +192,8 @@ val if_seq:
   bool t ->
   unit t
 (** [if_seq c ~t ~e] is an alternate API for {!if_then_else} (when
-    [?e] is provided) or {!if_then} (otherwise) that assumes “then”
-    and “else” bodies to be lists for {!seq} construct. *)
+    [?e] is provided) or {!if_then} (otherwise) that takes “then”
+    and “else” bodies which are lists for the {!seq} construct. *)
 
 (** {3 Switch Statements } *)
 
@@ -214,7 +219,7 @@ val make_switch :
   default:unit Language.t -> unit Language.t
 (**/**)
 
-(** {3 Redirections } *)
+(** {3 Redirections and File Descriptors } *)
 
 type fd_redirection
 (** Abstract type of file-descriptor redirections. *)
@@ -262,6 +267,8 @@ val (||>) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
 val get_stdout : unit t -> byte_array t
+(** Get the contents of [stdout] into a byte array (in previous
+    versions this function was called [output_as_string]).  *)
 
 val feed : string:byte_array t -> unit t -> unit t
 (** Feed some content ([~string]) into the ["stdin"] filedescriptor of
@@ -269,7 +276,6 @@ val feed : string:byte_array t -> unit t -> unit t
 
 val ( >> ) : byte_array t -> unit t -> unit t
 (** [str >> cmd] is [feed ~string:str cmd]. *)
-
 
 val printf : c_string t -> c_string t list -> unit t
 (**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
@@ -287,7 +293,7 @@ val fail: string -> unit t
 (** {3 Temporary Files} *)
 
 type file = <
-  get : byte_array t;
+  get : byte_array t; (** Get the current contents of the file *)
   get_c : c_string t;
   set : byte_array t -> unit t;
   set_c : c_string t -> unit t;
