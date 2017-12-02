@@ -18,6 +18,7 @@ type c_string
 (** {3 Literals } *)
 
 val string : string -> c_string t
+val c_string : string -> c_string t
 val byte_array : string -> byte_array t
 val int : int -> int t
 val bool : bool -> bool t
@@ -70,26 +71,22 @@ val setenv: var:c_string t -> c_string t -> unit t
 val ( &&& ) : bool t -> bool t -> bool t
 val ( ||| ) : bool t -> bool t -> bool t
 val not : bool t -> bool t
-val ( =$= ) : c_string t -> c_string t -> bool t
-val ( <$> ) : c_string t -> c_string t -> bool t
-module Byte_array : sig
-  val ( =$= ) : byte_array t -> byte_array t -> bool t
-  val ( <$> ) : byte_array t -> byte_array t -> bool t
-end
 
 val returns: 'a t -> value: int -> bool t
 (** Check the return value of a command/expression/script. *)
 
-module Bool: sig
-  val to_string : bool t -> c_string t
-  val of_string : c_string t -> bool t
-end
-
-    
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
 
 val file_exists : c_string t -> bool t
+(** Check whether a file exists, i.e. a shortcut for
+    [call [c_string "test"; c_string "-f"; path] |> succeeds]. *)
+
+(** Conversions of the [bool t] type. *)
+module Bool: sig
+  val to_string : bool t -> c_string t
+  val of_string : c_string t -> bool t
+end
 
 
 (** {3 Integer Arithmetic} *)
@@ -125,37 +122,50 @@ module Integer : sig
   val ( > ) : int t -> int t -> bool t
 end
 
-(** {3 Lists} *)
+(** {3 EDSL Lists} *)
 
-val list: 'a t list -> 'a list t
+module Elist : sig
 
-val list_append: 'a list t -> 'a list t -> 'a list t
+  val make: 'a t list -> 'a list t
+  (** Make an EDSL list out of an OCaml list. *)
 
-val list_iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+  val append: 'a list t -> 'a list t -> 'a list t
 
-val list_to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
+  val iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
+  (** Iterate over a list, the body of the loop [~f] takes as argument
+      function that returns the current eletment at the EDSL level. *)
 
-val list_of_string: byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
+  val to_string: 'a list t -> f:('a t -> byte_array t) -> byte_array t
+
+  val of_string: byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
+
+end
 
 (** {3 String Manipulation} *)
 
-val to_byte_array: c_string t -> byte_array t
-val to_c_string: byte_array t -> c_string t
 
-val output_as_string : unit t -> byte_array t
+module Byte_array : sig
+  val ( =$= ) : byte_array t -> byte_array t -> bool t
+  val ( <$> ) : byte_array t -> byte_array t -> bool t
+  val to_c_string: byte_array t -> c_string t
+  val to_c: byte_array t -> c_string t
+end
 
-val feed : string:byte_array t -> unit t -> unit t
-(** Feed some content ([~string]) into the ["stdin"] filedescriptor of
-    a [unit t] expression. *)
 
-val ( >> ) : byte_array t -> unit t -> unit t
-(** [str >> cmd] is [feed ~string:str cmd]. *)
+module C_string : sig
+  val equals : c_string t -> c_string t -> bool t
+  val ( =$= ) : c_string t -> c_string t -> bool t
+  val ( <$> ) : c_string t -> c_string t -> bool t
 
-val string_concat: c_string t list -> c_string t
-(** Concatenate an (OCaml) list of [c_string t] values. *)
+  val to_byte_array: c_string t -> byte_array t
+  val to_bytes: c_string t -> byte_array t
 
-val string_concat_list: c_string list t -> c_string t
-(** Concatenate a Genspio list of strings [c_string list t]. *)
+  val concat_list: c_string t list -> c_string t
+  (** Concatenate an (OCaml) list of [c_string t] values. *)
+
+  val concat_elist: c_string list t -> c_string t
+  (** Concatenate a Genspio list of strings [c_string list t]. *)
+end
 
 (** {3 Control Flow} *)
 
@@ -170,6 +180,11 @@ val seq : unit t list -> unit t
 (** Sequence a list of expressions into an expression. *)
 
 val loop_while : bool t -> body:unit t -> unit t
+(** Build a while loop. *)
+
+val loop_seq_while : bool t -> unit t list -> unit t
+(** [loop_seq_while condition body] is a shortcut for
+    [loop_while condition ~body:(seq body)]. *)
 
 val if_seq:
   t:unit t list ->
@@ -177,8 +192,8 @@ val if_seq:
   bool t ->
   unit t
 (** [if_seq c ~t ~e] is an alternate API for {!if_then_else} (when
-    [?e] is provided) or {!if_then} (otherwise) that assumes “then”
-    and “else” bodies to be lists for {!seq} construct. *)
+    [?e] is provided) or {!if_then} (otherwise) that takes “then”
+    and “else” bodies which are lists for the {!seq} construct. *)
 
 (** {3 Switch Statements } *)
 
@@ -204,7 +219,7 @@ val make_switch :
   default:unit Language.t -> unit Language.t
 (**/**)
 
-(** {3 Redirections } *)
+(** {3 Redirections and File Descriptors } *)
 
 type fd_redirection
 (** Abstract type of file-descriptor redirections. *)
@@ -251,6 +266,17 @@ val pipe: unit t list -> unit t
 val (||>) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
+val get_stdout : unit t -> byte_array t
+(** Get the contents of [stdout] into a byte array (in previous
+    versions this function was called [output_as_string]).  *)
+
+val feed : string:byte_array t -> unit t -> unit t
+(** Feed some content ([~string]) into the ["stdin"] filedescriptor of
+    a [unit t] expression. *)
+
+val ( >> ) : byte_array t -> unit t -> unit t
+(** [str >> cmd] is [feed ~string:str cmd]. *)
+
 val printf : c_string t -> c_string t list -> unit t
 (**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
 
@@ -267,7 +293,7 @@ val fail: string -> unit t
 (** {3 Temporary Files} *)
 
 type file = <
-  get : byte_array t;
+  get : byte_array t; (** Get the current contents of the file *)
   get_c : c_string t;
   set : byte_array t -> unit t;
   set_c : c_string t -> unit t;

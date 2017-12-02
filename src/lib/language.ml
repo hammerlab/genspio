@@ -212,12 +212,23 @@ module Construct = struct
   let call l = Exec l
   let (&&&) a b = Bool_operator (a, `And, b)
   let (|||) a b = Bool_operator (a, `Or, b)
-  let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-  let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+  module C_string = struct
+    let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+    let (=$=) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+    let (<$>) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+    let to_byte_array c = C_string_to_byte_array c
+    let to_bytes c = C_string_to_byte_array c
+
+    let concat_elist l = C_string_concat l
+    let concat_list sl =
+      concat_elist (List sl)
+
+  end
   module Byte_array = struct
     let (=$=) a b = String_operator (a, `Eq, b)
     let (<$>) a b = String_operator (a, `Neq, b)
-    let of_c s = to_byte_array s
+    let to_c_string ba = Byte_array_to_c_string ba
+    let to_c ba = Byte_array_to_c_string ba
   end
 
   let returns expr ~value = Returns {expr; value}
@@ -257,7 +268,7 @@ module Construct = struct
   let getenv v = Getenv v
   let setenv ~var v = Setenv (var, v)
 
-  let output_as_string e = Output_as_string e
+  let get_stdout e = Output_as_string e
 
   let feed ~string e = Feed (string, e)
   let (>>) string e = feed ~string e
@@ -266,18 +277,18 @@ module Construct = struct
   let (||>) a b = Pipe [a; b]
 
   let loop_while condition ~body = While {condition; body}
+  let loop_seq_while condition body = While {condition; body = Seq body}
 
-  let list l = List l
+  module Elist = struct
+    let make l = List l
+    let append la lb = List_append (la, lb)
+    let iter l ~f = List_iter (l, f)
+    let to_string l ~f = List_to_string (l, f)
+    let of_string l ~f = String_to_list (l, f)
+  end
 
-  let string_concat_list l = C_string_concat l
   let byte_array_concat_list l = Byte_array_concat l
 
-  let list_append la lb = List_append (la, lb)
-
-  let list_iter l ~f = List_iter (l, f)
-
-  let list_to_string l ~f = List_to_string (l, f)
-  let list_of_string l ~f = String_to_list (l, f)
 
   module Bool = struct
     let of_string s = String_to_bool s

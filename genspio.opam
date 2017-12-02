@@ -1,22 +1,22 @@
-# This `opam` file was auto-generated.
+# This Opam file was auto-generated, see the `please.ml` script.
 opam-version: "1.2"
 maintainer: "Seb Mondet <seb@mondet.org>"
-authors: "Seb Mondet <seb@mondet.org>"
-homepage: "https://github.com/hammerlab/genspio/"
+authors: [
+  "Seb Mondet <seb@mondet.org>"
+]
+homepage: "https://github.com/hammerlab/genspio"
 bug-reports: "https://github.com/hammerlab/genspio/issues"
 dev-repo: "https://github.com/hammerlab/genspio.git"
 license: "Apache 2.0"
 version: "0.0.1-dev"
-available: [
-  ocaml-version >= "4.03.0"
-]
+available: [ ocaml-version >= "4.03.0" ]
 build: [
   ["ocaml" "please.ml" "configure"]
   ["jbuilder" "build" "--only" "genspio" "--root" "." "-j" jobs "@install"]
 ]
 depends: [
-  "jbuilder" {build}
-  "ocamlfind" {build}
   "nonstd"
   "sosa"
+  "jbuilder" {build}
+  "ocamlfind" {build}
 ]

@@ -66,17 +66,17 @@ let downloader () =
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
-    string |> to_byte_array >> exec (["grep"; "-q"] @ options) |> succeeds in
+    string |> C_string.to_bytes >> exec (["grep"; "-q"] @ options) |> succeeds in
 
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      string_concat [input; string "\n"] |> to_byte_array
+      C_string.concat_list [input; string "\n"] |> C_string.to_bytes
       >> exec ["sed"; expr]
-      |> output_as_string
+      |> get_stdout
     in
     with_potential_newline >> exec ["tr"; "-d"; "\\n"]
-    |> output_as_string
-    |> to_c_string
+    |> get_stdout
+    |> Byte_array.to_c
   in
 
   let module Unwrapper = struct
@@ -104,7 +104,7 @@ let downloader () =
             (t.commands name_variable);
           name_variable#set
             (remove_suffix name_variable#get_c (sprintf "\\.%s" t.extension)
-             |> to_byte_array);
+             |> C_string.to_bytes);
         ] in
       seq [
         say [string "Extract loop: "; name_variable#get_c];
@@ -164,17 +164,17 @@ let downloader () =
     begin fun ~anon url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
-        if_seq (filename_ov =$= no_value)
+        if_seq C_string.(filename_ov =$= no_value)
           ~t:begin
             let filename =
               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
             let output_path =
-              string_concat [tmp_dir; string "/"; filename] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename] |> C_string.to_bytes in
             [current_name#set output_path]
           end
           ~e:begin
             let output_path =
-              string_concat [tmp_dir; string "/"; filename_ov] |> to_byte_array in
+              C_string.concat_list [tmp_dir; string "/"; filename_ov] |> C_string.to_bytes in
             [current_name#set output_path]
           end
       in
@@ -182,7 +182,7 @@ let downloader () =
         call [string "mkdir"; string "-p"; tmp_dir];
         if_then all_in_tmp
           (seq [sayf "Going to the tmpdir"; call [string "cd"; tmp_dir]]);
-        if_then (url =$= no_value)
+        if_then C_string.(url =$= no_value)
           (failf "Argument URL is mandatory");
         if_then_else
           (string_matches_any url ["^http://"; "^https://"; "^ftp://"])

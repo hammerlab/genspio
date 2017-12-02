@@ -66,7 +66,7 @@ let () =
 Genspio.EDSL.(
   call [
     string "echo";
-    string_concat [string "foo"; string "bar"]; (* A concatenation at run-time. *)
+    C_string.concat_list [string "foo"; string "bar"]; (* A concatenation at run-time. *)
   ]
 )
 |ocaml}
@@ -89,13 +89,13 @@ let () =
 {md|Here we use the constructs:
 
 ```ocaml
-val output_as_string : unit t -> byte_array t
-val to_c_string: byte_array t -> c_string t
+val get_stdout : unit t -> byte_array t
+val Byte_array.to_c: byte_array t -> c_string t
 val (||>) : unit t -> unit t -> unit t
 ```
 
 We use `let (s : …) = …` to show the types; we see then that we need to “cast”
-the output to a C-String with `to_c_string` in order to pass it to `call`.
+the output to a C-String with `Byte_array.to_c` in order to pass it to `call`.
 Indeed, commands can output arbitrary byte-arrays but Unix commands
 only accept `NUL`-terminated strings.
 
@@ -104,8 +104,8 @@ a 2-argument shortcut for `EDSL.pipe`).
 |md}
 {ocaml|
 Genspio.EDSL.(
-  let (s : byte_array t) = output_as_string (exec ["cat"; "README.md"]) in
-  call [string "printf"; string "%s"; to_c_string s] ||> exec ["wc"; "-l"];
+  let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
+  call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
 )
 |ocaml}
 
@@ -129,7 +129,7 @@ let () =
 Genspio.EDSL.(
     (* With a 🐱: *)
   let original = byte_array "one\ntwo\nth\000ree\n" in
-  let full_cycle = original >> exec ["cat"] |> output_as_string in
+  let full_cycle = original >> exec ["cat"] |> get_stdout in
   if_seq
     Byte_array.(full_cycle =$= original)
     ~t:[
@@ -151,16 +151,16 @@ Genspio.EDSL.(
   let tmp = tmp_file "genspio-example" in
   let body =
     seq [
-      if_then_else (tmp#get_c =$= string "")
-         (tmp#set_c (string "magic-"))
-         (if_then_else (tmp#get_c =$= string "magic-")
-            (tmp#append (string "string" |> to_byte_array))
+      if_then_else C_string.(tmp#get_c =$= c_string "")
+         (tmp#set_c (c_string "magic-"))
+         (if_then_else C_string.(tmp#get_c =$= string "magic-")
+            (tmp#append (c_string "string" |> C_string.to_bytes))
             nop);
       call [string "printf"; string "Currently '%s'\\n"; tmp#get_c];
     ] in
   seq [
     tmp#set (byte_array "");
-    loop_while (tmp#get_c <$> string "magic-string") ~body
+    loop_while C_string.(tmp#get_c <$> c_string "magic-string") ~body
   ]
 )
 |ocaml}
@@ -190,9 +190,26 @@ Genspio.EDSL.(
       to_fd (int 1) (int 2);
     ];
     call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
-          exec ["cat"; "/tmp/genspio-one"] |> output_as_string |> to_c_string;
-          exec ["cat"; "/tmp/genspio-two"] |> output_as_string |> to_c_string];
+          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> Byte_array.to_c;
+          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> Byte_array.to_c];
   ]
+)
+|ocaml}
+
+let () =
+  example "Lists" ~show:"[`Pretty_printed; `Stdout]"
+    {md|The module `EList` provides lists within the EDSL.
+
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  let l = Elist.make [
+    c_string "One";
+    c_string "Two";
+  ] in
+  Elist.iter l ~f:begin fun current ->
+    printf (c_string "Current: %s\\n") [current ()];
+  end
 )
 |ocaml}
 

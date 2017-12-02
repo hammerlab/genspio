@@ -22,11 +22,9 @@ let switch l =
   in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
-let string_concat sl =
-  string_concat_list (list sl)
 
-let string_list_to_string l = list_to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
-let string_list_of_string s = list_of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
+let string_list_to_string l = Elist.to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
+let string_list_of_string s = Elist.of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
 
 type file = <
   get : byte_array t;
@@ -42,9 +40,9 @@ let tmp_file ?tmp_dir name : file =
   let get_tmp_dir =
     Option.value tmp_dir
       ~default:begin
-        output_as_string (
+        get_stdout (
           (* https://en.wikipedia.org/wiki/TMPDIR *)
-          if_then_else (getenv (c_string "TMPDIR") <$> c_string "")
+          if_then_else C_string.(getenv (c_string "TMPDIR") <$> c_string "")
             (call [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
             (exec ["printf"; "%s"; default_tmp_dir])
         )
@@ -56,16 +54,16 @@ let tmp_file ?tmp_dir name : file =
       String.map name ~f:(function
         | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-' as c -> c
         | other -> '_') in
-    string_concat [
+    C_string.concat_list [
       get_tmp_dir;
       c_string "/";
       c_string
         (sprintf "genspio-tmp-file-%s-%s" clean Digest.(string name |> to_hex));
     ]
   in
-  let tmp = string_concat [path; string "-tmp"] in
+  let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
-    method get = output_as_string (call [string "cat"; path])
+    method get = get_stdout (call [string "cat"; path])
     method get_c = self#get |> to_c_string
     method path = path
     method set v =
@@ -177,9 +175,9 @@ module Command_line = struct
             setenv (string var) x.default);
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                p ||| (string s =$= getenv (string "1"))))
+                p ||| C_string.(c_string s =$= getenv (c_string "1"))))
               [
-                if_seq (getenv (string "2") =$= string "")
+                if_seq C_string.(getenv (string "2") =$= string "")
                   ~t:[
                     eprintf
                       (string "ERROR option '%s' requires an argument\\n")
@@ -203,7 +201,7 @@ module Command_line = struct
           );
           to_case (
             case (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                p ||| (string s =$= getenv (string "1"))))
+                p ||| (C_string.equals (string s) (getenv (string "1")))))
               [
                 setenv (string var) (Bool.to_string (bool true));
                 exec ["shift"];
@@ -224,25 +222,25 @@ module Command_line = struct
       let body =
         let append_anon_arg_to_list =
           setenv anonarg_var (
-            list_append
+            Elist.append
               (string_list_of_string (getenv anonarg_var))
-              (list [getenv (string "1")])
+              (Elist.make [getenv (string "1")])
             |> string_list_to_string
           ) in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
-                 p ||| (string s =$= getenv (string "1")))) [
+                 p ||| C_string.(c_string s =$= getenv (c_string "1")))) [
             setenv help_flag_var (Bool.to_string (bool true));
             byte_array help_msg >>  exec ["cat"];
             exec ["break"];
           ]
         in
         let dash_dash_case =
-          case (getenv (string "1") =$= string "--") [
+          case C_string.(getenv (c_string "1") =$= c_string "--") [
             exec ["shift"];
-            loop_while (getenv (string "#") <$> string "0") ~body:begin
+            loop_while C_string.(getenv (c_string "#") <$> c_string "0") ~body:begin
               seq [
                 append_anon_arg_to_list;
                 exec ["shift"];
@@ -251,7 +249,7 @@ module Command_line = struct
             exec ["break"];
           ] in
         let anon_case =
-          case (getenv (string "#") <$> string "0") [
+          case C_string.(getenv (c_string "#") <$> c_string "0") [
             append_anon_arg_to_list;
             exec ["shift"];
           ] in
@@ -268,7 +266,7 @@ module Command_line = struct
     in
     seq [
       setenv help_flag_var (Bool.to_string (bool false));
-      setenv anonarg_var (string_list_to_string (list []));
+      setenv anonarg_var (string_list_to_string (Elist.make []));
       seq (List.rev !inits);
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))
