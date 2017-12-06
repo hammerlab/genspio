@@ -214,6 +214,48 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
+  example "Loop until something is true" ~show:"[`Stdout]"
+    {md|The module `Extra_constructs` provides high-level utilities.
+
+Here is an example with `loop_until_true` that fails after 4 attempts
+(i.e. (4 - 1) × 1 = 3 seconds),
+unless there is line containing `godot` in `/etc/passwd`.
+
+We customize the output with an `~on_failed_attempt` function that (on
+most terminals) erases the previous display (with `\r`).
+
+<div><a href="https://user-images.githubusercontent.com/617111/33687244-962424f8-daa5-11e7-97cf-f7e0d9353b52.gif"><img
+ width="80%"
+  src="https://user-images.githubusercontent.com/617111/33687244-962424f8-daa5-11e7-97cf-f7e0d9353b52.gif"
+></a></div>
+
+|md}
+    {ocaml|
+Genspio.EDSL.(
+let the_condition =
+  exec ["cat"; "/etc/passwd"] ||> exec ["grep"; "^godot"]
+  |> returns ~value:0
+in
+let the_wait =
+  Extra_constructs.loop_until_true
+    ~attempts:4
+    ~sleep:1
+    ~on_failed_attempt:(fun nth ->
+      printf (string "\rWaiting for 'godot': %s-th attempt.") [Integer.to_string nth])
+    the_condition
+in
+if_seq the_wait ~t:[
+    printf (c_string "It was worth waiting\\n") [];
+  ]
+   ~e:[
+    printf (c_string "It was NOT worth waiting\\n") [];
+  ]
+)
+|ocaml}
+
+(******************************************************************************)
+
+let () =
   let o = open_out Sys.argv.(1) in
   fprintf o "%s" {ocaml|
 open Nonstd
