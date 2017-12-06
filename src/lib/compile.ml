@@ -123,6 +123,10 @@ let to_many_lines ?max_argument_length ?no_trap e =
   to_legacy `Multi_line
     ?max_argument_length ?no_trap e
 
+let quick_run_exn ?max_argument_length ?no_trap e =
+  match to_many_lines ?max_argument_length ?no_trap e |> Sys.command with
+  | 0 -> ()
+  | other -> ksprintf failwith "Command returned %d" other
 
 
 let pp_hum = Language.pp
