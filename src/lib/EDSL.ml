@@ -299,8 +299,9 @@ module Extra_constructs = struct
       )
         ~body:(seq [
             on_failed_attempt intvar#get;
-            exec ["sleep"; sprintf "%d" sleep];
             intvar#set Integer.(intvar#get + int 1);
+            if_then Integer.(intvar#get <= int attempts)
+              (exec ["sleep"; sprintf "%d" sleep]);
           ]);
       exec ["printf"; "\\n"];
       if_then_else Integer.(intvar#get > int attempts)

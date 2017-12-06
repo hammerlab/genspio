@@ -224,9 +224,9 @@ unless there is line containing `godot` in `/etc/passwd`.
 We customize the output with an `~on_failed_attempt` function that (on
 most terminals) erases the previous display (with `\r`).
 
-<div><a href="https://user-images.githubusercontent.com/617111/33687244-962424f8-daa5-11e7-97cf-f7e0d9353b52.gif"><img
+<div><a href="https://user-images.githubusercontent.com/617111/33687734-09f78c48-daa7-11e7-9a49-4c8fd8a07f24.gif"><img
  width="80%"
-  src="https://user-images.githubusercontent.com/617111/33687244-962424f8-daa5-11e7-97cf-f7e0d9353b52.gif"
+  src="https://user-images.githubusercontent.com/617111/33687734-09f78c48-daa7-11e7-9a49-4c8fd8a07f24.gif"
 ></a></div>
 
 |md}
