@@ -402,7 +402,25 @@ module Command_line: sig
   val parse : ('a, unit t) cli_options -> (anon: c_string list t -> 'a) -> unit t
 end
 
+(** {3 Additional higher-level utilities} *)
+module Extra_constructs: sig
 
+  val loop_until_true :
+    ?attempts:int ->
+    ?sleep:int ->
+    ?on_failed_attempt:(int t -> unit t) ->
+    bool t -> bool t
+  (** [loop_until_true eval_condition] tries to run [eval_condition]
+      in a loop until it succeeds. It makes [~attempts] attemps
+      (default 20), and sleeps for [sleep] seconds (default 2) after
+      each failed attempt. The argument [~on_failed_attempt] can be
+      used for instance to display something between each failed
+      attempt and the call to [sleep], the default is {[
+        fun nth -> printf (string "%d.") [Integer.to_string nth]
+     ]}.
+ *)
+
+end
 
 
 (** {3 Very Unsafe Operations} *)

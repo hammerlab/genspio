@@ -275,3 +275,45 @@ module Command_line = struct
     ]
 
 end
+
+
+module Extra_constructs = struct
+
+  let loop_until_true
+      ?(attempts = 20)
+      ?(sleep = 2)
+      ?(on_failed_attempt = fun nth -> printf (string "%d.") [Integer.to_string nth])
+      cmd =
+    let intvar =
+      let varname = string "C_ATTEMPTS" in
+      object
+        method set v = setenv ~var:varname (Integer.to_string v)
+        method get = getenv varname |> Integer.of_string
+      end in
+    seq [
+      intvar#set (int 1);
+      loop_while (
+        Integer.(intvar#get <= int attempts)
+        &&&
+        not cmd
+      )
+        ~body:(seq [
+            on_failed_attempt intvar#get;
+            exec ["sleep"; sprintf "%d" sleep];
+            intvar#set Integer.(intvar#get + int 1);
+          ]);
+      exec ["printf"; "\\n"];
+      if_then_else Integer.(intvar#get > int attempts)
+        (seq [
+            (* sprintf "Command failed %d times!" attempts; *)
+            exec ["false"]
+          ])
+        (seq [
+            (* sprintf "Command failed %d times!" attempts; *)
+            exec ["true"]
+          ])
+    ] |> returns ~value:0
+
+
+end
+
