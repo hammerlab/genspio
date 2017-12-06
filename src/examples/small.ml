@@ -232,19 +232,20 @@ most terminals) erases the previous display (with `\r`).
 |md}
     {ocaml|
 Genspio.EDSL.(
-let the_condition =
-  exec ["cat"; "/etc/passwd"] ||> exec ["grep"; "^godot"]
+let the_condition who =
+  exec ["cat"; "/etc/passwd"] ||> exec ["grep"; "^" ^ who]
   |> returns ~value:0
 in
-let the_wait =
+let the_wait who =
   Extra_constructs.loop_until_true
     ~attempts:4
     ~sleep:1
     ~on_failed_attempt:(fun nth ->
-      printf (string "\rWaiting for 'godot': %s-th attempt.") [Integer.to_string nth])
-    the_condition
+      printf (string "\rWaiting for '%s: %s-th attempt.")
+       [c_string who; Integer.to_string nth])
+    (the_condition who)
 in
-if_seq the_wait ~t:[
+if_seq (the_wait "godot") ~t:[
     printf (c_string "It was worth waiting\\n") [];
   ]
    ~e:[
