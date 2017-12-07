@@ -8,6 +8,8 @@ val pp_hum: Format.formatter -> 'a EDSL.t -> unit
 val to_string_hum: 'a EDSL.t -> string
 (** Pretty print a Genspio expression to [string]. *)
 
+val to_one_line_hum: 'a EDSL.t -> string
+(** Like [to_string_hum] but avoiding new-lines. *)
 
 (** {3 Compilation to POSIX Shell Scripts} *)
 

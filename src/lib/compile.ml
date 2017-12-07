@@ -131,3 +131,9 @@ let quick_run_exn ?max_argument_length ?no_trap e =
 
 let pp_hum = Language.pp
 let to_string_hum e = Format.asprintf "%a" pp_hum e
+let to_one_line_hum e =
+  let buf = Buffer.create 42 in
+  let formatter = Format.formatter_of_buffer  buf in
+  Format.pp_set_margin formatter 10_000_000;
+  Format.fprintf formatter "@[<h>%a@]@?" pp_hum e;
+  Buffer.contents buf
