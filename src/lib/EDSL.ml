@@ -325,5 +325,72 @@ module Extra_constructs = struct
   let seq_and l =
     List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
+  let output_markdown_code tag f =
+    seq [
+      exec ["printf"; sprintf "``````````%s\\n" tag];
+      f;
+      exec ["printf"; sprintf "\\n``````````\\n"];
+    ]
+  let cat_markdown tag file =
+    output_markdown_code tag @@ call [string "cat"; file]
+
+  let fresh_name suf =
+    let x = object method v = 42 end in
+    sprintf "g-%d-%d-%s"
+      (Oo.id x)
+      (Random.int 100_000)
+      suf
+  let sanitize_name n =
+    String.map n ~f:(function
+      | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-' as c -> c
+      | other -> '_')
+
+  let default_on_failure ~step:(i, u) ~stdout ~stderr =
+    seq [
+      printf (ksprintf c_string "Step '%s' FAILED:\\n" i) [];
+      cat_markdown "stdout" stdout;
+      cat_markdown "stderr" stderr;
+      exec ["false"]
+    ]
+
+  let check_sequence
+      ?(verbosity = `Announce ">> ")
+      ?(on_failure = default_on_failure)
+      ?(on_success = fun ~step ~stdout ~stderr -> nop)
+      ?(tmpdir = "/tmp")
+      cmds  =
+    let tmp_prefix = fresh_name "-cmd" in
+    let tmpout which id =
+      c_string (tmpdir //
+                sprintf "genspio-check-sequence-%s-%s-%s"
+                  tmp_prefix which (sanitize_name id)) in
+    let stdout id = tmpout "stdout" id in
+    let stderr id = tmpout "stderr" id in
+    let log id u =
+      match verbosity with
+      | `Silent -> write_output ~stdout:(stdout id) ~stderr:(stderr id) u
+      | `Announce prompt ->
+        seq [printf (ksprintf c_string "%s %s\\n" prompt id) [];
+             write_output ~stdout:(stdout id) ~stderr:(stderr id) u]
+      | `Output_all -> u in
+    let check idx (nam, u) next =
+      let id = sprintf "%d. %s" idx nam in
+      if_seq (log id u |> succeeds)
+        ~t:[
+          on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id);
+          next;
+        ]
+        ~e:[
+          on_failure ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id);
+        ] in
+    let rec loop i =
+      function
+      | one :: more ->
+        check i one (loop (i + 1) more)
+      | [] -> exec ["true"] in
+    loop 1 cmds
+
+
+
 end
 

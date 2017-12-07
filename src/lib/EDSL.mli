@@ -429,6 +429,56 @@ module Extra_constructs: sig
   val seq_and: 'a t list -> bool t
   (** [seq_and [a; b; c]] is like [succeeds a &&& succeeds b &&& succeeds c]. *)
 
+  val output_markdown_code: string -> unit t -> unit t
+  (** [output_markdown_code "ocaml" (exec ["echo"; "let x = 42"])]
+      runs its second argument within markdown-like code fences. *)
+
+  val cat_markdown: string -> c_string t -> unit t
+  (** [cat_markdown tag path] outputs the contents of the file at
+      [path] (with ["cat"]) within a markdown code bloc. *)
+
+  val check_sequence:
+    ?verbosity:[ `Announce of string | `Output_all | `Silent ] ->
+    ?on_failure:(step: string * unit t ->
+                 stdout: c_string t ->
+                 stderr: c_string t ->
+                 unit t) ->
+    ?on_success:(step: string * unit t ->
+                 stdout: c_string t ->
+                 stderr: c_string t ->
+                 unit t) ->
+    ?tmpdir:string ->
+    (string * unit t) list ->
+    unit t
+  (** Run a sequence of expressions until the first that fails:
+
+      {ul
+        {li [?verbosity] configures the output behavior, {ul
+             {li [`Announce prompt] uses [prompt] to output the name-tag
+                 of the command, the output of the command is redirected
+                 to temporary files (accessible through the [~on_success] and
+                 [~on_failure] functions).
+                 The default value is [`Announce ">> "].}
+             {li [`Output_all] lets all the output of the commands go through.}
+             {li [`Silent] is like [`Announce _] but without even the
+                 “prompt” command annoucement.}
+          }
+        }
+        {li [?on_failure] configures what to do when encountering the
+            first failure, the default is to display on stdout the
+            name-tag of the failing command and outputting the
+            contents of its [stdout] and [stderr] log-files (if any)
+            {b and then} call [exec ["false"]].}
+        {li [?on_success] is a similar function as [?on_failure],
+            called before starting the next command, the default is to
+            do nothing.}
+        {li [?tmpdir] configures where to create the logging files.}
+      }
+      
+
+ *)
+
+
 end
 
 
