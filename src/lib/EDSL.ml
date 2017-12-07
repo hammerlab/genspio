@@ -315,6 +315,12 @@ module Extra_constructs = struct
           ])
     ] |> returns ~value:0
 
+  let silently u =
+    let dev_null = string "/dev/null" in
+    write_output ~stdout:dev_null ~stderr:dev_null u
+
+  let succeeds_silently u =
+     silently u |> succeeds
 
 end
 

@@ -420,6 +420,12 @@ module Extra_constructs: sig
      ]}.
  *)
 
+  val silently : unit t -> unit t
+  (** [silently expr] is [expr] with [stdout] and [stderr] redirected to ["/dev/null"]. *)
+
+  val succeeds_silently : unit t -> bool t
+  (**  [succeeds_silently u] {i is} [silently u |> succeeds]. *)
+
 end
 
 
