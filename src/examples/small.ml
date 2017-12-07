@@ -254,6 +254,34 @@ Genspio.EDSL.(
   )
 |ocaml}
 
+let () =
+  example "Check Sequence" ~show:"[`Stdout]"
+    {md|Another function from the module `Extra_constructs`:
+        [`check_sequence`](genspio/Genspio/EDSL/Extra_constructs/index.html#val-check_sequence).
+
+We customize its output with the `~verbosity` (by adding a nice prompt) and
+`~on_success` arguments.
+|md}
+    {ocaml|
+Genspio.EDSL.(
+   Extra_constructs.check_sequence
+     ~verbosity:(`Announce "♦ Check-seq-example → ") (* Try also `Output_all or `Silent *)
+     ~on_success:begin fun ~step:(name, expr) ~stdout ~stderr ->
+       let code = Genspio.Compile.to_one_line_hum expr in
+       printf (c_string "  ↳ Extra “On Success” for command `%s`\\n\
+                        \    code: `%s`\\n\
+                        \    stdout: `%s`\\n\
+                        \    stderr: `%s`\\n")
+          [c_string name; c_string code; stdout; stderr]
+     end
+     [
+        "This will succeed", exec ["ls"; "/tmp"];
+        "This too", exec ["ls"; "/"];
+        "BUT NOT THIS", exec ["ls"; "/somecrazy path"];
+        "This won't happen", exec ["ls"; "/etc"];
+     ]
+)
+|ocaml}
 (******************************************************************************)
 
 let () =
