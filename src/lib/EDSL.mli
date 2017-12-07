@@ -426,6 +426,9 @@ module Extra_constructs: sig
   val succeeds_silently : unit t -> bool t
   (**  [succeeds_silently u] {i is} [silently u |> succeeds]. *)
 
+  val seq_and: 'a t list -> bool t
+  (** [seq_and [a; b; c]] is like [succeeds a &&& succeeds b &&& succeeds c]. *)
+
 end
 
 

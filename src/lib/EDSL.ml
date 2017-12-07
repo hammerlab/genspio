@@ -322,5 +322,8 @@ module Extra_constructs = struct
   let succeeds_silently u =
      silently u |> succeeds
 
+  let seq_and l =
+    List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
+
 end
 
