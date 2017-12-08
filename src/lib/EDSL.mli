@@ -36,15 +36,7 @@ val (%%%): string -> 'a t -> 'a t
 
 val call : c_string t list -> unit t
 (** Call a command from its list of “arguments” (including the first
-    argument being the actual command).
-
-    Note that UNIX does not allow strings passed as arguments to
-    executables to contain NUL-characters (['\x00']).
-    The function {!Language.to_many_lines} raises an exception
-    if an argument is a literal and contains a NUL, but if the
-    argument is the result of some other expression the behavior is
-    for now undefined.
-*)
+    argument being the actual command). *)
 
 val exec : string list -> unit t
 (** Like {!call} but with string literals; i.e. [exec ["a"; "b"]] is
