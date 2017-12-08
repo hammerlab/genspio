@@ -390,6 +390,13 @@ module Extra_constructs = struct
       | [] -> exec ["true"] in
     loop 1 cmds
 
+  let on_stdin_lines body =
+    let fresh = Common.Unique_name.variable "read_stdin" in
+    loop_while (exec ["read"; "-r"; fresh] |> succeeds)
+      ~body:(seq [
+          exec ["export"; fresh];
+          body (getenv (string fresh));
+        ])
 
 
 end

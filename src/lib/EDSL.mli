@@ -478,6 +478,11 @@ module Extra_constructs: sig
 
  *)
 
+  val on_stdin_lines: (c_string t -> unit t) -> unit t
+  (** [on_stdin_lines body] builds a loop that iterates over the lines of the [stdin]
+      file descriptor. The argument of `body` is the current line.
+      Note that this is for text-like input, ['\000']
+      characters in the input lead to undefined behavior. *)
 
 end
 
