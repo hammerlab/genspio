@@ -215,7 +215,8 @@ Genspio.EDSL.(
 
 let () =
   example "Loop until something is true" ~show:"[`Stdout]"
-    {md|The module `Extra_constructs` provides high-level utilities.
+    {md|The EDSL also provides high-level utilities implemented with
+the API (like a standard library).
 
 Here is an example with `loop_until_true` that fails after 4 attempts
 (i.e. (4 - 1) × 1 = 3 seconds),
@@ -237,7 +238,7 @@ Genspio.EDSL.(
     |> returns ~value:0
   in
   let the_wait who =
-    Extra_constructs.loop_until_true
+    loop_until_true
       ~attempts:4
       ~sleep:1
       ~on_failed_attempt:(fun nth ->
@@ -256,15 +257,15 @@ Genspio.EDSL.(
 
 let () =
   example "Check Sequence" ~show:"[`Stdout]"
-    {md|Another function from the module `Extra_constructs`:
-        [`check_sequence`](genspio/Genspio/EDSL/Extra_constructs/index.html#val-check_sequence).
+    {md|Another function from the “extra constructs:”
+[`check_sequence`](genspio/Genspio/EDSL/index.html#val-check_sequence).
 
 We customize its output with the `~verbosity` (by adding a nice prompt) and
 `~on_success` arguments.
 |md}
     {ocaml|
 Genspio.EDSL.(
-   Extra_constructs.check_sequence
+   check_sequence
      ~verbosity:(`Announce "♦ Check-seq-example → ") (* Try also `Output_all or `Silent *)
      ~on_success:begin fun ~step:(name, expr) ~stdout ~stderr ->
        let code = Genspio.Compile.to_one_line_hum expr in
@@ -285,8 +286,9 @@ Genspio.EDSL.(
 
 let () =
   example "Read `stdin` Line by Line" ~show:"[`Stdout]"
-    {md|Another function from the module `Extra_constructs`:
-[`on_stdin_lines`](genspio/Genspio/EDSL/Extra_constructs/index.html#val-on_stdin_lines).
+    {md|Let's try now the
+[`on_stdin_lines`](genspio/Genspio/EDSL/index.html#val-on_stdin_lines)
+function, to read a *stream* of lines.
 
 Note that for the word “lines” to really make sense, the input should
 be proper “text,” in the example below the `'\000'` character is just
@@ -295,7 +297,7 @@ silently forgotten, not counted.
     {ocaml|
 Genspio.EDSL.(
   printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
-  ||> Extra_constructs.on_stdin_lines begin fun line ->
+  ||> on_stdin_lines begin fun line ->
     printf (c_string "→ %s bytes\\n")
       [C_string.to_byte_array line
        >> exec ["wc"; "-c"] ||> exec ["tr"; "-d"; "\\n"]

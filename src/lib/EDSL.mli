@@ -402,89 +402,88 @@ module Command_line: sig
   val parse : ('a, unit t) cli_options -> (anon: c_string list t -> 'a) -> unit t
 end
 
-(** {3 Additional higher-level utilities} *)
-module Extra_constructs: sig
+(** {3 Additional Higher-Level Utilities} *)
 
-  val loop_until_true :
-    ?attempts:int ->
-    ?sleep:int ->
-    ?on_failed_attempt:(int t -> unit t) ->
-    bool t -> bool t
-  (** [loop_until_true eval_condition] tries to run [eval_condition]
-      in a loop until it succeeds. It makes [~attempts] attemps
-      (default 20), and sleeps for [sleep] seconds (default 2) after
-      each failed attempt. The argument [~on_failed_attempt] can be
-      used for instance to display something between each failed
-      attempt and the call to [sleep], the default is {[
-        fun nth -> printf (string "%d.") [Integer.to_string nth]
-     ]}.
- *)
 
-  val silently : unit t -> unit t
-  (** [silently expr] is [expr] with [stdout] and [stderr] redirected to ["/dev/null"]. *)
 
-  val succeeds_silently : unit t -> bool t
-  (**  [succeeds_silently u] {i is} [silently u |> succeeds]. *)
+val loop_until_true :
+  ?attempts:int ->
+  ?sleep:int ->
+  ?on_failed_attempt:(int t -> unit t) ->
+  bool t -> bool t
+(** [loop_until_true eval_condition] tries to run [eval_condition]
+    in a loop until it succeeds. It makes [~attempts] attemps
+    (default 20), and sleeps for [sleep] seconds (default 2) after
+    each failed attempt. The argument [~on_failed_attempt] can be
+    used for instance to display something between each failed
+    attempt and the call to [sleep], the default is {[
+      fun nth -> printf (string "%d.") [Integer.to_string nth]
+    ]}.
+*)
 
-  val seq_and: 'a t list -> bool t
-  (** [seq_and [a; b; c]] is like [succeeds a &&& succeeds b &&& succeeds c]. *)
+val silently : unit t -> unit t
+(** [silently expr] is [expr] with [stdout] and [stderr] redirected to ["/dev/null"]. *)
 
-  val output_markdown_code: string -> unit t -> unit t
-  (** [output_markdown_code "ocaml" (exec ["echo"; "let x = 42"])]
-      runs its second argument within markdown-like code fences. *)
+val succeeds_silently : unit t -> bool t
+(**  [succeeds_silently u] {i is} [silently u |> succeeds]. *)
 
-  val cat_markdown: string -> c_string t -> unit t
-  (** [cat_markdown tag path] outputs the contents of the file at
-      [path] (with ["cat"]) within a markdown code bloc. *)
+val seq_and: 'a t list -> bool t
+(** [seq_and [a; b; c]] is like [succeeds a &&& succeeds b &&& succeeds c]. *)
 
-  val check_sequence:
-    ?verbosity:[ `Announce of string | `Output_all | `Silent ] ->
-    ?on_failure:(step: string * unit t ->
-                 stdout: c_string t ->
-                 stderr: c_string t ->
-                 unit t) ->
-    ?on_success:(step: string * unit t ->
-                 stdout: c_string t ->
-                 stderr: c_string t ->
-                 unit t) ->
-    ?tmpdir:string ->
-    (string * unit t) list ->
-    unit t
-  (** Run a sequence of expressions until the first that fails:
+val output_markdown_code: string -> unit t -> unit t
+(** [output_markdown_code "ocaml" (exec ["echo"; "let x = 42"])]
+    runs its second argument within markdown-like code fences. *)
 
-      {ul
-        {li [?verbosity] configures the output behavior, {ul
-             {li [`Announce prompt] uses [prompt] to output the name-tag
-                 of the command, the output of the command is redirected
-                 to temporary files (accessible through the [~on_success] and
-                 [~on_failure] functions).
-                 The default value is [`Announce ">> "].}
-             {li [`Output_all] lets all the output of the commands go through.}
-             {li [`Silent] is like [`Announce _] but without even the
-                 “prompt” command annoucement.}
-          }
+val cat_markdown: string -> c_string t -> unit t
+(** [cat_markdown tag path] outputs the contents of the file at
+    [path] (with ["cat"]) within a markdown code bloc. *)
+
+val check_sequence:
+  ?verbosity:[ `Announce of string | `Output_all | `Silent ] ->
+  ?on_failure:(step: string * unit t ->
+               stdout: c_string t ->
+               stderr: c_string t ->
+               unit t) ->
+  ?on_success:(step: string * unit t ->
+               stdout: c_string t ->
+               stderr: c_string t ->
+               unit t) ->
+  ?tmpdir:string ->
+  (string * unit t) list ->
+  unit t
+(** Run a sequence of expressions until the first that fails:
+
+    {ul
+      {li [?verbosity] configures the output behavior, {ul
+           {li [`Announce prompt] uses [prompt] to output the name-tag
+               of the command, the output of the command is redirected
+               to temporary files (accessible through the [~on_success] and
+               [~on_failure] functions).
+               The default value is [`Announce ">> "].}
+           {li [`Output_all] lets all the output of the commands go through.}
+           {li [`Silent] is like [`Announce _] but without even the
+               “prompt” command annoucement.}
         }
-        {li [?on_failure] configures what to do when encountering the
-            first failure, the default is to display on stdout the
-            name-tag of the failing command and outputting the
-            contents of its [stdout] and [stderr] log-files (if any)
-            {b and then} call [exec ["false"]].}
-        {li [?on_success] is a similar function as [?on_failure],
-            called before starting the next command, the default is to
-            do nothing.}
-        {li [?tmpdir] configures where to create the logging files.}
       }
-      
+      {li [?on_failure] configures what to do when encountering the
+          first failure, the default is to display on stdout the
+          name-tag of the failing command and outputting the
+          contents of its [stdout] and [stderr] log-files (if any)
+          {b and then} call [exec ["false"]].}
+      {li [?on_success] is a similar function as [?on_failure],
+          called before starting the next command, the default is to
+          do nothing.}
+      {li [?tmpdir] configures where to create the logging files.}
+    }
 
- *)
 
-  val on_stdin_lines: (c_string t -> unit t) -> unit t
-  (** [on_stdin_lines body] builds a loop that iterates over the lines of the [stdin]
-      file descriptor. The argument of `body` is the current line.
-      Note that this is for text-like input, ['\000']
-      characters in the input lead to undefined behavior. *)
+*)
 
-end
+val on_stdin_lines: (c_string t -> unit t) -> unit t
+(** [on_stdin_lines body] builds a loop that iterates over the lines of the [stdin]
+    file descriptor. The argument of `body` is the current line.
+    Note that this is for text-like input, ['\000']
+    characters in the input lead to undefined behavior. *)
 
 
 (** {3 Very Unsafe Operations} *)
