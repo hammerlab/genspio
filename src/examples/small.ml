@@ -282,6 +282,28 @@ Genspio.EDSL.(
      ]
 )
 |ocaml}
+
+let () =
+  example "Read `stdin` Line by Line" ~show:"[`Stdout]"
+    {md|Another function from the module `Extra_constructs`:
+[`on_stdin_lines`](genspio/Genspio/EDSL/Extra_constructs/index.html#val-on_stdin_lines).
+
+Note that for the word “lines” to really make sense, the input should
+be proper “text,” in the example below the `'\000'` character is just
+silently forgotten, not counted.
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
+  ||> Extra_constructs.on_stdin_lines begin fun line ->
+    printf (c_string "→ %s bytes\\n")
+      [C_string.to_byte_array line
+       >> exec ["wc"; "-c"] ||> exec ["tr"; "-d"; "\\n"]
+       |> get_stdout |> Byte_array.to_c]
+  end
+)
+|ocaml}
+
 (******************************************************************************)
 
 let () =
