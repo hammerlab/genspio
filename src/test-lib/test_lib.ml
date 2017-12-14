@@ -332,7 +332,9 @@ module Example = struct
     function
     | EDSL {code; description; ocaml_code; name; show} ->
       let md_code_block lang code =
-        ff fmt "```%s@\n%s@\n```@\n@\n" lang (String.strip code) in
+        let fence = String.make 50 '`' in
+        ff fmt "%s%s@\n%s@\n%s@\n@\n"
+          fence lang (String.strip code) fence in
       let if_show s f = if List.mem s show then f () else () in
       let try_url =
         sprintf "https://smondet.gitlab.io/genspio-web-demo/genspio-master/\
@@ -342,7 +344,6 @@ module Example = struct
       ff fmt "@\n%s@\n%s@\n@\n%s@ [[Try-Online](%s)]@\n@\n"
         name (String.map name ~f:(fun _ -> '-')) description try_url;
       md_code_block "ocaml" ocaml_code;
-      (* ff fmt "```ocaml@\n%s@\n```@\n@\n" (String.strip ocaml_code); *)
       if_show `Pretty_printed begin fun () ->
         ff fmt "Pretty-printed:@\n@\n";
         md_code_block "scheme" (Genspio.Compile.to_string_hum code);
@@ -360,13 +361,14 @@ module Example = struct
         (* ff fmt "    *@[<hov 2> Std-OUT:@ `%s`@]@\n" out; *)
         (* ff fmt "    *@[<hov 2> Std-ERR:@ `%s`@]@\n" err; *)
         let show_file name path =
-          ff fmt "@\n%s:@\n@\n```@\n" name;
+          let fence = String.make 50 '`' in
+          ff fmt "@\n%s:@\n@\n%s@\n" name fence;
           let i = open_in path in
           let rec loop () =
             try ff fmt "%c" @@ input_char i; loop ()
             with _ -> () in
           loop ();
-          ff fmt "@\n```@\n@\n" in
+          ff fmt "@\n%s@\n@\n" fence in
         if_show `Compiled begin fun () ->
           ff fmt "Compiled to POSIX (%d bytes):@\n@\n" (String.length script);
           md_code_block "shell" script;

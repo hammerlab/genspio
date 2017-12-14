@@ -275,3 +275,125 @@ module Command_line = struct
     ]
 
 end
+
+
+let loop_until_true
+    ?(attempts = 20)
+    ?(sleep = 2)
+    ?(on_failed_attempt = fun nth -> printf (string "%d.") [Integer.to_string nth])
+    cmd =
+  let intvar =
+    let varname = string "C_ATTEMPTS" in
+    object
+      method set v = setenv ~var:varname (Integer.to_string v)
+      method get = getenv varname |> Integer.of_string
+    end in
+  seq [
+    intvar#set (int 1);
+    loop_while (
+      Integer.(intvar#get <= int attempts)
+      &&&
+      not cmd
+    )
+      ~body:(seq [
+          on_failed_attempt intvar#get;
+          intvar#set Integer.(intvar#get + int 1);
+          if_then Integer.(intvar#get <= int attempts)
+            (exec ["sleep"; sprintf "%d" sleep]);
+        ]);
+    exec ["printf"; "\\n"];
+    if_then_else Integer.(intvar#get > int attempts)
+      (seq [
+          (* sprintf "Command failed %d times!" attempts; *)
+          exec ["false"]
+        ])
+      (seq [
+          (* sprintf "Command failed %d times!" attempts; *)
+          exec ["true"]
+        ])
+  ] |> returns ~value:0
+
+let silently u =
+  let dev_null = string "/dev/null" in
+  write_output ~stdout:dev_null ~stderr:dev_null u
+
+let succeeds_silently u =
+  silently u |> succeeds
+
+let seq_and l =
+  List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
+
+let output_markdown_code tag f =
+  seq [
+    exec ["printf"; sprintf "``````````%s\\n" tag];
+    f;
+    exec ["printf"; sprintf "\\n``````````\\n"];
+  ]
+let cat_markdown tag file =
+  output_markdown_code tag @@ call [string "cat"; file]
+
+let fresh_name suf =
+  let x = object method v = 42 end in
+  sprintf "g-%d-%d-%s"
+    (Oo.id x)
+    (Random.int 100_000)
+    suf
+let sanitize_name n =
+  String.map n ~f:(function
+    | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-' as c -> c
+    | other -> '_')
+
+let default_on_failure ~step:(i, u) ~stdout ~stderr =
+  seq [
+    printf (ksprintf c_string "Step '%s' FAILED:\\n" i) [];
+    cat_markdown "stdout" stdout;
+    cat_markdown "stderr" stderr;
+    exec ["false"]
+  ]
+
+let check_sequence
+    ?(verbosity = `Announce ">> ")
+    ?(on_failure = default_on_failure)
+    ?(on_success = fun ~step ~stdout ~stderr -> nop)
+    ?(tmpdir = "/tmp")
+    cmds  =
+  let tmp_prefix = fresh_name "-cmd" in
+  let tmpout which id =
+    c_string (tmpdir //
+              sprintf "genspio-check-sequence-%s-%s-%s"
+                tmp_prefix which (sanitize_name id)) in
+  let stdout id = tmpout "stdout" id in
+  let stderr id = tmpout "stderr" id in
+  let log id u =
+    match verbosity with
+    | `Silent -> write_output ~stdout:(stdout id) ~stderr:(stderr id) u
+    | `Announce prompt ->
+      seq [printf (ksprintf c_string "%s %s\\n" prompt id) [];
+           write_output ~stdout:(stdout id) ~stderr:(stderr id) u]
+    | `Output_all -> u in
+  let check idx (nam, u) next =
+    let id = sprintf "%d. %s" idx nam in
+    if_seq (log id u |> succeeds)
+      ~t:[
+        on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id);
+        next;
+      ]
+      ~e:[
+        on_failure ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id);
+      ] in
+  let rec loop i =
+    function
+    | one :: more ->
+      check i one (loop (i + 1) more)
+    | [] -> exec ["true"] in
+  loop 1 cmds
+
+let on_stdin_lines body =
+  let fresh = Common.Unique_name.variable "read_stdin" in
+  loop_while (exec ["read"; "-r"; fresh] |> succeeds)
+    ~body:(seq [
+        exec ["export"; fresh];
+        body (getenv (string fresh));
+      ])
+
+

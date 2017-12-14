@@ -214,6 +214,101 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
+  example "Loop until something is true" ~show:"[`Stdout]"
+    {md|The EDSL also provides high-level utilities implemented with
+the API (like a standard library).
+
+Here is an example with `loop_until_true` that fails after 4 attempts
+(i.e. (4 - 1) × 1 = 3 seconds),
+unless there is line containing `godot` in `/etc/passwd`.
+
+We customize the output with an `~on_failed_attempt` function that (on
+most terminals) erases the previous display (with `\r`).
+
+<div><a href="https://user-images.githubusercontent.com/617111/33687734-09f78c48-daa7-11e7-9a49-4c8fd8a07f24.gif"><img
+ width="80%"
+  src="https://user-images.githubusercontent.com/617111/33687734-09f78c48-daa7-11e7-9a49-4c8fd8a07f24.gif"
+></a></div>
+
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  let the_condition who =
+    exec ["cat"; "/etc/passwd"] ||> exec ["grep"; "^" ^ who]
+    |> returns ~value:0
+  in
+  let the_wait who =
+    loop_until_true
+      ~attempts:4
+      ~sleep:1
+      ~on_failed_attempt:(fun nth ->
+        printf (string "\rWaiting for '%s: %s-th attempt.")
+         [c_string who; Integer.to_string nth])
+      (the_condition who)
+  in
+  if_seq (the_wait "godot") ~t:[
+      printf (c_string "It was worth waiting\\n") [];
+    ]
+     ~e:[
+      printf (c_string "It was NOT worth waiting\\n") [];
+    ]
+  )
+|ocaml}
+
+let () =
+  example "Check Sequence" ~show:"[`Stdout]"
+    {md|Another function from the “extra constructs:”
+[`check_sequence`](genspio/Genspio/EDSL/index.html#val-check_sequence).
+
+We customize its output with the `~verbosity` (by adding a nice prompt) and
+`~on_success` arguments.
+|md}
+    {ocaml|
+Genspio.EDSL.(
+   check_sequence
+     ~verbosity:(`Announce "♦ Check-seq-example → ") (* Try also `Output_all or `Silent *)
+     ~on_success:begin fun ~step:(name, expr) ~stdout ~stderr ->
+       let code = Genspio.Compile.to_one_line_hum expr in
+       printf (c_string "  ↳ Extra “On Success” for command `%s`\\n\
+                        \    code: `%s`\\n\
+                        \    stdout: `%s`\\n\
+                        \    stderr: `%s`\\n")
+          [c_string name; c_string code; stdout; stderr]
+     end
+     [
+        "This will succeed", exec ["ls"; "/tmp"];
+        "This too", exec ["ls"; "/"];
+        "BUT NOT THIS", exec ["ls"; "/somecrazy path"];
+        "This won't happen", exec ["ls"; "/etc"];
+     ]
+)
+|ocaml}
+
+let () =
+  example "Read `stdin` Line by Line" ~show:"[`Stdout]"
+    {md|Let's try now the
+[`on_stdin_lines`](genspio/Genspio/EDSL/index.html#val-on_stdin_lines)
+function, to read a *stream* of lines.
+
+Note that for the word “lines” to really make sense, the input should
+be proper “text,” in the example below the `'\000'` character is just
+silently forgotten, not counted.
+|md}
+    {ocaml|
+Genspio.EDSL.(
+  printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
+  ||> on_stdin_lines begin fun line ->
+    printf (c_string "→ %s bytes\\n")
+      [C_string.to_byte_array line
+       >> exec ["wc"; "-c"] ||> exec ["tr"; "-d"; "\\n"]
+       |> get_stdout |> Byte_array.to_c]
+  end
+)
+|ocaml}
+
+(******************************************************************************)
+
+let () =
   let o = open_out Sys.argv.(1) in
   fprintf o "%s" {ocaml|
 open Nonstd

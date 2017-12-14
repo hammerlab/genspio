@@ -8,6 +8,8 @@ val pp_hum: Format.formatter -> 'a EDSL.t -> unit
 val to_string_hum: 'a EDSL.t -> string
 (** Pretty print a Genspio expression to [string]. *)
 
+val to_one_line_hum: 'a EDSL.t -> string
+(** Like [to_string_hum] but avoiding new-lines. *)
 
 (** {3 Compilation to POSIX Shell Scripts} *)
 
@@ -178,3 +180,10 @@ val to_many_lines :
 (** Compile a Genspio expression to a multi-line POSIX shell script,
     slightly more readable than {!to_one_liner}.
 *)
+
+val quick_run_exn:
+  ?max_argument_length:int option ->
+  ?no_trap:bool -> 'a EDSL.t -> unit
+(** Compile an expression and use [Sys.command] on it; if the overall
+    command does not return 0 an exception is raised. *)
+
