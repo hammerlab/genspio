@@ -7,15 +7,14 @@ The idea is to build values of type `'a EDSL.t` with the
 combinators in the `Genspio.EDSL` module, and compile them to POSIX
 shell scripts (or one-liners) with functions from `Genspio.Compile`.
 
-Genspio is still in *alpha* status. For now the EDSL is based on a big GADT and
-compiles to POSIX one-liners or multi-line scripts.
-
 The tests run the output of the compiler against a few shells that it tries to
 find on the host (e.g. `dash`, `bash`, `busybox`, `mksh`, `zsh` … cf. the
 example test results summary below).
 
 If you have any questions, do not hesitate to submit an
 [issue](https://github.com/hammerlab/genspio/issues).
+
+Genspio's documentation root is at <https://smondet.gitlab.io/genspio-doc/>.
 
 Build
 -----
@@ -35,6 +34,7 @@ You need OCaml ≥ 4.03.0 together with
 [`sosa`](http://www.hammerlab.org/docs/sosa/master/index.html), and
 [`jbuilder`](https://github.com/janestreet/jbuilder):
 
+    ocaml please.ml configure
     jbuilder build @install
     
 Getting Started
