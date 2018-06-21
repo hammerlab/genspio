@@ -11,7 +11,7 @@ jbuilder build $genspio_small_examples
 
 rm -fr _build/doc/html/
 mkdir -p _build/doc/html/
-cp -r _build/default/_doc/* _build/doc/html/
+cp -r _build/default/_doc/_html/* _build/doc/html/
 
 pandocify () {
     local title="$(head -n 1 $1)"
