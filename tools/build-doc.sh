@@ -21,7 +21,9 @@ pandocify () {
         | sed 's:(./\([^/]*\)\.md):(\1.html):g' \
         | sed 's:\(`Genspio.\([^`]*\)`\):[\1](genspio/Genspio/\2/index.html):g' \
         | sed 's:usage examples:[usage examples](./small-examples.html):' \
-        | pandoc -c odoc.css -s --variable title="$title" --toc -o _build/doc/html/$2.html
+        | pandoc -c odoc.css -s \
+                 --variable title="$title" --variable pagetitle="$title" \
+                 --toc -o _build/doc/html/$2.html
 }
 pandocify README.md index
 for f in $(find doc -type f -name '*.md') ; do
