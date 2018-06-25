@@ -17,10 +17,17 @@ type c_string
 
 (** {3 Literals } *)
 
-val string : string -> c_string t
 val c_string : string -> c_string t
+(** Create a {!type:c_string} literal. *)
+
+val string : string -> c_string t
+(** [string] is an alias for {!function:c_string}. *)
+
 val byte_array : string -> byte_array t
+(** Create a {!type:byte_array} literal. *)
+
 val int : int -> int t
+
 val bool : bool -> bool t
 
 (** {3 Comments} *)
@@ -83,6 +90,7 @@ end
 
 (** {3 Integer Arithmetic} *)
 
+(** Functions on [int t] values (arithmetic, comparisons, conversions, etc.). *)
 module Integer : sig
   val to_string : int t -> c_string t
   val to_byte_array : int t -> byte_array t
@@ -116,12 +124,14 @@ end
 
 (** {3 EDSL Lists} *)
 
+(** Functions on ['a list t] values. *)
 module Elist : sig
 
   val make: 'a t list -> 'a list t
   (** Make an EDSL list out of an OCaml list. *)
 
   val append: 'a list t -> 'a list t -> 'a list t
+  (** Concatenate two EDSL lists. *)
 
   val iter: 'a list t -> f:((unit -> 'a t) -> unit t) -> unit t
   (** Iterate over a list, the body of the loop [~f] takes as argument
