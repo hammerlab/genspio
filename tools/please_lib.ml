@@ -40,14 +40,19 @@ module Jbuilder = struct
     "(jbuild_version 1)";
   ] @ l
 
-  let executable ?(ppx = []) ?(single_module = false) ~libraries name =
+  let executable ?(ppx = []) ?(modules = []) ?(single_module = false) ~libraries name =
     sprintf "(executable ((name %s) %s (libraries (%s))%s))"
       name
       (if ppx = [] then "" else
          sprintf "(preprocess (pps (%s)))"
            (String.concat ~sep:" " ppx))
       (String.concat libraries ~sep:" ")
-      (if single_module then sprintf "(modules %s)" name else "")
+      (match single_module, modules with
+      | true, [] -> sprintf "(modules (%s))" name
+      | true, _ ->
+        failwith "Cannot call `executable` with ~single_module and ~modules"
+      | false, [] -> ""
+      | false, more -> sprintf "(modules (%s))" (String.concat " " more))
 
   let rule ~targets ?(deps = []) actions =
     sprintf "(rule (\
@@ -95,12 +100,29 @@ end
 
 module Opam = struct
 
-  let dep ?(build = false) n =
-    sprintf "%S%s" n (if build then " {build}" else "")
+  type qualifier =
+    [ `Build
+    | `Version of [ `GT ] * string
+    | `And of qualifier * qualifier ]
+  let qualifier_to_string q =
+    let rec go =
+      function
+      | `And (a, b) -> sprintf "%s & %s" (go a) (go b)
+      | `Build -> "build"
+      | `Version (`GT, s) -> sprintf ">= %S" s
+    in
+    sprintf "{%s}" (go q)
+
+  let dep ?qualify ?(build = false) n =
+    sprintf "%S%s" n
+      (match qualify, build with
+      | None, false -> ""
+      | None, true -> " " ^ qualifier_to_string `Build
+      | Some q, false ->  " " ^ qualifier_to_string q
+      | Some q, true ->  " " ^ qualifier_to_string (`And (`Build, q)))
 
   let obvious_deps = [
     dep "jbuilder" ~build:true;
-    dep "ocamlfind" ~build:true;
   ]
 
   let make
@@ -141,8 +163,7 @@ module Opam = struct
       sprintf "available: [ ocaml-version >= %S ]" ocaml_min_version;
       sprintf "build: [\n\
               \  [\"ocaml\" %S \"configure\"]\n\
-              \  [\"jbuilder\" \"build\" \"--only\" %S \"--root\" \
-               \".\" \"-j\" jobs \"@install\"]\n\
+              \  [\"jbuilder\" \"build\" \"-p\" %S \"-j\" jobs ]\n\
                ]"
         configure_script name;
       sprintf "depends: [\n%s\n]"
