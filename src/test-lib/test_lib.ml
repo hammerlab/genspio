@@ -327,6 +327,9 @@ module Example = struct
   let make ?(show = [`Pretty_printed]) ~ocaml name description code =
     EDSL {name; description; code; show; ocaml_code = ocaml}
 
+  let default_demo_url =
+    "https://smondet.gitlab.io/genspio-web-demo/genspio-master/index.html"
+
   let run fmt =
     let ff = Format.fprintf in
     function
@@ -337,9 +340,9 @@ module Example = struct
           fence lang (String.strip code) fence in
       let if_show s f = if List.mem s show then f () else () in
       let try_url =
-        sprintf "https://smondet.gitlab.io/genspio-web-demo/genspio-master/\
-                 index.html?input=%s"
-         (Uri.pct_encode ocaml_code)
+        let base =
+          try Sys.getenv "genspio_demo_url" with _ -> default_demo_url in
+        sprintf "%s?input=%s" base (Uri.pct_encode ocaml_code)
       in
       ff fmt "@\n%s@\n%s@\n@\n%s@ [[Try-Online](%s)]@\n@\n"
         name (String.map name ~f:(fun _ -> '-')) description try_url;
