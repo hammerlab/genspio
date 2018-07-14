@@ -90,7 +90,7 @@ Username matches: `smondet`
   contains a (much) bigger example.
 - The project 
   [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
-  larger-scale use of Genspio (for now using version 0.0.1).
+  larger-scale use of Genspio (for now using version 0.0.0).
 
 
 Testing
