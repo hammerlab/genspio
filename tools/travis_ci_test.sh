@@ -81,11 +81,14 @@ $genspio_test --important-shells $important_shells _test/
 (
     cd _test
     case $TRAVIS_OS_NAME in
-        osx) # On OSX we do less tests because they take too long on Travis
+        osx)
             (
+                echo "On OSX we do less tests because they take too long on Travis"
                 cd dash-Std1L
-                make
-                make check
+                echo "Make"
+                make || { cat _failure/* ; exit 1 ; }
+                echo "Make Check"
+                make check || { cat _failure/* ; exit 1 ; }
             ) ;;
         linux)
             make run-all
