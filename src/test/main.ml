@@ -431,7 +431,7 @@ let () = add_tests @@ begin
     ]
   end
 
-let () = add_tests @@ exits 11 Construct.(
+let () = add_tests @@ exits ~name:"error-in-get-stdout-1" 11 Construct.(
     let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     seq [
@@ -445,7 +445,7 @@ let () = add_tests @@ exits 11 Construct.(
   );
   ()
 
-let () = add_tests @@ exits 11 Construct.(
+let () = add_tests @@ exits ~name:"error-in-get-stdout-2" 11 Construct.(
     let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     seq [
@@ -458,7 +458,7 @@ let () = add_tests @@ exits 11 Construct.(
   );
   ()
 
-let () = add_tests @@ exits 77 Construct.(
+let () = add_tests @@ exits ~name:"error-in-get-stdout-3" 77 Construct.(
     let tmp = "/tmp/test_error_in_get_stdout" in
     let cat_tmp = exec ["cat"; tmp] in
     let succeed_or_die ut =
@@ -470,6 +470,8 @@ let () = add_tests @@ exits 77 Construct.(
           ]) in
     seq [
       exec ["rm"; "-f"; tmp];
+      tprintf "ps-output:\\n";
+      exec ["ps"];
       if_then_else
         C_string.(seq [tprintf "aaa"; cat_tmp] |> succeed_or_die
                   |> get_stdout |> Byte_array.to_c =$= string "aaa")
