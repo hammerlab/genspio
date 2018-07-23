@@ -534,10 +534,10 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
          BSD-ish `sed`s do not support “or”s in regular expressions.
          Cf. http://pubs.opengroup.org/onlinepubs/9699919799/utilities/sed.html
       *)
-      sprintf "$(%s)" @@ seq [
-        sprintf "export %s=%s" var bac;
+      sprintf "\"$(%s ; )\"" @@ seq [
+        sprintf " %s=%s" var bac;
         sprintf
-          {sh|if [ "$(printf -- %s | sed -e 's/\(.\{3\}\)/@\1/g' | grep @000)" = "" ]|sh}
+          {sh|if [ "$(printf -- %s | sed -e 's/\(.\{3\}\)/@\1/g' | grep @000)" = "" ] |sh}
           value_n;
         sprintf "then printf -- %s" value;
         sprintf "else %s" (
