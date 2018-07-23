@@ -63,6 +63,14 @@ val setenv: var:c_string t -> c_string t -> unit t
 
     If the [~var] argument is not a valid variable name or if the value does
     not fit in a shell variable (newlines, ['\000']), behavior is undefined.
+    
+    Also, the total environment of a UNIX process counts towards the
+    total size of the arguments passed on to a sub-process (see
+    usually the result of ["getconf ARG_MAX"]). Genspio does not check
+    for that limit which is not that high in some operating systems
+    (e.g. about 200 KiB on the {i MacOSX Sierra} that the Travis CI
+    runs …). You might prefer putting or accumulating things in a
+    {!tmp_file}.
  *)
 
 (** {3 Boolean Expressions} *)
