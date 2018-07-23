@@ -12,25 +12,32 @@ travis_install_on_linux () {
     export opam_init_options="--comp=$OCAML_VERSION"
     sudo apt-get install -qq  opam time git
 
+    dpkg -s dash
+
     export important_shells=bash,dash,busybox
+    export main_shell=dash
 }
 
 travis_install_on_osx () {
-    curl -OL "http://xquartz.macosforge.org/downloads/SL/XQuartz-2.7.6.dmg"
-    sudo hdiutil attach XQuartz-2.7.6.dmg
-    sudo installer -verbose -pkg /Volumes/XQuartz-2.7.6/XQuartz.pkg -target /
 
-    brew update
-    brew install opam
+    curl -OL "http://xquartz.macosforge.org/downloads/SL/XQuartz-2.7.6.dmg"
+    sudo hdiutil attach XQuartz-2.7.6.dmg > /dev/null 2>&1
+    sudo installer -verbose -pkg /Volumes/XQuartz-2.7.6/XQuartz.pkg -target / > /dev/null 2>&1
+
+    brew update > /dev/null 2>&1
+    brew install opam bash
+    # We get a newer bash see https://github.com/hammerlab/genspio/issues/68
     export opam_init_options="--comp=$OCAML_VERSION"
 
     # Get a POSIX shell
-    brew install dash
+    ## brew install dash
 
     # the tests require more than the default limit
     ulimit -n 2048
 
-    export important_shells=dash
+
+    export important_shells=bash
+    export main_shell=bash
 }
 
 
@@ -48,6 +55,24 @@ echo "opam --version"
 opam --version
 echo "git --version"
 git --version
+
+echo "bash --version"
+bash --version
+
+
+echo ">>> getconf ARG_MAX:"
+getconf ARG_MAX
+
+echo ">>> getconf -a:"
+getconf -a || echo "Not on OSX...?"
+
+echo ">>> xargs shows the limits:"
+echo "$(xargs --show-limits & { sleep 1 ; exit 0 ; } )"
+
+echo ">>> ULimits:"
+ulimit -a
+
+bash ./tools/env-var-tst.sh
 
 # install OCaml packages
 opam init $opam_init_options
@@ -75,6 +100,8 @@ jbuilder build $genspio_test
 jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
 
+
+
 echo "================== TESTS ======================================================="
 
 $genspio_test --important-shells $important_shells _test/
@@ -84,11 +111,11 @@ $genspio_test --important-shells $important_shells _test/
         osx)
             (
                 echo "On OSX we do less tests because they take too long on Travis"
-                cd dash-Std1L
+                cd $main_shell-StdML
                 echo "Make"
-                make || { cat _failure/* ; exit 1 ; }
+                make
                 echo "Make Check"
-                make check || { cat _failure/* ; exit 1 ; }
+                make check
             ) ;;
         linux)
             make run-all
@@ -103,16 +130,16 @@ echo "================== EXAMPLES: TEST 1 ======================================
 genspio_downloader=/tmp/genspio-downloader
 $genspio_downloader_maker make $genspio_downloader
 
-dash $genspio_downloader -h
+$main_shell $genspio_downloader -h
 
-dash $genspio_downloader -c -t /tmp/test1 -f k3.0.0.tar.gz -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
+$main_shell $genspio_downloader -c -t /tmp/test1 -f k3.0.0.tar.gz -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
 ls -la /tmp/test1
 test -f /tmp/test1/k3.0.0.tar
 test -f /tmp/test1/ketrew-ketrew.3.0.0/README.md
 
 
 echo "================== EXAMPLES: TEST 2 ============================================"
-dash $genspio_downloader -c -t /tmp/genstest2 -u https://www.dropbox.com/s/h16b8ak9smkgw3g/test.tar.gz.zip.bz2.tbz2?raw=1
+$main_shell $genspio_downloader -c -t /tmp/genstest2 -u https://www.dropbox.com/s/h16b8ak9smkgw3g/test.tar.gz.zip.bz2.tbz2?raw=1
 ls -la /tmp/genstest2
 test -f /tmp/genstest2/src/lib/EDSL.ml
 
@@ -121,7 +148,7 @@ echo "================== EXAMPLES: TEST 3 ======================================
 (
     mkdir -p /tmp/test3
     cd /tmp/test3
-    dash $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
+    $main_shell $genspio_downloader -u https://github.com/hammerlab/ketrew/archive/ketrew.3.0.0.tar.gz
     ls -la /tmp/test3
     test -f /tmp/test3/ketrew-ketrew.3.0.0/README.md
 )
