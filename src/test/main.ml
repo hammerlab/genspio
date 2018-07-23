@@ -786,6 +786,8 @@ let () = add_tests @@ List.concat [
              C_string.(tmp1#get_c =$= string recognizable))
           );
           assert_or_fail "return-value" (
+            C_string.(tmp2#get_c =$= string "1")
+            |||
             C_string.(tmp2#get_c =$= string "2")
             |||
             (this_is_bash
