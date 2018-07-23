@@ -673,8 +673,10 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
         )
       |> ir_int
     | Bool_to_string b ->
-      continue (Output_as_string (Raw_cmd (sprintf "printf -- '%s'"
-                                             (continue b))))
+      continue (Output_as_string
+                  (Raw_cmd (sprintf
+                              "{ if %s ; then printf true ; else printf false ; fi ; }"
+                              (continue b))))
       |> ir_octostring
     | String_to_bool s ->
       continue (
