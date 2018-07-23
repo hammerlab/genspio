@@ -140,11 +140,13 @@ module Command_line = struct
       getenv (string var) in
     let bool_of_var var =
       getenv (string var) |> Bool.of_string in
-    let anonarg_var = prefix ^ "_anon" |> string in
+    let anon_tmp =
+      ksprintf tmp_file "parse-cli-%s"
+        (Marshal.to_string options [] |> Digest.string |> Digest.to_hex) in
     let anon =
-      getenv anonarg_var |> string_list_of_string in
+      anon_tmp#get_c |> string_list_of_string in
     let applied_action =
-      (** 
+      (* 
         The [loop] function below is building 3 pieces of Genspio code at once:
 
         - variable initializations
@@ -159,8 +161,8 @@ module Command_line = struct
           [options] is a “difference list”, see also:
           {{:https://drup.github.io/2016/08/02/difflists/}Drup's blog post}.
 
-        The 2 first items are agglomerated in the [inits] and [cases]
-        references.
+         The 2 first items are agglomerated in the [inits] and [cases]
+         references.
       *)
       let rec loop
         : type a b.
@@ -221,12 +223,13 @@ module Command_line = struct
     let while_loop =
       let body =
         let append_anon_arg_to_list =
-          setenv anonarg_var (
-            Elist.append
-              (string_list_of_string (getenv anonarg_var))
-              (Elist.make [getenv (string "1")])
-            |> string_list_to_string
-          ) in
+          (* This assumes knowledge of the internal representation of lists... *)
+          seq [
+            anon_tmp#append (byte_array " ");
+            anon_tmp#append
+              (Elist.make [getenv (string "1")] |> string_list_to_string |> to_byte_array)
+          ]
+        in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
           case
@@ -266,7 +269,7 @@ module Command_line = struct
     in
     seq [
       setenv help_flag_var (Bool.to_string (bool false));
-      setenv anonarg_var (string_list_to_string (Elist.make []));
+      anon_tmp#set_c ((string_list_to_string (Elist.make [])));
       seq (List.rev !inits);
       while_loop;
       if_then_else (bool_of_var (sprintf "%s_help" prefix))
