@@ -460,7 +460,7 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
         error ~comment_backtrace:comments (`No_fail_configured s) in
     let expand_octal s =
       sprintf
-        {sh| printf -- "$(printf -- '%%s' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
+        {sh| printf -- "$(printf -- '%%s\n' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
         s in
     let to_argument ~error_loc varprefix =
       let argument ?declaration ?variable_name argument =
@@ -693,7 +693,7 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
       )
       |> ir_bool
     | List l ->
-      (* Lists are newline-separated internal represetations,
+      (* Lists are space-separated internal represetations,
          prefixed by `G`. *)
       let output o = sprintf "printf -- 'G%%s' \"%s\"" (continue o) in
       let outputs = List.map l ~f:output in
@@ -702,7 +702,7 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
         | [] -> []
         | [one] -> [one]
         | one :: two :: t ->
-          one :: "printf -- '\\n'" :: build (two :: t)
+          one :: "printf -- ' '" :: build (two :: t)
       in
       (seq (build outputs)) |> ir_list
     | List_to_string (l, f) ->
@@ -713,22 +713,20 @@ let rec to_ir: type a. _ -> _ -> a t -> internal_representation =
       |> ir_list
     | C_string_concat sl ->
       let outputing_list = continue sl in
-      sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      sprintf "$( { %s ; } | tr -d 'G ' )" outputing_list
       |> ir_octostring
     | Byte_array_concat sl ->
       let outputing_list = continue sl in
-      sprintf "$( { %s ; } | tr -d 'G\\n' )" outputing_list
+      sprintf "$( { %s ; } | tr -d 'G ' )" outputing_list
       |> ir_octostring
     | List_append (la, lb) ->
-      seq (continue la :: "printf -- '\\n'" :: continue lb :: [])
+      seq (continue la :: "printf -- ' '" :: continue lb :: [])
       |> ir_list
     | List_iter (l, f) ->
       let variter = Unique_name.variable "list_iter_var" in
-      let varlist = Unique_name.variable "list_iter_list" in
       let outputing_list = continue l in
       seq [
-        sprintf "export %s=\"$(%s)\" " varlist outputing_list;
-        sprintf "for %s in ${%s} " variter varlist;
+        sprintf "for %s in $(%s) " variter outputing_list;
         "do : "; (* we cannot put a `;` after do so the first command is no-op *)
         continue (f (fun () ->
             (* Here we remove the `G` from the internal represetation: *)
