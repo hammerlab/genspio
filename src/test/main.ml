@@ -251,10 +251,11 @@ let () = add_tests @@ exits 13 Construct.(
 
 let () = add_tests @@ begin
     let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
-    let make ret minus_g single count =
+    let make ?(anon3 = "BBBBBBB") ret minus_g single count =
       let anon1 = "annonlkjde" in
-      let anon2 = "annon 02e930 99e3\n deij" in
-      let anon3 = "annon deid \t dlsij" in
+      let anon2 = "annon 02e930 99e3\n d \t eij" in
+      (* let anon3 = "annon deid \t dlsij" in *)
+      (* let anon3 = "======== \t =====" in *)
       exits ret
         ~name:(sprintf "parse-cli-%d" count)
         ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3 ]
@@ -270,8 +271,11 @@ let () = add_tests @@ begin
             parse spec
               begin fun ~anon one two bone ->
                 seq [
-                  eprintf (string "one: '%s' two: '%s'\n") [one; two];
-                  eprintf (string "dollar-sharp '%s'\n") [getenv (string "#")];
+                  printf (string "######## Begin action ########\\n\
+                                  === one: '%s' two: '%s'\\n\
+                                  === dollar-sharp '%s'\\n\
+                                 ")
+                    [one; two; getenv (string "#")];
                   switch [
                     case C_string.(string single =$= string "-v") [
                       assert_or_fail "bone-is-true" (
@@ -281,14 +285,33 @@ let () = add_tests @@ begin
                                                 [anon1; anon2; anon3]))
                       )
                     ];
-                    case C_string.(string single =$= string "--") [
-                      assert_or_fail "dash-dash" (
-                        not bone &&&
-                        C_string.(concat_elist anon
-                                  =$= string (String.concat ~sep:""
-                                                [anon1; "-g"; minus_g; anon2; anon3]))
-                      )
-                    ];
+                    case C_string.(string single =$= string "--")
+                      (let concated_in_ocaml =
+                         (String.concat ~sep:"" [anon1; "-g"; minus_g; anon2; anon3]) in
+                       [
+                         printf (ksprintf
+                                   string
+                                   "######### In dash-dash case: #########\\n\
+                                    === length-of-all: %d\\nbone: '%%s'\\n\
+                                    === anon3: '%%s'\\n\
+                                    === concat_elist anon: '%%s'\\n\
+                                    === string.concat: '%%s'\\n"
+                                   (String.length concated_in_ocaml)
+                                )
+                           [Bool.to_string bone; 
+                            string anon3;
+                            C_string.concat_elist anon;
+                            string concated_in_ocaml];
+                         Elist.iter anon ~f:(fun v ->
+                             printf (string "=== anonth: %s\\n") [v ()];
+                           );
+                         assert_or_fail "dash-dash" (
+                           not bone &&&
+                           C_string.(concat_elist anon
+                                     =$= string (String.concat ~sep:""
+                                                   [anon1; "-g"; minus_g; anon2; anon3]))
+                         )
+                       ]);
                     default [
                       assert_or_fail "single-is-anon" (
                         not bone &&&
@@ -312,8 +335,17 @@ let () = add_tests @@ begin
     List.mapi ~f:(fun i f -> f i) [
       make 11 minus_f "";
       make 12 "not-one" "";
+      make 12 "not-one" "" ~anon3:(String.make 20 'S');
       make 11 "not-one" "-v";
       make 12 minus_f "--"; (* the `--` should prevent the `-g one` from being parsed *)
+      make 12 minus_f "--" ~anon3:(String.make  6 'S');
+      make 12 minus_f "--" ~anon3:(String.make  7 'S');
+      make 12 minus_f "--" ~anon3:(String.make  8 'S');
+      make 12 minus_f "--" ~anon3:(String.make  9 'S');
+      make 12 minus_f "--" ~anon3:(String.make 10 'S');
+      make 12 minus_f "--" ~anon3:(String.make 11 'S');
+      make 12 minus_f "--" ~anon3:(String.make 12 'S');
+      make 12 minus_f "--" ~anon3:(String.make 20 'S');
       make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
       make 12 "not-one" "--v";
       make 12 "not-one" "-v j";
@@ -780,6 +812,14 @@ let () = add_tests @@ List.concat [
           );
           assert_or_fail "test4" (
             (Bool.to_string (bool false) |> Bool.of_string |> not)
+          );
+          assert_or_fail "test5" (
+            (Bool.to_string (exec ["ls"; "/deiuhdse"] |> succeeds_silently)
+             |> Bool.of_string |> not)
+          );
+          assert_or_fail "test6" (
+            (Bool.to_string (exec ["ls"; "/"] |> succeeds_silently)
+             |> Bool.of_string)
           );
           return 2
         ]

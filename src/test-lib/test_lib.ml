@@ -35,7 +35,7 @@ module Shell = struct
     (* let exec l = *)
     (*   List.map ~f:Filename.quote l |> String.concat ~sep:" " in *)
     let dash_like bin ~get_version =
-      make_shell bin
+      make_shell (Filename.basename bin)
         ~command:(fun s args -> [bin; "-x"; s] @ args)
         ~get_version
     in
