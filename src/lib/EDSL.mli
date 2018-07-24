@@ -62,7 +62,7 @@ val setenv: var:c_string t -> c_string t -> unit t
     it returns the empty string is the variable is not defined.
 
     If the [~var] argument is not a valid variable name or if the value does
-    not fit in a shell variable (newlines, ['\000']), behavior is undefined.
+    not fit in a shell variable (e.g. newlines), behavior is undefined.
     
     Also, the total environment of a UNIX process counts towards the
     total size of the arguments passed on to a sub-process (see
@@ -83,7 +83,7 @@ val returns: 'a t -> value: int -> bool t
 (** Check the return value of a command/expression/script. *)
 
 val succeeds : 'a t -> bool t
-(** [succeeds expr] is a equivalent to [returns expr ~value:0]. *)
+(** [succeeds expr] is equivalent to [returns expr ~value:0]. *)
 
 val file_exists : c_string t -> bool t
 (** Check whether a file exists, i.e. a shortcut for
@@ -327,7 +327,7 @@ val tmp_file: ?tmp_dir: c_string t -> string -> file
 
 (** {3 Command Line Parsing} *)
 
-(** Typed command-line parsing for your shell scripts, à la {!Prtinf.scanf}. *)
+(** Typed command-line parsing for your shell scripts, à la {!Printf.scanf}. *)
 module Command_line: sig
   (** 
 
