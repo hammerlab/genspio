@@ -6,6 +6,10 @@ Genspio is a typed EDSL to generate shell scripts and commands from OCaml.
 The idea is to build values of type `'a EDSL.t` with the
 combinators in the `Genspio.EDSL` module, and compile them to POSIX
 shell scripts (or one-liners) with functions from `Genspio.Compile`.
+See the file 
+[`src/examples/small.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/small.ml)
+which generates a useful list of usage examples, or the
+section [“Getting Started”](#getting-started) below.
 
 The tests run the output of the compiler against a few shells that it tries to
 find on the host (e.g. `dash`, `bash`, `busybox`, `mksh`, `zsh` … cf. the
@@ -34,7 +38,7 @@ You need OCaml ≥ 4.03.0 together with
 [`sosa`](http://www.hammerlab.org/docs/sosa/master/index.html), and
 [`jbuilder`](https://github.com/janestreet/jbuilder):
 
-    ocaml please.ml configure
+    ocaml please.mlt configure
     jbuilder build @install
     
 Getting Started
@@ -82,15 +86,15 @@ Username matches: `smondet`
 
 **More examples:**
 
-- See the file 
+- There are many examples in
   [`src/examples/small.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/small.ml)
-  which generates a useful list of usage examples.
+  which are used to generate the usage examples documentation webpage.
 - The file 
   [`src/examples/downloader.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/downloader.ml)
   contains a (much) bigger example.
 - The project 
   [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
-  larger-scale use of Genspio (for now using version 0.0.1).
+  larger-scale use of Genspio (for now using version 0.0.0).
 
 
 Testing
@@ -111,54 +115,16 @@ Try this:
     make run-all # Attempts to run all the tests on all the shells
     make check   # Checks that all the tests for the important ones succeeded
 
-You can generate a markdown report:
-
-* Shell: dash, total tests: 93
-    * Failures: 0.
-    * Successes: 93.
-* Shell: bash, total tests: 93
-    * Failures: 0.
-    * Successes: 93.
-* Shell: sh, total tests: 93
-    * Failures: 0.
-    * Successes: 93.
-* Shell: busybox, total tests: 93
-    * Failures: 0.
-    * Successes: 93.
-* Shell: ksh, total tests: 93
-    * Failures: 2.
-    * Successes: 91.
-* Shell: mksh, total tests: 93
-    * Failures: 3.
-    * Successes: 90.
-* Shell: posh, total tests: 93
-    * Failures: 3.
-    * Successes: 90.
-* Shell: zsh, total tests: 93
-    * Failures: 8.
-    * Successes: 85.
+You can generate a markdown report with `make report` and check `report.md`.
 
 Some failures are expected with not-really-POSIX or buggy shells like
 [KSH93](https://en.wikipedia.org/wiki/Korn_shell), or on some corner cases
 cf. [`#35`](https://github.com/hammerlab/genspio/issues/35).
 
 You can check failures in the `<shell-test>/failures.md` files, see for instance
-`ksh/failures.md`:
-
-- **KO**: `test-T-no_name_77-A0-R77-71757b23d6`
-    - Returns 12 (expected: 77).
-    - Script: `script/test-T-no_name_77-A0-R77-71757b23d6-script.sh`
-    - Test-runner: `script/test-T-no_name_77-A0-R77-71757b23d6-run-test.sh`
-    - STDOUT: `_log/test-T-no_name_77-A0-R77-71757b23d6/stdout.txt`
-    - STDERR: `_log/test-T-no_name_77-A0-R77-71757b23d6/stderr.txt`
-- **KO**: `test-T-redirect_fails-A0-R2-5f3e8da336`
-    - Returns 77 (expected: 2).
-    - Script: `script/test-T-redirect_fails-A0-R2-5f3e8da336-script.sh`
-    - Test-runner: `script/test-T-redirect_fails-A0-R2-5f3e8da336-run-test.sh`
-    - STDOUT: `_log/test-T-redirect_fails-A0-R2-5f3e8da336/stdout.txt`
-    - STDERR: `_log/test-T-redirect_fails-A0-R2-5f3e8da336/stderr.txt`
-
-(similarly there are `<shell-test>/successes.md` files).
+`ksh-StdML/failures.md` for the failures of the “KSH with standard Genspio
+compilation to multi-line scripts” (similarly there are
+`<shell-test>/successes.md` files).
 
 Additional Documentation
 ------------------------

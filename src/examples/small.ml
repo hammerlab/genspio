@@ -1,28 +1,26 @@
 open Nonstd
 module String = Sosa.Native_string
 
-let examples = ref ([]: (out_channel -> unit) list)
+let examples = ref ([] : (out_channel -> unit) list)
+
 let example ?show name description code =
   let f o =
     fprintf o
-      "let () = examples := Example.make ~ocaml:%S %s %S %S %s :: !examples\n" code
-      (match show with
-      | None -> ""
-      | Some s -> sprintf "~show:%s" s)
-      name description code in
+      "let () = examples := Example.make ~ocaml:%S %s %S %S %s :: !examples\n"
+      code
+      (match show with None -> "" | Some s -> sprintf "~show:%s" s)
+      name description code
+  in
   examples := f :: !examples
 
 let intro_blob =
   "EDSL Usage Examples\n\
-   ===================\n\
-   \n\
-   The following examples show gradually complex uses of the EDSL.\n\
-  "
+   ===================\n\n\
+   The following examples show gradually complex uses of the EDSL.\n"
 
 let () =
-  example "Exec"
-    "Simple call to the `exec` construct."
-{ocaml|
+  example "Exec" "Simple call to the `exec` construct."
+    {ocaml|
 Genspio.EDSL.(
   exec ["ls"; "-la"]
 )
@@ -30,9 +28,9 @@ Genspio.EDSL.(
 
 let () =
   example "Exec with Comment" ~show:"[`Pretty_printed; `Compiled]"
-    "Adding comments with the `%%%` operator, we can see them in the \
-     compiled output."
-{ocaml|
+    "Adding comments with the `%%%` operator, we can see them in the compiled \
+     output."
+    {ocaml|
 Genspio.EDSL.(
   "This is a very simple command" %%%
   exec ["ls"; "-la"]
@@ -43,7 +41,7 @@ let () =
   example ~show:"[`Stderr]" "Failure with Comment"
     "When an expression is wrapped with *“comments”* they also appear in \
      error messages (compilation *and* run-time) as “the comment stack.”"
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
   "This is a very simple comment" %%% seq [
     exec ["ls"; "-la"];
@@ -56,13 +54,12 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Call a command with C-Strings"
-    ~show:"[`Stdout; `Pretty_printed]"
+  example "Call a command with C-Strings" ~show:"[`Stdout; `Pretty_printed]"
     "The `call` construct is a more general version of `exec` that can take \
      any EDSL string. As with `exec` the string will be checked for C-String \
      compatibilty, hence the calls to `byte-array-to-c-string` in the \
      pretty-printed output."
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
   call [
     string "echo";
@@ -73,9 +70,9 @@ Genspio.EDSL.(
 
 let () =
   example "C-String Compilation Failure" ~show:"[]"
-    "When a string literal cannot be converted to a “C-String” the compiler \
-     tries to catch the error at compile-time."
-{ocaml|
+    "When a string literal cannot be converted to a “C-String” the \
+     compiler tries to catch the error at compile-time."
+    {ocaml|
 Genspio.EDSL.(
   "A sequence that will fail" %%% seq [
     call [string "ls"; string "foo\x00bar"]; (* A string containing `NUL` *)
@@ -86,7 +83,7 @@ Genspio.EDSL.(
 let () =
   example "Playing with the output of a command"
     ~show:"[`Pretty_printed; `Stdout]"
-{md|Here we use the constructs:
+    {md|Here we use the constructs:
 
 ```ocaml
 val get_stdout : unit t -> byte_array t
@@ -102,7 +99,7 @@ only accept `NUL`-terminated strings.
 We then “pipe” the output to another `exec` call with `||>` (which is
 a 2-argument shortcut for `EDSL.pipe`).
 |md}
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
   let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
   call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
@@ -110,10 +107,11 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Feeding a string to a command's stdin" ~show:"[`Pretty_printed; `Stdout]"
+  example "Feeding a string to a command's stdin"
+    ~show:"[`Pretty_printed; `Stdout]"
     "The operator `>>` puts any byte-array into the `stdin` of any `unit t` \
      expression."
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
   (* Let's see wether `wc -l` is fine with a NUL in the middle of a “line:” *)
   byte_array "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
@@ -121,11 +119,12 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Comparing byte-arrays, using conditionals" ~show:"[`Pretty_printed; `Stdout]"
+  example "Comparing byte-arrays, using conditionals"
+    ~show:"[`Pretty_printed; `Stdout]"
     "We show that `byte-array >> cat` is not changing anything and we try \
      `if_seq`; a version of `EDSL.if_then_else` more practical for \
      sequences/imperative code."
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
     (* With a 🐱: *)
   let original = byte_array "one\ntwo\nth\000ree\n" in
@@ -140,13 +139,13 @@ Genspio.EDSL.(
     ]
 )
 |ocaml}
-  
+
 let () =
   example "“While” loops" ~show:"[`Stdout]"
-    "The default and simplest loop construct is `loop_while`, the EDSL has also \
-     a simple API to manage temporary files and use them as \
+    "The default and simplest loop construct is `loop_while`, the EDSL has \
+     also a simple API to manage temporary files and use them as \
      pseudo-global-variables."
-{ocaml|
+    {ocaml|
 Genspio.EDSL.(
   let tmp = tmp_file "genspio-example" in
   let body =
@@ -310,18 +309,20 @@ Genspio.EDSL.(
 
 let () =
   let o = open_out Sys.argv.(1) in
-  fprintf o "%s" {ocaml|
+  fprintf o "%s"
+    {ocaml|
 open Nonstd
 module String = Sosa.Native_string
 open Tests.Test_lib
 
 let examples = ref []
-|ocaml};
-  fprintf o "let () = printf \"%%s\" %S\n" intro_blob;
-  List.iter (List.rev !examples) ~f:(fun f -> f o);
-  fprintf o "%s" {ocaml|
+|ocaml} ;
+  fprintf o "let () = printf \"%%s\" %S\n" intro_blob ;
+  List.iter (List.rev !examples) ~f:(fun f -> f o) ;
+  fprintf o "%s"
+    {ocaml|
 let () =
     List.iter (List.rev !examples) ~f:(Example.run Format.std_formatter)
-|ocaml};
-  close_out o;
+|ocaml} ;
+  close_out o ;
   printf "%s: Done.\n%!" Sys.argv.(0)

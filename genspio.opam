@@ -1,4 +1,4 @@
-# This Opam file was auto-generated, see the `please.ml` script.
+# This Opam file was auto-generated, see the `please.mlt` script.
 opam-version: "1.2"
 maintainer: "Seb Mondet <seb@mondet.org>"
 authors: [
@@ -11,11 +11,12 @@ license: "Apache 2.0"
 version: "0.0.1-dev"
 available: [ ocaml-version >= "4.03.0" ]
 build: [
-  ["ocaml" "please.ml" "configure"]
+  ["ocaml" "please.mlt" "configure"]
   ["jbuilder" "build" "-p" "genspio" "-j" jobs ]
 ]
 depends: [
   "nonstd"
   "sosa"
   "jbuilder" {build}
+  "ocamlfind" {build}
 ]
