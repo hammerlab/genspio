@@ -4,7 +4,7 @@ set -e
 
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 
-ocaml please.ml configure
+ocaml please.mlt configure
 jbuilder build @install
 jbuilder build @doc
 jbuilder build $genspio_small_examples

@@ -93,7 +93,7 @@ genspio_downloader_maker=_build/default/src/examples/downloader.exe
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 
 echo "================== BUILD ALL ==================================================="
-ocaml please.ml configure
+ocaml please.mlt configure
 jbuilder build @install
 
 jbuilder build $genspio_test
