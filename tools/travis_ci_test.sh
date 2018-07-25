@@ -91,6 +91,7 @@ export OCAMLPARAM='warn-error=Ad-58,_'
 genspio_test=_build/default/src/test/main.exe
 genspio_downloader_maker=_build/default/src/examples/downloader.exe
 genspio_small_examples=_build/default/src/examples/small_examples.exe
+genspio_vm_tester=_build/default/src/examples/vm_tester.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.mlt configure
@@ -99,6 +100,7 @@ jbuilder build @install
 jbuilder build $genspio_test
 jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
+jbuilder build $genspio_vm_tester
 
 
 
@@ -157,4 +159,10 @@ echo "================== EXAMPLES: SMALL ONES ==================================
 
 $genspio_small_examples
 
+echo "================== EXAMPLES: vm_tester ============================================"
+
+$genspio_vm_tester arm-owrt /tmp/vmt/arm-owrt/
+( cd /tmp/vmt/arm-owrt/ ; make help ; )
+$genspio_vm_tester arm-dw /tmp/vmt/arm-dw/
+( cd /tmp/vmt/arm-dw/ ; make help ; )
 
