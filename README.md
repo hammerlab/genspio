@@ -92,6 +92,10 @@ Username matches: `smondet`
 - The file 
   [`src/examples/downloader.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/downloader.ml)
   contains a (much) bigger example.
+- The file 
+  [`src/examples/vm_tester.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/vm_tester.ml)
+  is a *“Makefile + scripts”* generator to setup Qemu virtual machines, they can
+  be for instance used to run the tests on more exotic platforms.
 - The project 
   [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
   larger-scale use of Genspio (for now using version 0.0.0).
