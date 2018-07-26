@@ -29,6 +29,8 @@ let files =
     @@ jbuild
          [ executable ~single_module:true "downloader"
              ~libraries:("genspio" :: main_libs)
+         ; executable ~single_module:true "vm_tester"
+             ~libraries:("genspio" :: main_libs)
          ; executable ~single_module:true "small"
              ~libraries:("genspio" :: main_libs)
          ; rule ~targets:["small_examples.ml"] ~deps:["small.exe"]

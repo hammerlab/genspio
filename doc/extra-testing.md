@@ -77,3 +77,5 @@ qemu_openwrt_depedencies () {
 ```
 
 You may just run the tests as above.
+
+Note that this setup is also handled by the `vm_tests` example.
