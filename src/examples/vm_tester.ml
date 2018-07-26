@@ -105,10 +105,9 @@ module Run_environment = struct
                    ; sprintf "sh %s" tmp ] ) ) ]
   end
 
-  type t =
-    | Qemu_ssh of
-        { name: string
-        ; ssh_port: int
+  type vm =
+    | Qemu_arm of
+        { ssh_port: int
         ; kernel: File.t
         ; sd_card: File.t
         ; machine: string
@@ -118,8 +117,29 @@ module Run_environment = struct
         ; setup: unit Genspio.EDSL.t
         ; local_dependencies: [`Command of string] list }
 
+  type t = {name: string; vm: vm}
+
+  let qemu_arm ~ssh_port ~kernel ~sd_card ~machine ?initrd ~root_device
+      ?root_password ?(setup= Genspio.EDSL.nop) ~local_dependencies name =
+    { name
+    ; vm=
+        Qemu_arm
+          { ssh_port
+          ; kernel
+          ; sd_card
+          ; machine
+          ; initrd
+          ; root_device
+          ; root_password
+          ; setup
+          ; local_dependencies } }
+
+  let http uri = File.Http uri
+
   let start_qemu_vm : t -> Shell_script.t = function
-    | Qemu_ssh {kernel; machine; sd_card; ssh_port; root_device; initrd; _} ->
+    | { vm=
+          Qemu_arm {kernel; machine; sd_card; ssh_port; root_device; initrd; _}
+      } ->
         let open Shell_script in
         let open Genspio.EDSL in
         make "Start-qemu-arm"
@@ -147,7 +167,7 @@ module Run_environment = struct
              ))
 
   let kill_qemu_vm : t -> Shell_script.t = function
-    | Qemu_ssh {name} ->
+    | {name} ->
         let open Shell_script in
         let open Genspio.EDSL in
         let pid = get_stdout (exec ["cat"; "qemu.pid"]) |> Byte_array.to_c in
@@ -173,7 +193,7 @@ module Run_environment = struct
                    ~e:[printf (string "No PID file") []; exec ["false"]] ) ]
 
   let configure : t -> Shell_script.t = function
-    | Qemu_ssh {name; local_dependencies} ->
+    | {name; vm= Qemu_arm {local_dependencies}} ->
         let open Shell_script in
         let open Genspio.EDSL in
         let report = tmp_file "configure-report.md" in
@@ -206,8 +226,9 @@ module Run_environment = struct
              (List.mapi cmds ~f:(fun i c -> (sprintf "config-%s-%d" name i, c)))
 
   let setup_dir_content
-      ( Qemu_ssh {name; ssh_port; root_password; kernel; sd_card; initrd; setup}
-      as qssh ) =
+      ( { name
+        ; vm= Qemu_arm {ssh_port; root_password; kernel; sd_card; initrd; setup}
+        } as qssh ) =
     let other_files = ref [] in
     let dependencies =
       File.make_files
@@ -294,24 +315,21 @@ module Run_environment = struct
       let base_url =
         "https://downloads.openwrt.org/snapshots/trunk/realview/generic/"
       in
-      Qemu_ssh
-        { ssh_port
-        ; name= "qemu_arm_openwrt"
-        ; machine= "realview-pbx-a9"
-        ; kernel= Http (base_url // "openwrt-realview-vmlinux.elf")
-        ; sd_card= Http (base_url // "openwrt-realview-sdcard.img")
-        ; initrd= None
-        ; root_device= "/dev/mmcblk0p1"
-        ; root_password= None
-        ; setup
-        ; local_dependencies= [`Command "qemu-system-arm"] }
+      qemu_arm "qemu_arm_openwrt"
+        ~ssh_port
+        ~machine: "realview-pbx-a9"
+        ~kernel: (http (base_url // "openwrt-realview-vmlinux.elf"))
+        ~sd_card:( http (base_url // "openwrt-realview-sdcard.img"))
+        ~root_device: "/dev/mmcblk0p1"
+        ~setup
+        ~local_dependencies: [`Command "qemu-system-arm"] 
 
     let qemu_arm_wheezy ~ssh_port more_setup =
       (*
          See {{:https://people.debian.org/~aurel32/qemu/armhf/}}.
       *)
       let aurel32 file =
-        File.Http ("https://people.debian.org/~aurel32/qemu/armhf" // file)
+        http ("https://people.debian.org/~aurel32/qemu/armhf" // file)
       in
       let setup =
         let open Genspio.EDSL in
@@ -319,19 +337,17 @@ module Run_environment = struct
           [ ("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])
           ; ("additional-setup", more_setup) ]
       in
-      let root_password = Some "root" in
-      Qemu_ssh
-        { ssh_port
-        ; name= "qemu_arm_wheezy"
-        ; machine= "vexpress-a9"
-        ; kernel= aurel32 "vmlinuz-3.2.0-4-vexpress"
-        ; sd_card= aurel32 "debian_wheezy_armhf_standard.qcow2"
-        ; initrd= Some (aurel32 "initrd.img-3.2.0-4-vexpress")
-        ; root_device= "/dev/mmcblk0p2"
-        ; root_password
-        ; setup
-        ; local_dependencies= [`Command "qemu-system-arm"; `Command "sshpass"]
-        }
+      qemu_arm "qemu_arm_wheezy"
+        ~ssh_port
+        ~machine: "vexpress-a9"
+        ~kernel: (aurel32 "vmlinuz-3.2.0-4-vexpress")
+        ~sd_card: (aurel32 "debian_wheezy_armhf_standard.qcow2")
+        ~initrd:  (aurel32 "initrd.img-3.2.0-4-vexpress")
+        ~root_device: "/dev/mmcblk0p2"
+        ~root_password:"root"
+        ~setup
+        ~local_dependencies: [`Command "qemu-system-arm"; `Command "sshpass"]
+
   end
 end
 
