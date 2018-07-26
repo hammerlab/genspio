@@ -46,25 +46,42 @@ end
 
 module Run_environment = struct
   module File = struct
-    type t = Http of string
+    type t = Http of string * [`Xz] option
 
-    let local_file_name = function
-      | Http url -> "_cache" // Filename.basename url
+    let local_file_name =
+      let noquery url = String.split ~on:(`Character '?') url |> List.hd_exn in
+      function
+      | Http (url, None) -> "_cache" // Filename.basename (noquery url)
+      | Http (url, Some `Xz) ->
+          "_cache"
+          // Filename.(basename (noquery url) |> fun f -> chop_suffix f ".xz")
 
-    let tmp_name_of_url url = "_cache" // Digest.(string url |> to_hex)
+    let tmp_name_of_url = function
+      | Http (url, ext) ->
+          ("_cache" // Digest.(string url |> to_hex))
+          ^ Option.value_map ~default:"" ext ~f:(fun `Xz -> ".xz")
 
     let make_files files =
-      List.map files ~f:(function Http url ->
-          let base = local_file_name (Http url) in
+      List.map files ~f:(function Http (url, act) as t ->
+          let base = local_file_name t in
           let wget =
             let open Shell_script in
             let open Genspio.EDSL in
             check_sequence
               [ ("mkdir", exec ["mkdir"; "-p"; "_cache"])
               ; ( "wget"
-                , exec ["wget"; url; "--output-document"; tmp_name_of_url url]
-                )
-              ; ("mv-f", exec ["mv"; "-f"; tmp_name_of_url url; base]) ]
+                , exec ["wget"; url; "--output-document"; tmp_name_of_url t] )
+              ; ( "act-and-mv"
+                , match act with
+                  | None -> exec ["mv"; "-f"; tmp_name_of_url t; base]
+                  | Some `Xz ->
+                      seq
+                        [ exec ["unxz"; "-k"; tmp_name_of_url t]
+                        ; exec
+                            [ "mv"
+                            ; "-f"
+                            ; Filename.chop_suffix (tmp_name_of_url t) ".xz"
+                            ; base ] ] ) ]
           in
           (base, [], wget) )
   end
@@ -107,39 +124,35 @@ module Run_environment = struct
 
   type vm =
     | Qemu_arm of
-        { ssh_port: int
-        ; kernel: File.t
+        { kernel: File.t
         ; sd_card: File.t
         ; machine: string
         ; initrd: File.t option
-        ; root_device: string
-        ; root_password: string option
-        ; setup: unit Genspio.EDSL.t
-        ; local_dependencies: [`Command of string] list }
+        ; root_device: string }
+    | Qemu_amd46 of {hda: File.t}
 
-  type t = {name: string; vm: vm}
+  type t =
+    { name: string
+    ; root_password: string option
+    ; setup: unit Genspio.EDSL.t
+    ; ssh_port: int
+    ; local_dependencies: [`Command of string] list
+    ; vm: vm }
 
-  let qemu_arm ~ssh_port ~kernel ~sd_card ~machine ?initrd ~root_device
-      ?root_password ?(setup= Genspio.EDSL.nop) ~local_dependencies name =
-    { name
-    ; vm=
-        Qemu_arm
-          { ssh_port
-          ; kernel
-          ; sd_card
-          ; machine
-          ; initrd
-          ; root_device
-          ; root_password
-          ; setup
-          ; local_dependencies } }
+  let make vm ?root_password ?(setup= Genspio.EDSL.nop) ~local_dependencies
+      ~ssh_port name =
+    {vm; root_password; setup; local_dependencies; name; ssh_port}
 
-  let http uri = File.Http uri
+  let qemu_arm ~kernel ~sd_card ~machine ?initrd ~root_device =
+    make (Qemu_arm {kernel; sd_card; machine; initrd; root_device})
+
+  let qemu_amd46 ~hda = make (Qemu_amd46 {hda})
+
+  let http ?act uri = File.Http (uri, act)
 
   let start_qemu_vm : t -> Shell_script.t = function
-    | { vm=
-          Qemu_arm {kernel; machine; sd_card; ssh_port; root_device; initrd; _}
-      } ->
+    | { ssh_port
+      ; vm= Qemu_arm {kernel; machine; sd_card; root_device; initrd; _} } ->
         let open Shell_script in
         let open Genspio.EDSL in
         make "Start-qemu-arm"
@@ -165,6 +178,30 @@ module Run_environment = struct
                ; "-append"
                ; sprintf "console=ttyAMA0 verbose debug root=%s" root_device ]
              ))
+    | {ssh_port; vm= Qemu_amd46 {hda}} ->
+        (* See https://wiki.qemu.org/Hosts/BSD
+         qemu-system-x86_64 -m 2048 \
+          -hda FreeBSD-11.0-RELEASE-amd64.qcow2 -enable-kvm \
+          -netdev user,id=mynet0,hostfwd=tcp:127.0.0.1:7722-:22 \
+          -device e1000,netdev=mynet0 *)
+        let open Shell_script in
+        let open Genspio.EDSL in
+        make "Start-qemu"
+          (exec
+             ( [ "qemu-system-x86_64" (* ; "-M"
+                * ; machine *)
+               ; "-m"
+               ; "1024M" (* ; "-enable-kvm" → requires `sudo`?*)
+               ; "-hda"
+               ; File.local_file_name hda ]
+             @ [ "-pidfile"
+               ; "qemu.pid"
+               ; "-netdev"
+               ; sprintf "user,id=mynet0,hostfwd=tcp::%d-:22" ssh_port
+               ; "-curses"
+               ; "-device"
+               ; "e1000,netdev=mynet0"
+                ] ))
 
   let kill_qemu_vm : t -> Shell_script.t = function
     | {name} ->
@@ -193,7 +230,7 @@ module Run_environment = struct
                    ~e:[printf (string "No PID file") []; exec ["false"]] ) ]
 
   let configure : t -> Shell_script.t = function
-    | {name; vm= Qemu_arm {local_dependencies}} ->
+    | {name; local_dependencies} ->
         let open Shell_script in
         let open Genspio.EDSL in
         let report = tmp_file "configure-report.md" in
@@ -225,22 +262,26 @@ module Run_environment = struct
         @@ check_sequence ~verbosity:`Output_all
              (List.mapi cmds ~f:(fun i c -> (sprintf "config-%s-%d" name i, c)))
 
-  let setup_dir_content
-      ( { name
-        ; vm= Qemu_arm {ssh_port; root_password; kernel; sd_card; initrd; setup}
-        } as qssh ) =
+  let make_dependencies = function
+    | {vm= Qemu_amd46 {hda}} -> File.make_files [hda]
+    | {vm= Qemu_arm {kernel; sd_card; initrd}} ->
+        File.make_files
+          ( [kernel; sd_card]
+          @ Option.value_map initrd ~default:[] ~f:(fun x -> [x]) )
+
+  let setup_dir_content tvm =
+    let {name; root_password; setup; ssh_port; vm} = tvm in
     let other_files = ref [] in
-    let dependencies =
-      File.make_files
-        ( [kernel; sd_card]
-        @ Option.value_map initrd ~default:[] ~f:(fun x -> [x]) )
-    in
+    let dependencies = make_dependencies tvm in
     let start_deps = List.map dependencies ~f:(fun (base, _, _) -> base) in
     let help_entries = ref [] in
     let make_entry ?doc ?(phony= false) ?(deps= []) target action =
       help_entries := (target, doc) :: !help_entries ;
       (if phony then [sprintf ".PHONY: %s" target] else [])
-      @ [ sprintf "# %s: %s" target (Option.value doc ~default:"NOT DOCUMENTED")
+      @ [ sprintf "# %s: %s" target
+            (Option.value_map
+               ~f:(String.map ~f:(function '\n' -> ' ' | c -> c))
+               doc ~default:"NOT DOCUMENTED")
         ; sprintf "%s: %s" target (String.concat ~sep:" " deps)
         ; sprintf "\t@%s" (Genspio.Compile.to_one_liner ~no_trap:true action)
         ]
@@ -252,22 +293,22 @@ module Run_environment = struct
       make_entry ?doc ?phony ?deps target call
     in
     let makefile =
-      ["# Makefile genrated by Habust"]
+      ["# Makefile genrated by Genspio's VM-Tester"]
       @ List.concat_map dependencies ~f:(fun (base, deps, cmd) ->
             Shell_script.(make (sprintf "get-%s" (sanitize_name base)) cmd)
             |> make_script_entry ~deps base )
-      @ make_script_entry ~phony:true "configure" (configure qssh)
+      @ make_script_entry ~phony:true "configure" (configure tvm)
           ~doc:"Configure this local-host (i.e. check for requirements)."
       @ make_script_entry ~deps:start_deps ~phony:true "start"
           ~doc:"Start the Qemu VM (this grabs the terminal)."
-          (start_qemu_vm qssh)
-      @ make_script_entry ~phony:true "kill" (kill_qemu_vm qssh)
+          (start_qemu_vm tvm)
+      @ make_script_entry ~phony:true "kill" (kill_qemu_vm tvm)
           ~doc:"Kill the Qemu VM."
       @ make_script_entry ~phony:true "setup"
           (Ssh.script_over_ssh ?root_password ~ssh_port ~name:"setup"
              (Shell_script.make (sprintf "setup-%s" name) setup))
           ~doc:
-            "Run the “setup” recipe on the Qemu VM (requires the VM \
+            "Run the “setup” recipe on the Qemu VM (requires the VM\n  \
              started in another terminal)."
       @ make_entry ~phony:true "ssh" ~doc:"Display an SSH command"
           Genspio.EDSL.(
@@ -283,8 +324,8 @@ module Run_environment = struct
             Genspio.EDSL.(
               exec
                 [ "printf"
-                ; "\\nHelp\\n====\\n\\nThis a Habust-generated \
-                   Makefile:\\n\\n%s\\n\\n%s\\n"
+                ; "\\nHelp\\n====\\n\\nThis a generated Makefile (by \
+                   Genspio-VM-Tester):\\n\\n%s\\n\\n%s\\n"
                 ; List.map
                     ( ("help", Some "Display this help message")
                     :: !help_entries ) ~f:(function
@@ -294,9 +335,10 @@ module Run_environment = struct
                   |> String.concat ~sep:""
                 ; sprintf
                     "SSH: the command `make ssh` *outputs* an SSH command \
-                     (%s). Examples:\n\n \
-                     $ `make ssh` uname -a\n \
-                     $ tar c some/dir/ | $(make ssh) 'tar x'\n"
+                     (%s). Examples:\n\n\
+                     $ `make ssh` uname -a\n\
+                     $ tar c some/dir/ | $(make ssh) 'tar x'\n\n\
+                     (may need to be `tar -x -f -` for BSD tar).\n"
                     (Option.value_map ~default:"No root-password" root_password
                        ~f:(sprintf "Root-password: %S")) ]))
     in
@@ -315,14 +357,11 @@ module Run_environment = struct
       let base_url =
         "https://downloads.openwrt.org/snapshots/trunk/realview/generic/"
       in
-      qemu_arm "qemu_arm_openwrt"
-        ~ssh_port
-        ~machine: "realview-pbx-a9"
-        ~kernel: (http (base_url // "openwrt-realview-vmlinux.elf"))
-        ~sd_card:( http (base_url // "openwrt-realview-sdcard.img"))
-        ~root_device: "/dev/mmcblk0p1"
-        ~setup
-        ~local_dependencies: [`Command "qemu-system-arm"] 
+      qemu_arm "qemu_arm_openwrt" ~ssh_port ~machine:"realview-pbx-a9"
+        ~kernel:(http (base_url // "openwrt-realview-vmlinux.elf"))
+        ~sd_card:(http (base_url // "openwrt-realview-sdcard.img"))
+        ~root_device:"/dev/mmcblk0p1" ~setup
+        ~local_dependencies:[`Command "qemu-system-arm"]
 
     let qemu_arm_wheezy ~ssh_port more_setup =
       (*
@@ -337,17 +376,25 @@ module Run_environment = struct
           [ ("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])
           ; ("additional-setup", more_setup) ]
       in
-      qemu_arm "qemu_arm_wheezy"
-        ~ssh_port
-        ~machine: "vexpress-a9"
-        ~kernel: (aurel32 "vmlinuz-3.2.0-4-vexpress")
-        ~sd_card: (aurel32 "debian_wheezy_armhf_standard.qcow2")
-        ~initrd:  (aurel32 "initrd.img-3.2.0-4-vexpress")
-        ~root_device: "/dev/mmcblk0p2"
-        ~root_password:"root"
-        ~setup
-        ~local_dependencies: [`Command "qemu-system-arm"; `Command "sshpass"]
+      qemu_arm "qemu_arm_wheezy" ~ssh_port ~machine:"vexpress-a9"
+        ~kernel:(aurel32 "vmlinuz-3.2.0-4-vexpress")
+        ~sd_card:(aurel32 "debian_wheezy_armhf_standard.qcow2")
+        ~initrd:(aurel32 "initrd.img-3.2.0-4-vexpress")
+        ~root_device:"/dev/mmcblk0p2" ~root_password:"root" ~setup
+        ~local_dependencies:[`Command "qemu-system-arm"; `Command "sshpass"]
 
+    let qemu_amd64_freebsd ~ssh_port more_setup =
+      let qcow =
+        http ~act:`Xz
+          (* This qcow2 was created following the instructions at
+             https://wiki.qemu.org/Hosts/BSD#FreeBSD *)
+          "https://www.dropbox.com/s/ni7u0k6auqh2lya/FreeBSD11-amd64-rootssh.qcow2.xz?raw=1"
+      in
+      let setup = more_setup in
+      let root_password = "root" in
+      qemu_amd46 "qemu_amd46_freebsd" ~hda:qcow ~setup ~root_password
+        ~local_dependencies:[`Command "qemu-system-x86_64"; `Command "sshpass"]
+        ~ssh_port
   end
 end
 
@@ -382,6 +429,8 @@ let () =
         Run_environment.Example.qemu_arm_openwrt ~ssh_port:20022 more_setup
     | "arm-dw" ->
         Run_environment.Example.qemu_arm_wheezy ~ssh_port:20023 more_setup
+    | "amd64-fb" ->
+        Run_environment.Example.qemu_amd64_freebsd ~ssh_port:20024 more_setup
     | other -> fail "Don't know VM %S" other
   in
   let path = List.nth_exn args 1 in
