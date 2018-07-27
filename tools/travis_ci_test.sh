@@ -165,4 +165,7 @@ $genspio_vm_tester arm-owrt /tmp/vmt/arm-owrt/
 ( cd /tmp/vmt/arm-owrt/ ; make help ; )
 $genspio_vm_tester arm-dw /tmp/vmt/arm-dw/
 ( cd /tmp/vmt/arm-dw/ ; make help ; )
+$genspio_vm_tester amd64-fb /tmp/vmt/amd64-fb/
+( cd /tmp/vmt/amd64-fb ; make help ; )
+
 
