@@ -129,7 +129,7 @@ module Run_environment = struct
         ; machine: string
         ; initrd: File.t option
         ; root_device: string }
-    | Qemu_amd46 of {hda: File.t}
+    | Qemu_amd46 of {hda: File.t; ui: [`No_graphic | `Curses]}
 
   type t =
     { name: string
@@ -146,7 +146,7 @@ module Run_environment = struct
   let qemu_arm ~kernel ~sd_card ~machine ?initrd ~root_device =
     make (Qemu_arm {kernel; sd_card; machine; initrd; root_device})
 
-  let qemu_amd46 ~hda = make (Qemu_amd46 {hda})
+  let qemu_amd46 ?(ui= `No_graphic) ~hda = make (Qemu_amd46 {hda; ui})
 
   let http ?act uri = File.Http (uri, act)
 
@@ -178,7 +178,7 @@ module Run_environment = struct
                ; "-append"
                ; sprintf "console=ttyAMA0 verbose debug root=%s" root_device ]
              ))
-    | {ssh_port; vm= Qemu_amd46 {hda}} ->
+    | {ssh_port; vm= Qemu_amd46 {hda; ui}} ->
         (* See https://wiki.qemu.org/Hosts/BSD
          qemu-system-x86_64 -m 2048 \
           -hda FreeBSD-11.0-RELEASE-amd64.qcow2 -enable-kvm \
@@ -198,10 +198,11 @@ module Run_environment = struct
                ; "qemu.pid"
                ; "-netdev"
                ; sprintf "user,id=mynet0,hostfwd=tcp::%d-:22" ssh_port
-               ; "-curses"
+               ; ( match ui with
+                 | `Curses -> "-curses"
+                 | `No_graphic -> "-nographic" )
                ; "-device"
-               ; "e1000,netdev=mynet0"
-                ] ))
+               ; "e1000,netdev=mynet0" ] ))
 
   let kill_qemu_vm : t -> Shell_script.t = function
     | {name} ->
@@ -392,7 +393,24 @@ module Run_environment = struct
       in
       let setup = more_setup in
       let root_password = "root" in
-      qemu_amd46 "qemu_amd46_freebsd" ~hda:qcow ~setup ~root_password
+      qemu_amd46 "qemu_amd64_freebsd" ~hda:qcow ~setup ~root_password
+        ~ui:`Curses
+        ~local_dependencies:[`Command "qemu-system-x86_64"; `Command "sshpass"]
+        ~ssh_port
+
+    let qemu_amd64_darwin ~ssh_port more_setup =
+      (*
+         Made with these instructions: http://althenia.net/notes/darwin
+         from http://www.opensource.apple.com/static/iso/darwinx86-801.iso.gz
+      *)
+      let qcow =
+        http ~act:`Xz
+          "https://www.dropbox.com/s/2oeuya0isvorsam/darwin-disk-20180730.qcow2.xz?raw=1"
+      in
+      let setup = more_setup in
+      let root_password = "root" in
+      qemu_amd46 "qemu_amd64_darwin" ~hda:qcow ~setup ~root_password
+        ~ui:`No_graphic
         ~local_dependencies:[`Command "qemu-system-x86_64"; `Command "sshpass"]
         ~ssh_port
   end
@@ -431,6 +449,8 @@ let () =
         Run_environment.Example.qemu_arm_wheezy ~ssh_port:20023 more_setup
     | "amd64-fb" ->
         Run_environment.Example.qemu_amd64_freebsd ~ssh_port:20024 more_setup
+    | "amd64-dw" ->
+        Run_environment.Example.qemu_amd64_darwin ~ssh_port:20025 more_setup
     | other -> fail "Don't know VM %S" other
   in
   let path = List.nth_exn args 1 in
