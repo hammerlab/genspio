@@ -155,7 +155,7 @@ end
 
 module Main = struct
   let make ?(command= "ocaml " ^ Sys.argv.(0)) ~files ?(argv= Sys.argv)
-      ?(more_commands= []) () =
+      ?describe ?(more_commands= []) () =
     let usage () =
       eprintf "usage: %s {clean,configure%s}\n%!" command
         ( List.map more_commands ~f:(fun (k, _) -> sprintf ",%s" k)
@@ -172,6 +172,10 @@ module Main = struct
             Util.cmdf "mkdir -p %s" Filename.(dirname path |> quote) ;
             Util.write_lines path content ) ;
         ()
+    | "describe" -> (
+      match describe with
+      | None -> failwith "describe function not defined"
+      | Some f -> try f (Some Sys.argv.(2)) with _ -> f None )
     | other -> (
       match List.find more_commands ~f:(fun (k, v) -> k = other) with
       | _, f -> f ()

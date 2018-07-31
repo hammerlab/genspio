@@ -49,4 +49,13 @@ let files =
                 ~build:true "jbuilder"
             :: List.map main_libs ~f:dep )) ];;
 
-let () = Main.make ~files ()
+let describe _ =
+  print_endline
+    "Genspio is a typed EDSL to generate shell scripts and commands from OCaml.\n\n\
+     The idea is to build values of type `Genspio.EDSL.t` with the\n\
+     combinators in the `Genspio.EDSL` module, and compile them to POSIX\n\
+     shell scripts (or one-liners) with functions from `Genspio.Compile`.\n\n\
+     Genspio's documentation root is at \
+     <https://smondet.gitlab.io/genspio-doc/>.\n";;
+
+let () = Main.make ~files ~describe ()
