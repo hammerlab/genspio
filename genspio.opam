@@ -15,8 +15,7 @@ build: [
   ["jbuilder" "build" "-p" "genspio" "-j" jobs ]
 ]
 depends: [
+  "jbuilder" {build & >= "1.0+beta20"}
   "nonstd"
   "sosa"
-  "jbuilder" {build}
-  "ocamlfind" {build}
 ]

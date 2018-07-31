@@ -43,6 +43,10 @@ let files =
           ~maintainer:"Seb Mondet <seb@mondet.org>"
           ~homepage:"https://github.com/hammerlab/genspio"
           ~license:"Apache 2.0" ~version ~ocaml_min_version:"4.03.0"
-          ~deps:(List.map main_libs ~f:dep @ obvious_deps)) ];;
+          ~deps:
+            ( Opam.dep
+                ~qualify:(`Version (`GT, "1.0+beta20"))
+                ~build:true "jbuilder"
+            :: List.map main_libs ~f:dep )) ];;
 
 let () = Main.make ~files ()
