@@ -155,9 +155,11 @@ end
 
 module Main = struct
   let make ?(command= "ocaml " ^ Sys.argv.(0)) ~files ?(argv= Sys.argv)
-      ?describe ?(more_commands= []) () =
+      ?version ?describe ?(more_commands= []) () =
     let usage () =
-      eprintf "usage: %s {clean,configure%s}\n%!" command
+      eprintf
+        "usage: %s {clean,configure,version <pkg?>,describe <pkg?>%s}\n%!"
+        command
         ( List.map more_commands ~f:(fun (k, _) -> sprintf ",%s" k)
         |> String.concat ~sep:"" )
     in
@@ -175,6 +177,10 @@ module Main = struct
     | "describe" -> (
       match describe with
       | None -> failwith "describe function not defined"
+      | Some f -> try f (Some Sys.argv.(2)) with _ -> f None )
+    | "version" -> (
+      match version with
+      | None -> failwith "version function not defined"
       | Some f -> try f (Some Sys.argv.(2)) with _ -> f None )
     | other -> (
       match List.find more_commands ~f:(fun (k, v) -> k = other) with

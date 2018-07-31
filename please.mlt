@@ -58,4 +58,4 @@ let describe _ =
      Genspio's documentation root is at \
      <https://smondet.gitlab.io/genspio-doc/>.\n";;
 
-let () = Main.make ~files ~describe ()
+let () = Main.make ~files ~describe ~version:(fun _ -> print_endline version) ()
