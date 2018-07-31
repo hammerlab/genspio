@@ -56,8 +56,15 @@ opam --version
 echo "git --version"
 git --version
 
+echo "Which bash"
+which bash
 echo "bash --version"
 bash --version
+echo "/bin/bash --version"
+/bin/bash --version || echo "NO /bin/bash version"
+echo "/bin/sh --version"
+/bin/sh --version || echo "NO /bin/sh version"
+
 
 
 echo ">>> getconf ARG_MAX:"
@@ -114,7 +121,12 @@ $genspio_test --important-shells $important_shells _test/
             (
                 echo "On OSX we do less tests because they take too long on Travis"
                 cd $main_shell-StdML
-                echo "Make"
+                echo "Make $main_shell-StdML"
+                make
+                echo "Make Check"
+                make check
+                cd ../sh-SlowStack/
+                echo "Make sh-SlowStack"
                 make
                 echo "Make Check"
                 make check

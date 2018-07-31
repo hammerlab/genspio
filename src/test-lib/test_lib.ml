@@ -59,14 +59,15 @@ end
 module Shell_directory = struct
   type t =
     { shell: Shell.t
-    ; compilation: [`Std_one_liner | `Std_multi_line]
+    ; compilation: [`Std_one_liner | `Std_multi_line | `Slow_stack]
     ; verbose: bool }
 
   let name t =
     sprintf "%s-%s" (Shell.to_string t.shell)
       ( match t.compilation with
       | `Std_multi_line -> "StdML"
-      | `Std_one_liner -> "Std1L" )
+      | `Std_one_liner -> "Std1L"
+      | `Slow_stack -> "SlowStack" )
 
   let unique_name = function
     | Exits {no_trap; name; args; returns; script} ->
@@ -159,6 +160,10 @@ module Shell_directory = struct
       match t.compilation with
       | `Std_one_liner -> Genspio.Compile.to_one_liner ~no_trap script
       | `Std_multi_line -> Genspio.Compile.to_many_lines ~no_trap script
+      | `Slow_stack ->
+          Genspio.To_slow_stack.compile script
+            ~trap:(if no_trap then `None else `Exit_with 77)
+          |> Format.asprintf "%a\n" Genspio.To_slow_stack.Script.pp
 
   let make_report_path t = "script" // "make_report.sh"
 
@@ -179,7 +184,8 @@ module Shell_directory = struct
               (Shell.to_string t.shell)
               ( match t.compilation with
               | `Std_one_liner -> "Standard-one-liner"
-              | `Std_multi_line -> "Standard-multi-line" )
+              | `Std_multi_line -> "Standard-multi-line"
+              | `Slow_stack -> "Slow-stack" )
               (List.length testlist) ]
       ; call
           [ string "printf"
@@ -194,7 +200,7 @@ module Shell_directory = struct
   let makefile t testlist =
     sprintf ".PHONY: all clean report check\nall: %s\n\n"
       (List.map testlist ~f:success_path |> String.concat ~sep:" ")
-    :: sprintf "clean:\n\trm -fr _success _failure _log\n\n"
+    :: sprintf "clean:\n\trm -fr _success _failure _log *.md\n\n"
     :: sprintf
          "failures.md:\n\t@{ cat _failure/* ; echo '' ; } > failures.md\n\n"
     :: sprintf
