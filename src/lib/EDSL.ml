@@ -29,11 +29,13 @@ let switch l =
   in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
+(*
 let string_list_to_string l =
   Elist.to_string ~f:(fun e -> to_byte_array e) l |> to_c_string
 
 let string_list_of_string s =
   Elist.of_string ~f:(fun e -> to_c_string e) (to_byte_array s)
+ *)
 
 type file =
   < get: byte_array t
@@ -146,7 +148,7 @@ module Command_line = struct
       ksprintf tmp_file "parse-cli-%s"
         (Marshal.to_string options [] |> Digest.string |> Digest.to_hex)
     in
-    let anon = anon_tmp#get_c |> string_list_of_string in
+    let anon = anon_tmp#get |> Elist.deserialize_to_c_string_list in
     let applied_action =
       (* 
         The [loop] function below is building 3 pieces of Genspio code at once:
@@ -221,7 +223,7 @@ module Command_line = struct
             [ anon_tmp#append (byte_array " ")
             ; anon_tmp#append
                 ( Elist.make [getenv (string "1")]
-                |> string_list_to_string |> to_byte_array ) ]
+                |> Elist.serialize_c_string_list ) ]
         in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
@@ -257,7 +259,7 @@ module Command_line = struct
     in
     seq
       [ setenv help_flag_var (Bool.to_string (bool false))
-      ; anon_tmp#set_c (string_list_to_string (Elist.make []))
+      ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
       ; seq (List.rev !inits)
       ; while_loop
       ; if_then_else
@@ -312,9 +314,11 @@ let cat_markdown tag file =
   output_markdown_code tag @@ call [string "cat"; file]
 
 let fresh_name suf =
-  let x = object
-            method v = 42
-          end in
+  let x =
+    object
+      method v = 42
+    end
+  in
   sprintf "g-%d-%d-%s" (Oo.id x) (Random.int 100_000) suf
 
 let sanitize_name n =

@@ -271,7 +271,8 @@ module Construct = struct
 
   let ( %%% ) s u = comment s u
 
-  let make_switch : type a. (bool t * unit t) list -> default:unit t -> unit t =
+  let make_switch : type a. (bool t * unit t) list -> default:unit t -> unit t
+      =
    fun conds ~default ->
     List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
         if_then_else x body prev )
@@ -306,18 +307,6 @@ module Construct = struct
   let loop_while condition ~body = While {condition; body}
 
   let loop_seq_while condition body = While {condition; body= Seq body}
-
-  module Elist = struct
-    let make l = List l
-
-    let append la lb = List_append (la, lb)
-
-    let iter l ~f = List_iter (l, f)
-
-    let to_string l ~f = List_to_string (l, f)
-
-    let of_string l ~f = String_to_list (l, f)
-  end
 
   let byte_array_concat_list l = Byte_array_concat l
 
@@ -387,6 +376,39 @@ module Construct = struct
 
   module Magic = struct
     let unit s : unit t = Raw_cmd s
+  end
+
+  module Elist = struct
+    let make l = List l
+
+    let append la lb = List_append (la, lb)
+
+    let iter l ~f = List_iter (l, f)
+
+    let to_string f l = List_to_string (l, f)
+
+    let of_string f l = String_to_list (l, f)
+
+    let serialize_byte_array_list : byte_array list t -> byte_array t =
+      to_string (fun e -> e)
+
+    let deserialize_to_byte_array_list : byte_array t -> byte_array list t =
+      of_string (fun e -> e)
+
+    let serialize_c_string_list : c_string list t -> byte_array t =
+       to_string (fun e -> to_byte_array e)
+
+    let deserialize_to_c_string_list : byte_array t -> c_string list t =
+      of_string (fun e -> to_c_string e)
+
+    let serialize_int_list : int list t -> byte_array t =
+      to_string Integer.to_byte_array
+
+    let deserialize_to_int_list : byte_array t -> int list t =
+      of_string Integer.of_byte_array
+
+    let to_string _ = `Do_not_use
+    let of_string _ = `Do_not_use
   end
 end
 
