@@ -613,7 +613,8 @@ let () =
          if_then_else
            C_string.(
              (* Explicit test of a corner case: *)
-             getenv (string "HOME\nME") =$= string (Sys.getenv "HOME"))
+             getenv (string "HOME\nME")
+             =$= string (Sys.getenv "HOME"))
            (return 12) (return 27)) ;
   ()
 
@@ -726,10 +727,12 @@ let () =
                     [to_fd (int 1) (int 2)])
              ; assert_or_fail "stdout-empty" C_string.(tmp1#get_c =$= empty)
              ; assert_or_fail "stderr-hello"
-                 (* We can only test with grep because stderr contains a bunch of
+                 ( (* We can only test with grep because stderr contains a bunch of
                other stuff, especially since we use the
                `-x` option of the shells *)
-                 (tmp2#get >> exec ["grep"; recognizable] |> succeeds)
+                   tmp2#get
+                 >> exec ["grep"; recognizable]
+                 |> succeeds )
              ; return 2 ])
        ; exits 3 ~name:"redirect-many"
            (let open Genspio.EDSL in
@@ -750,8 +753,10 @@ let () =
              ; call [string "cat"; tmp2#path]
              ; assert_or_fail "fd3-empty" C_string.(tmp1#get_c =$= string "")
              ; assert_or_fail "fd3-other-recog"
-                 (* Again going through fd `2` we've grabbed some junk: *)
-                 (tmp2#get >> exec ["grep"; recognizable] |> succeeds)
+                 ( (* Again going through fd `2` we've grabbed some junk: *)
+                   tmp2#get
+                 >> exec ["grep"; recognizable]
+                 |> succeeds )
              ; return 3 ])
        ; exits 2 ~name:"redirect-fails"
            (let open Genspio.EDSL in
@@ -891,10 +896,9 @@ let () =
       seq
         [ tmp#set (byte_array "")
         ; (* We serialize the list to `tmp2`: *)
-          tmp2#set (Elist.to_string slist (fun e -> e))
+          tmp2#set (Elist.serialize_byte_array_list slist)
         ; (* We get back the serialized list from `tmp2`: *)
-          tmp2#get
-          |> Elist.of_string ~f:(fun e -> e)
+          tmp2#get |> Elist.deserialize_to_byte_array_list
           |> Elist.iter ~f:(fun v ->
                  (* Elist.iter slist ~f:(fun v -> *)
                  seq
@@ -942,11 +946,10 @@ let () =
       (* Checking that implementing `fold` with `iter` does the `fold`: *)
       seq
         [ (* We serialize the list to `tmp2`: *)
-          tmp2#set @@ Elist.to_string ilist Integer.to_byte_array
+          tmp2#set @@ Elist.serialize_int_list ilist
         ; tmp#set (int 0 |> Integer.to_byte_array)
         ; (* We get back the serialized list from `tmp2`: *)
-          tmp2#get
-          |> Elist.of_string ~f:Integer.of_byte_array
+          tmp2#get |> Elist.deserialize_to_int_list
           |> Elist.iter ~f:(fun v ->
                  seq
                    [ eprintf (string "Adding: '%s'\\n")

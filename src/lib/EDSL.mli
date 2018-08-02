@@ -173,9 +173,17 @@ module Elist : sig
   (** Iterate over a list, the body of the loop [~f] takes as argument
       function that returns the current eletment at the EDSL level. *)
 
-  val to_string : 'a list t -> f:('a t -> byte_array t) -> byte_array t
+  val serialize_byte_array_list : byte_array list t -> byte_array t
 
-  val of_string : byte_array t -> f:(byte_array t -> 'a t) -> 'a list t
+  val deserialize_to_byte_array_list : byte_array t -> byte_array list t
+
+  val serialize_c_string_list : c_string list t -> byte_array t
+
+  val deserialize_to_c_string_list : byte_array t -> c_string list t
+
+  val serialize_int_list : int list t -> byte_array t
+
+  val deserialize_to_int_list : byte_array t -> int list t
 end
 
 (** {3 String Manipulation} *)
