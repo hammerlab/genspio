@@ -67,7 +67,7 @@ module Shell_directory = struct
       ( match t.compilation with
       | `Std_multi_line -> "StdML"
       | `Std_one_liner -> "Std1L"
-      | `Slow_stack -> "SlowStack" )
+      | `Slow_stack -> "SlowFlow" )
 
   let unique_name = function
     | Exits {no_trap; name; args; returns; script} ->

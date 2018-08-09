@@ -125,8 +125,8 @@ $genspio_test --important-shells $important_shells _test/
                 make
                 echo "Make Check"
                 make check
-                cd ../sh-SlowStack/
-                echo "Make sh-SlowStack"
+                cd ../sh-SlowFlow/
+                echo "Make sh-SlowFlow"
                 make
                 echo "Make Check"
                 make check
