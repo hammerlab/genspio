@@ -605,6 +605,8 @@ let compile ?(tmp_dir_path= `Fresh) ?(signal_name= "USR1")
   let s = to_ir ~fail_commands ~tmpdir expr in
   make (before @ s.commands) s.result
 
+(** Extra tests which can be activated for debugging purposes (option
+    ["--run-slow-stack-tests"] in the main tests). *)
 let test () =
   let open Format in
   let open EDSL in
@@ -703,25 +705,11 @@ let test () =
     ; (let var = string "AAA" in
        let v1 = string "V1" in
        let v2 = string "V2" in
-       (*
-let s s = printf (ksprintf string "SUCCESS %s\\n" s) [] in
-       let f s = printf (ksprintf string "FAILURE %s\\n" s) [] in
-       let tmp = tmp_file "tmp1" in
- *)
        seq
          [ setenv var v1
          ; loop_seq_while
              C_string.(getenv var =$= v1)
-             [printf (string "Iteration\\n") []; setenv var v2]
-         (*
-; if_then_else  (s "1") (f "1")
-         ; tmp#set_c (getenv var)
-         ; if_then_else C_string.(tmp#get_c =$= v1) (s "2") (f "2")
-         ; if_then_else C_string.(getenv var =$= v2) (s "3") (f "3")
-         ; tmp#set_c (getenv var)
-         ; if_then_else C_string.(tmp#get_c =$= v2) (s "4") (f "4")
- *)
-          ]) ]
+             [printf (string "Iteration\\n") []; setenv var v2] ]) ]
   in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in
