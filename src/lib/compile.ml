@@ -98,6 +98,14 @@ module To_posix = struct
     | exception Language.Compilation ce -> Error ce
 end
 
+module To_slow_flow = struct
+
+  module Script= To_slow_flow.Script
+
+  let compile = To_slow_flow.compile
+
+end
+
 let to_legacy style ?(max_argument_length= default_max_argument_length)
     ?(no_trap= false) e =
   To_posix.string e

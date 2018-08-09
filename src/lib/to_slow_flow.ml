@@ -282,7 +282,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       Script.if_then_else sbool sthen selse
   | While {condition; body} ->
       Script.while_loop (continue condition) (continue body)
-  | Seq [] -> continue (No_op)
+  | Seq [] -> continue No_op
   | Seq l ->
       let cmds =
         List.concat_map l ~f:(fun e ->
@@ -429,16 +429,17 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
           (* let tmpfamily = tmp_path ~tmpdir ~expression:e "list-copy-family" in *)
           let copy =
             let posixish_hash path =
-              sprintf "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')"
-                path  path
-                (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
+              sprintf
+                "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')" path
+                path
+              (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
             in
             let file_var = var_name ~expression:e "list_copy" in
             rawf
               "printf 'String_to_list copy: %s %s\\n' 1>&2 ; rm -f %s ; touch \
                %s ; for %s in $(cat %s) ; do\n\
                {\n  \
-               tag=%s
+               tag=%s\n               \
                cp ${%s} ${%s}-$tag \n\
                echo ${%s}-$tag >> %s \n\
                }\n\
@@ -446,7 +447,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
               (Filename.quote tmp) (Filename.quote flist) (Filename.quote tmp)
               (Filename.quote tmp) file_var (Filename.quote flist)
               (posixish_hash @@ sprintf "${%s}" file_var)
-              file_var  file_var file_var (Filename.quote tmp)
+              file_var file_var file_var (Filename.quote tmp)
           in
           make (str_script.commands @ [copy]) (File tmp)
       | other -> assert false )
@@ -576,10 +577,12 @@ let compile ?(tmp_dir_path= `Fresh) ?(signal_name= "USR1")
     ?(trap= `Exit_with 77) expr =
   let open Script in
   let tmpdir =
-    match tmp_dir_path with `Fresh ->
-      Filename.concat
-        (try Sys.getenv "TMPDIR" with _ -> "/tmp")
-        (var_name ~expression:expr "tmpdir")
+    match tmp_dir_path with
+    | `Fresh ->
+        Filename.concat
+          (try Sys.getenv "TMPDIR" with _ -> "/tmp")
+          (var_name ~expression:expr "tmpdir")
+    | `Use p -> p
   in
   let pid = var_name ~expression:expr "script_pid" in
   let tmp = tmp_path ~tmpdir ~expression:expr "fail-msg" in

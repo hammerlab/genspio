@@ -1083,7 +1083,7 @@ let () =
   in
   let anon_fun p = anon := p :: !anon in
   let no_compilation_tests = ref false in
-  let extra_slow_stack_tests = ref false in
+  let extra_slow_flow_tests = ref false in
   let args =
     Arg.align
       [ ( "--important-shells"
@@ -1098,8 +1098,8 @@ let () =
         , Arg.Set no_compilation_tests
         , " Do not do the compilation tests." )
       ; ( "--run-slow-stack-tests"
-        , Arg.Set extra_slow_stack_tests
-        , " Run the To_slow_stack.test tests." )
+        , Arg.Set extra_slow_flow_tests
+        , " Run the To_slow_flow.test tests." )
       ; ( "--"
         , Rest anon_fun
         , "<args> Arguments following are not interpreted as CL options." ) ]
@@ -1136,5 +1136,5 @@ let () =
   let errors =
     if !no_compilation_tests then false else compilation_error_tests ()
   in
-  if !extra_slow_stack_tests then Genspio.To_slow_stack.test () ;
+  if !extra_slow_flow_tests then Genspio.To_slow_flow.test () ;
   exit (if errors then 23 else 0)

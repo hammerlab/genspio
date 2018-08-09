@@ -119,6 +119,23 @@ module To_posix : sig
   *)
 end
 
+(** The much slower but more portable compiler. *)
+module To_slow_flow : sig
+  module Script : sig
+    type t
+
+    val pp : Format.formatter -> t -> unit
+  end
+
+  val compile :
+       ?tmp_dir_path:[`Fresh | `Use of string]
+    -> ?signal_name:string
+    -> ?trap:[`Exit_with of int | `None]
+    -> 'a EDSL.t
+    -> Script.t
+end
+
+
 (** {3 Legacy API}
 
 These functions are here for backwards compatibility, please use now

@@ -75,7 +75,7 @@ module Shell_directory = struct
           (if no_trap then "noT" else "T")
           (let long =
              String.map name ~f:(function
-               | ('a'..'z' | 'A'..'Z' | '0'..'9') as c -> c
+               | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9') as c -> c
                | _ -> '_' )
            in
            if String.length long > 30 then
@@ -161,9 +161,9 @@ module Shell_directory = struct
       | `Std_one_liner -> Genspio.Compile.to_one_liner ~no_trap script
       | `Std_multi_line -> Genspio.Compile.to_many_lines ~no_trap script
       | `Slow_stack ->
-          Genspio.To_slow_stack.compile script
+          Genspio.Compile.To_slow_flow.compile script
             ~trap:(if no_trap then `None else `Exit_with 77)
-          |> Format.asprintf "%a\n" Genspio.To_slow_stack.Script.pp
+          |> Format.asprintf "%a\n" Genspio.Compile.To_slow_flow.Script.pp
 
   let make_report_path t = "script" // "make_report.sh"
 
