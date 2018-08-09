@@ -218,12 +218,12 @@ module Command_line = struct
     let while_loop =
       let body =
         let append_anon_arg_to_list =
-          (* This assumes knowledge of the internal representation of lists... *)
           seq
-            [ anon_tmp#append (byte_array " ")
-            ; anon_tmp#append
-                ( Elist.make [getenv (string "1")]
-                |> Elist.serialize_c_string_list ) ]
+            [ anon_tmp#set
+                ( Elist.append
+                    (anon_tmp#get |> Elist.deserialize_to_byte_array_list)
+                    (Elist.make [getenv (string "1") |> C_string.to_byte_array])
+                |> Elist.serialize_byte_array_list ) ]
         in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in

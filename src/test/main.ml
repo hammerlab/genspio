@@ -16,27 +16,13 @@ let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt
 
 let assert_or_fail name cond =
   let open Genspio.EDSL in
-  if_then_else cond nop (seq [tprintf "Fail: %s\n" name; fail name])
+  if_then_else cond (tprintf "OK: %s\n" name)
+    (seq [tprintf "Fail: %s\n" name; fail name])
 
 let tests = ref []
 
 let add_tests t = tests := t :: !tests
 
-(*
-let () = add_tests @@ exits 0 Construct.(
-    succeeds (exec ["ls"])
-    &&& returns ~value:18 (seq [
-        exec ["ls"];
-        exec ["sh"; "-c"; "exit 18"]])
-  )
-
-let () = add_tests @@ exits 0 Construct.(
-    succeeds (exec ["ls"])
-    &&& returns ~value:18 (seq [
-        exec ["ls"];
-        exec ["sh"; "-c"; "exit 18"]])
-  )
-*)
 let () =
   add_tests
   @@ exits 23
@@ -299,7 +285,7 @@ let () =
                      ; Elist.iter anon ~f:(fun v ->
                            printf (string "=== anonth: %s\\n") [v ()] )
                      ; assert_or_fail "dash-dash"
-                         ( not bone
+                         ( (not bone)
                          &&&
                          C_string.(
                            concat_elist anon
@@ -308,7 +294,7 @@ let () =
                                     [anon1; "-g"; minus_g; anon2; anon3])) ) ])
                 ; default
                     [ assert_or_fail "single-is-anon"
-                        ( not bone
+                        ( (not bone)
                         &&&
                         C_string.(
                           concat_elist anon
@@ -497,7 +483,7 @@ let () =
        ; exits 16
            Construct.(
              if_then_else
-               (bool true &&& not (bool false))
+               (bool true &&& (not (bool false)))
                (return 16) (return 17))
        ; exits 11
            Construct.(
@@ -573,7 +559,7 @@ let () =
                &&& Integer.(int 3 > int 2)
                &&& Integer.(int 3 >= int 2)
                &&& Integer.(int 3 <> int 2)
-               &&& not Integer.(int 3 = int 2)
+               &&& (not Integer.(int 3 = int 2))
                &&& Integer.(int (-1) < int 2) )
                (return 23) (return 13)) ]
 
@@ -608,13 +594,12 @@ let () =
 
 let () =
   add_tests
-  @@ exits 27
+  @@ exits 27 ~name:"getenv-corner-case-00"
        Construct.(
          if_then_else
            C_string.(
              (* Explicit test of a corner case: *)
-             getenv (string "HOME\nME")
-             =$= string (Sys.getenv "HOME"))
+             getenv (string "HOME\nME") =$= string (Sys.getenv "HOME"))
            (return 12) (return 27)) ;
   ()
 
@@ -632,31 +617,50 @@ let () =
 
 let () =
   add_tests
-  @@ exits 0 ~name:"setenv-getenv"
-       (let open Construct in
+  @@ exits 20 ~name:"setenv-getenv"
+       (let open Genspio.EDSL in
        let var = string "VVVVVVV" in
        let assert_or_return ret cond =
          if_then_else cond nop
            (seq [tprintf "Fail: %d" ret; fail "assert_or_return"])
        in
+       let set_and_test ?(varname= "XXXX") value =
+         let var = string varname in
+         seq
+           [ setenv ~var (string value)
+           ; if_seq
+               C_string.(
+                 (* The behavior when there is a final new-line is
+                    considered undefined, the slow-stack compiler seems
+                    to respect them but default one doesn't. We consider
+                    both bahaviors OK for now. *)
+                 getenv var =$= string value
+                 ||| (getenv var =$= string (String.strip value)))
+               ~t:[]
+               ~e:
+                 [ printf
+                     (ksprintf string
+                        "\\n====\\nvarname: %s\\nvalue: %S\\ngetenv: \
+                         {%%s}\\nshell: {%%s}\\n"
+                        varname value)
+                     [ getenv var
+                     ; exec ["sh"; "-c"; sprintf "echo \"ECHO: $%s\"" varname]
+                       |> get_stdout |> Byte_array.to_c ]
+                 ; ksprintf fail "fail: %s" value ] ]
+       in
        seq
          [ assert_or_return 27 C_string.(getenv var =$= string "")
-         ; setenv ~var (string "Bouh")
-         ; assert_or_return 28 C_string.(getenv var =$= string "Bouh")
-         ; (* We also “record the undefined behavior” *)
-           setenv ~var (string "Bouhh\nbah")
-         ; assert_or_return 29 C_string.(getenv var =$= string "Bouhh\nbah")
-         ; setenv ~var (string "Bouhhh\nbah\n")
-         ; assert_or_return 30 C_string.(getenv var =$= string "Bouhhh\nbah")
-         ; setenv ~var (string "Bouhoo\001bah\n")
-         ; assert_or_return 12 C_string.(getenv var =$= string "Bouhoo\001bah")
-         ; (* We check that the environment is affected in a brutal way:
-         we mess up the $PATH:
-         /bin/sh: 1: ls: not found
-         We cannot even use `return` anymore after that: *)
-           setenv ~var:(string "PATH") (string "/nope")
-         ; assert_or_return 42 (exec ["/bin/sh"; "-c"; "ls"] |> succeeds |> not)
-         ]) ;
+         ; set_and_test "bouh"
+         ; set_and_test "bouh\nbah"
+         ; set_and_test "bouh\nbah\n"
+         ; set_and_test "bouh'bah"
+         ; set_and_test "bouh\"bah"
+         ; set_and_test "bouh\001bah"
+         ; (* We check that the environment is affected properly: *)
+           setenv ~var:(string "AAA") (string "aaa")
+         ; assert_or_return 42
+             (exec ["/bin/sh"; "-c"; "[ \"$AAA\" = \"aaa\" ]"] |> succeeds)
+         ; return 20 ]) ;
   ()
 
 let () =
@@ -887,7 +891,7 @@ let () =
   (* We make a bunch of separate tests to avoid the command line
        argument size limit: *)
   let make_list_iter_strings_test i l =
-    let name = sprintf "list-iter-strings-%d-%dstrings" i (List.length l) in
+    let name = sprintf "list-iter-strings-%d-%d-strings" i (List.length l) in
     exits 5 ~name
       (let open Genspio.EDSL in
       let slist = List.map l ~f:byte_array |> Elist.make in
@@ -900,7 +904,6 @@ let () =
         ; (* We get back the serialized list from `tmp2`: *)
           tmp2#get |> Elist.deserialize_to_byte_array_list
           |> Elist.iter ~f:(fun v ->
-                 (* Elist.iter slist ~f:(fun v -> *)
                  seq
                    [ eprintf
                        (string "Concatenating: '%s'\\n")
@@ -919,7 +922,8 @@ let () =
         ; return 5 ])
   in
   List.concat_mapi ~f:make_list_iter_strings_test
-    [ ["one"; "two"; "three"]
+    [ ["zero"]
+    ; ["one"; "two"; "three"]
     ; ["four"]
     ; []
     ; [""]
@@ -941,8 +945,8 @@ let () =
     exits 5 ~name
       (let open Genspio.EDSL in
       let ilist = List.map l ~f:int |> Elist.make in
-      let tmp = tmp_file "listitertest" in
-      let tmp2 = tmp_file "listserializationtest" in
+      let tmp = tmp_file ("tmp-" ^ name) in
+      let tmp2 = tmp_file ("tmp2" ^ name) in
       (* Checking that implementing `fold` with `iter` does the `fold`: *)
       seq
         [ (* We serialize the list to `tmp2`: *)
@@ -958,6 +962,7 @@ let () =
                        Integer.(
                          (tmp#get |> of_byte_array) + v () |> to_byte_array) ]
              )
+        ; printf (string "TMP: %s, TMP2: %s\\n") [tmp#path; tmp2#path]
         ; assert_or_fail name
             C_string.(
               tmp#get_c
@@ -1077,6 +1082,8 @@ let () =
       fmt
   in
   let anon_fun p = anon := p :: !anon in
+  let no_compilation_tests = ref false in
+  let extra_slow_flow_tests = ref false in
   let args =
     Arg.align
       [ ( "--important-shells"
@@ -1085,39 +1092,49 @@ let () =
         , sprintf
             "<comma-sep-list> Set the shells that are considered \
              “important”\n\
-             \t(default: '%s')"
+             \t(default: '%s')."
             (String.concat ~sep:"," !important_shells) )
+      ; ( "--no-compilation-tests"
+        , Arg.Set no_compilation_tests
+        , " Do not do the compilation tests." )
+      ; ( "--run-slow-stack-tests"
+        , Arg.Set extra_slow_flow_tests
+        , " Run the To_slow_flow.test tests." )
       ; ( "--"
         , Rest anon_fun
         , "<args> Arguments following are not interpreted as CL options." ) ]
   in
   Arg.parse args anon_fun usage ;
-  let path =
+  let path_opt =
     match !anon with
-    | [one] -> one
-    | [] -> failf "Missing <path> argument."
+    | [one] -> Some one
+    | [] -> None
     | moar -> failf "Too many arguments: %s" (String.concat ~sep:", " moar)
   in
-  let open Test in
-  let testlist = List.concat !tests in
-  let testdir =
-    let tests =
-      List.concat_map
-        Shell.(known_shells ())
-        ~f:(fun shell ->
-          let make compilation =
-            Shell_directory.{shell; verbose= true; compilation}
-          in
-          [make `Std_one_liner; make `Std_multi_line] )
-    in
-    let open Test_directory in
-    {shell_tests= tests; important_shells= !important_shells; verbose= true}
+  Option.iter path_opt ~f:(fun path ->
+      let open Test in
+      let testlist = List.concat !tests in
+      let testdir =
+        let tests =
+          List.concat_map
+            Shell.(known_shells ())
+            ~f:(fun shell ->
+              let make compilation =
+                Shell_directory.{shell; verbose= true; compilation}
+              in
+              [make `Std_one_liner; make `Std_multi_line; make `Slow_stack] )
+        in
+        let open Test_directory in
+        {shell_tests= tests; important_shells= !important_shells; verbose= true}
+      in
+      let todo = Test_directory.contents testdir ~path testlist in
+      List.iter todo ~f:(function
+        | `File (p, v) ->
+            let mo = open_out p in
+            fprintf mo "%s\n" v ; close_out mo
+        | `Directory v -> ksprintf Sys.command "mkdir -p '%s'" v |> ignore ) ) ;
+  let errors =
+    if !no_compilation_tests then false else compilation_error_tests ()
   in
-  let todo = Test_directory.contents testdir ~path testlist in
-  List.iter todo ~f:(function
-    | `File (p, v) ->
-        let mo = open_out p in
-        fprintf mo "%s\n" v ; close_out mo
-    | `Directory v -> ksprintf Sys.command "mkdir -p '%s'" v |> ignore ) ;
-  let errors = compilation_error_tests () in
+  if !extra_slow_flow_tests then Genspio.To_slow_flow.test () ;
   exit (if errors then 23 else 0)

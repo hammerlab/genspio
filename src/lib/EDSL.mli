@@ -3,16 +3,16 @@
 (** The type of a Genspio expression. *)
 type 'a t = 'a Language.t
 
-(** Abstract type to encode arbitrary byte-arrays in the EDSL as
+(** Type to encode arbitrary byte-arrays in the EDSL as
     [byte_array t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays. *)
-type byte_array
+type byte_array = Language.byte_array
 
-(** Abstract type to encode NUL-terminated strings in the EDSL as
+(** Type to encode NUL-terminated strings in the EDSL as
     [c_string t] values. C-strings cannot contain the ['\x00'] character.
     The command line arguments of commands as well as the contents of
     environment variables must be C-strings. *)
-type c_string
+type c_string = Language.c_string
 
 (** {3 Literals } *)
 
