@@ -13,7 +13,8 @@ val to_one_line_hum : 'a EDSL.t -> string
 
 (** {3 Compilation to POSIX Shell Scripts} *)
 
-(** Compiler from {!EDSL.t} to POSIX shell scripts. *)
+(** Compiler from {!EDSL.t} to POSIX shell scripts (one-liners or
+    multiline scripts). *)
 module To_posix : sig
   (** When a compiled script runs into an error, these details are
       accessible to the user.  *)
@@ -119,12 +120,15 @@ module To_posix : sig
   *)
 end
 
-(** The much slower but more portable compiler. *)
+(** Compile {!EDSL.t} values to much slower but more portable scripts
+    (which use temporary-files). *)
 module To_slow_flow : sig
+  (** The result of {!compile} function is a {!Script.t}. *)
   module Script : sig
     type t
 
     val pp : Format.formatter -> t -> unit
+    (** Print the value as a POSIX shell script. *)
   end
 
   val compile :
@@ -133,8 +137,8 @@ module To_slow_flow : sig
     -> ?trap:[`Exit_with of int | `None]
     -> 'a EDSL.t
     -> Script.t
+  (** Compile and {!EDSL.t} value to a script. *)
 end
-
 
 (** {3 Legacy API}
 
