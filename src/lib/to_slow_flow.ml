@@ -436,16 +436,15 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
             in
             let file_var = var_name ~expression:e "list_copy" in
             rawf
-              "printf 'String_to_list copy: %s %s\\n' 1>&2 ; rm -f %s ; touch \
-               %s ; for %s in $(cat %s) ; do\n\
+              "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
                {\n  \
                tag=%s\n               \
                cp ${%s} ${%s}-$tag \n\
                echo ${%s}-$tag >> %s \n\
                }\n\
                done"
-              (Filename.quote tmp) (Filename.quote flist) (Filename.quote tmp)
-              (Filename.quote tmp) file_var (Filename.quote flist)
+              (Filename.quote tmp) (Filename.quote tmp) file_var
+              (Filename.quote flist)
               (posixish_hash @@ sprintf "${%s}" file_var)
               file_var file_var file_var (Filename.quote tmp)
           in
