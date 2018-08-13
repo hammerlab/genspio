@@ -1,7 +1,7 @@
 open Common
 open Language
 
-let string_to_octal ?(prefix= "") s =
+let string_to_octal ?(prefix = "") s =
   with_buffer (fun str ->
       String.iter s ~f:(fun c ->
           str prefix ;
@@ -30,11 +30,12 @@ module Script = struct
     | Unit
     | Literal_value of string
     | File of string
+    | File_in_variable of string
     | Raw_inline of string
 
   type t = {commands: command list; result: compiled_value}
 
-  let to_argument ?(arithmetic= false) = function
+  let to_argument ?(arithmetic = false) = function
     | Unit -> "\"$(exit 42)\""
     | Literal_value s when String.exists s ~f:(( = ) '\x00') ->
         let oct = string_to_octal s in
@@ -46,6 +47,9 @@ module Script = struct
     | File s ->
         let v = sprintf "$(cat %s)" (Filename.quote s) in
         if not arithmetic then sprintf "\"%s\"" v else v
+    | File_in_variable s ->
+        let v = sprintf "$(cat ${%s})" s in
+        if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
     | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
 
@@ -55,6 +59,8 @@ module Script = struct
     | Literal_value s -> string_to_octal s
     | File f ->
         sprintf "$(cat %s | od -t o1 -An -v | tr -d ' \\n')" (Filename.quote f)
+    | File_in_variable f ->
+        sprintf "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
 
   let commands s = s.commands
 
@@ -86,6 +92,7 @@ module Script = struct
       | Unit -> fprintf fmt "Unit"
       | Literal_value s -> fprintf fmt "Literal: %S" s
       | File s -> fprintf fmt "File: %S" s
+      | File_in_variable s -> fprintf fmt "File: ${%s}" s
       | Raw_inline s -> fprintf fmt "Raw: %S" s
     in
     fprintf fmt "%a\n# Result: %a\n" pp_command_list script.commands pp_result
@@ -137,6 +144,12 @@ module Script = struct
                 { condition= to_argument p
                 ; block_then= bool_to_file false tmp
                 ; block_else= bool_to_file true tmp } ] )
+      | File_in_variable _ as p ->
+          ( File tmp
+          , [ If_then_else
+                { condition= to_argument p
+                ; block_then= bool_to_file false tmp
+                ; block_else= bool_to_file true tmp } ] )
     in
     {commands= commands @ morecmds; result= r}
 
@@ -179,6 +192,8 @@ let var_name ?expression ?script tag =
 let tmp_path ~tmpdir ?expression ?script tag =
   sprintf "%s/%s" tmpdir (var_name ?expression ?script tag)
 
+type Language.raw_command_annotation += Cat_variable of string
+
 let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
  fun ~fail_commands ~tmpdir e ->
   let continue : type a. a t -> _ = fun x -> to_ir ~fail_commands ~tmpdir x in
@@ -214,6 +229,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
     | Literal_value v ->
         (rawf "printf -- %s > %s" (Filename.quote v) tmparg, tmp)
     | File p -> (rawf ":", p)
+    | File_in_variable p -> (rawf "cp \"${%s}\" %s" p tmp, tmp)
     | Raw_inline s -> (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
   in
   match e with
@@ -225,8 +241,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       in
       let commands = List.concat_map ~f:Script.commands irs in
       Script.unit (commands @ [Raw cmd])
-  | Raw_cmd (Some Magic_unit, s) ->
-    Script.unit [Script.rawf "%s" s]
+  | Raw_cmd (Some Magic_unit, s) -> Script.unit [Script.rawf "%s" s]
+  | Raw_cmd (Some (Cat_variable filepathvar), _) ->
+      Script.make [] (File_in_variable filepathvar)
   | Raw_cmd (_, s) -> Script.make [] (Raw_inline s)
   | Byte_array_to_c_string ba ->
       let open Script in
@@ -245,6 +262,15 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
                 ; block_then=
                     ksprintf fail_commands
                       "Byte array in %s cannot be converted to a C-String" f
+                ; block_else= [rawf ":"] } ]
+        | File_in_variable v ->
+            [ If_then_else
+                { condition=
+                    sprintf
+                      "od -t o1 -An -v ${%s} | grep ' 000' > /dev/null 2>&1 " v
+                ; block_then=
+                    ksprintf fail_commands
+                      "Byte array in $%s cannot be converted to a C-String" v
                 ; block_else= [rawf ":"] } ]
         | Raw_inline ri -> []
       in
@@ -300,8 +326,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
   | Redirect_output (unit_t, redirections) ->
       let pre_commands, sub_shell_commands =
         let open Script in
-        List.fold ~init:([], []) redirections ~f:
-          (fun (precmds, evals) {take; redirect_to} ->
+        List.fold ~init:([], []) redirections
+          ~f:(fun (precmds, evals) {take; redirect_to} ->
             let take_script = continue take in
             let redirect_to_script, op =
               match redirect_to with
@@ -331,8 +357,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
                 ; Comment
                     ( "Writing return value"
                     , Raw_cmd
-                        (None, sprintf "printf -- \"$?\" > %s"
-                           Script.(to_argument scr.result)) ) ] )
+                        ( None
+                        , sprintf "printf -- \"$?\" > %s"
+                            Script.(to_argument scr.result) ) ) ] )
       in
       let redirections =
         let make fd =
@@ -479,7 +506,11 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
          contents through the transformation function `f` and append the
          result to `tmp`. *)
       let convert_script =
-        continue (f (fun () -> Raw_cmd (None, sprintf "\"$(cat ${%s})\"" file_var)))
+        continue
+          (f (fun () ->
+               Raw_cmd
+                 ( Some (Cat_variable file_var)
+                 , sprintf "\"$(cat ${%s})\"" file_var ) ))
       in
       let loop =
         [ Script.rawf "for %s in $(cat %s) ; do\n{\n%s\n}\ndone" file_var
@@ -574,8 +605,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let script = continue expr in
       make (Comment cmt :: script.commands) script.result
 
-let compile ?(tmp_dir_path= `Fresh) ?(signal_name= "USR1")
-    ?(trap= `Exit_with 77) expr =
+let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
+    ?(trap = `Exit_with 77) expr =
   let open Script in
   let tmpdir =
     match tmp_dir_path with
