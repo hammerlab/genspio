@@ -225,7 +225,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       in
       let commands = List.concat_map ~f:Script.commands irs in
       Script.unit (commands @ [Raw cmd])
-  | Raw_cmd s -> Script.make [] (Raw_inline s)
+  | Raw_cmd (Some Magic_unit, s) ->
+    Script.unit [Script.rawf "%s" s]
+  | Raw_cmd (_, s) -> Script.make [] (Raw_inline s)
   | Byte_array_to_c_string ba ->
       let open Script in
       let script = continue ba in
@@ -329,7 +331,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
                 ; Comment
                     ( "Writing return value"
                     , Raw_cmd
-                        (sprintf "printf -- \"$?\" > %s"
+                        (None, sprintf "printf -- \"$?\" > %s"
                            Script.(to_argument scr.result)) ) ] )
       in
       let redirections =
@@ -365,9 +367,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
         continue
           (If
              ( Int_bin_comparison
-                 ( Raw_cmd (to_argument string_script.result)
+                 ( Raw_cmd (None, to_argument string_script.result)
                  , `Eq
-                 , Raw_cmd (to_argument string_script.result) )
+                 , Raw_cmd (None, to_argument string_script.result) )
              , No_op
              , Fail "string-to-int" ))
       in
@@ -388,7 +390,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let extra_check =
         let is v =
           String_operator
-            ( Raw_cmd (Script.to_ascii scr.result)
+            ( Raw_cmd (None, Script.to_ascii scr.result)
             , `Eq
             , Literal Literal.(String v) )
         in
@@ -477,7 +479,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
          contents through the transformation function `f` and append the
          result to `tmp`. *)
       let convert_script =
-        continue (f (fun () -> Raw_cmd (sprintf "\"$(cat ${%s})\"" file_var)))
+        continue (f (fun () -> Raw_cmd (None, sprintf "\"$(cat ${%s})\"" file_var)))
       in
       let loop =
         [ Script.rawf "for %s in $(cat %s) ; do\n{\n%s\n}\ndone" file_var

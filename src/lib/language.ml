@@ -6,9 +6,9 @@ type byte_array = Byte_Array
 
 module Literal = struct
   type _ t =
-    | Int: int -> int t
-    | String: string -> byte_array t
-    | Bool: bool -> bool t
+    | Int : int -> int t
+    | String : string -> byte_array t
+    | Bool : bool -> bool t
 
   let pp : type a. _ -> a t -> unit =
     let open Format in
@@ -20,9 +20,9 @@ module Literal = struct
   module Str = struct
     let easy_to_escape s =
       String.for_all s ~f:(function
-        | 'a'..'z'
-         |'A'..'Z'
-         |'0'..'9'
+        | 'a' .. 'z'
+         |'A' .. 'Z'
+         |'0' .. '9'
          |'-' | '_' | '*' | '&' | '^' | '=' | '+' | '%' | '$' | '"' | '\''
          |'/' | '#' | '@' | '!' | ' ' | '~' | '`' | '\\' | '|' | '?' | '>'
          |'<' | '.' | ',' | ':' | ';' | '{' | '}' | '(' | ')' | '[' | ']' ->
@@ -33,55 +33,60 @@ module Literal = struct
   end
 end
 
+type raw_command_annotation = ..
+type raw_command_annotation += Magic_unit
+
 type fd_redirection =
   { take: int t
   ; redirect_to:
       [`Path of c_string t | `Fd of int t (* | `Input_of of unit t *)] }
 
 and _ t =
-  | Exec: c_string t list -> unit t
-  | Raw_cmd: string -> 'a t
-  | Bool_operator: bool t * [`And | `Or] * bool t -> bool t
-  | String_operator: byte_array t * [`Eq | `Neq] * byte_array t -> bool t
-  | Not: bool t -> bool t
-  | Returns: {expr: 'a t; value: int} -> bool t
+  | Exec : c_string t list -> unit t
+  | Raw_cmd : (raw_command_annotation option * string) -> 'a t
+  | Bool_operator : bool t * [`And | `Or] * bool t -> bool t
+  | String_operator : byte_array t * [`Eq | `Neq] * byte_array t -> bool t
+  | Not : bool t -> bool t
+  | Returns : {expr: 'a t; value: int} -> bool t
   | No_op : unit t
-  | If: bool t * unit t * unit t -> unit t
-  | Seq: unit t list -> unit t
-  | Literal: 'a Literal.t -> 'a t
-  | Output_as_string: unit t -> byte_array t
-  | Redirect_output: unit t * fd_redirection list -> unit t
-  | Write_output:
+  | If : bool t * unit t * unit t -> unit t
+  | Seq : unit t list -> unit t
+  | Literal : 'a Literal.t -> 'a t
+  | Output_as_string : unit t -> byte_array t
+  | Redirect_output : unit t * fd_redirection list -> unit t
+  | Write_output :
       { expr: unit t
       ; stdout: c_string t option
       ; stderr: c_string t option
       ; return_value: c_string t option }
       -> unit t
-  | Feed: byte_array t * unit t -> unit t
-  | Pipe: unit t list -> unit t
-  | While: {condition: bool t; body: unit t} -> unit t
-  | Fail: string -> unit t
-  | Int_to_string: int t -> c_string t
-  | String_to_int: c_string t -> int t
-  | Bool_to_string: bool t -> c_string t
-  | String_to_bool: c_string t -> bool t
-  | List_to_string: 'a list t * ('a t -> byte_array t) -> byte_array t
-  | String_to_list: byte_array t * (byte_array t -> 'a t) -> 'a list t
-  | List: 'a t list -> 'a list t
-  | C_string_concat: c_string list t -> c_string t
-  | Byte_array_concat: byte_array list t -> byte_array t
-  | List_append: ('a list t * 'a list t) -> 'a list t
-  | List_iter: 'a list t * ((unit -> 'a t) -> unit t) -> unit t
-  | Byte_array_to_c_string: byte_array t -> c_string t
-  | C_string_to_byte_array: c_string t -> byte_array t
-  | Int_bin_op: int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t -> int t
-  | Int_bin_comparison:
+  | Feed : byte_array t * unit t -> unit t
+  | Pipe : unit t list -> unit t
+  | While : {condition: bool t; body: unit t} -> unit t
+  | Fail : string -> unit t
+  | Int_to_string : int t -> c_string t
+  | String_to_int : c_string t -> int t
+  | Bool_to_string : bool t -> c_string t
+  | String_to_bool : c_string t -> bool t
+  | List_to_string : 'a list t * ('a t -> byte_array t) -> byte_array t
+  | String_to_list : byte_array t * (byte_array t -> 'a t) -> 'a list t
+  | List : 'a t list -> 'a list t
+  | C_string_concat : c_string list t -> c_string t
+  | Byte_array_concat : byte_array list t -> byte_array t
+  | List_append : ('a list t * 'a list t) -> 'a list t
+  | List_iter : 'a list t * ((unit -> 'a t) -> unit t) -> unit t
+  | Byte_array_to_c_string : byte_array t -> c_string t
+  | C_string_to_byte_array : c_string t -> byte_array t
+  | Int_bin_op :
+      int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t
+      -> int t
+  | Int_bin_comparison :
       int t * [`Eq | `Ne | `Gt | `Ge | `Lt | `Le] * int t
       -> bool t
-  | Getenv: c_string t -> c_string t
+  | Getenv : c_string t -> c_string t
   (* See [man execve]. *)
-  | Setenv: c_string t * c_string t -> unit t
-  | Comment: string * 'a t -> 'a t
+  | Setenv : c_string t * c_string t -> unit t
+  | Comment : string * 'a t -> 'a t
 
 let pp_in_expr fmt pp =
   let open Format in
@@ -100,7 +105,7 @@ let rec pp : type a. Format.formatter -> a t -> unit =
   let open Format in
   fun fmt -> function
     | Exec l -> pp_fun_call fmt "exec" pp l
-    | Raw_cmd s ->
+    | Raw_cmd (_, s) ->
         pp_fun_call fmt "raw-command" (fun fmt -> fprintf fmt "%S") [s]
     | Bool_operator (a, op, b) ->
         pp_fun_call fmt (match op with `And -> "and" | `Or -> "or") pp [a; b]
@@ -177,14 +182,13 @@ let rec pp : type a. Format.formatter -> a t -> unit =
     | String_to_bool b -> pp_fun_call fmt "string-to-bool" pp [b]
     | List_to_string (l, f) -> pp_fun_call fmt "list-to-string" pp [l]
     (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
-    | String_to_list (s, f) ->
-        pp_fun_call fmt "string-to-list" pp [s]
+    | String_to_list (s, f) -> pp_fun_call fmt "string-to-list" pp [s]
     | List l -> pp_fun_call fmt "list" pp l
     | C_string_concat t -> pp_fun_call fmt "c-string-concat" pp [t]
     | Byte_array_concat t -> pp_fun_call fmt "byte-array-concat" pp [t]
     | List_append (la, lb) -> pp_fun_call fmt "list-append" pp [la; lb]
     | List_iter (l, f) ->
-        let body = f (fun () -> Raw_cmd "VARIABLE") in
+        let body = f (fun () -> Raw_cmd (None, "VARIABLE")) in
         pp_open_box fmt 1 ;
         fprintf fmt
           "(list-iter@ list: %a@ f: @[<hov 4>(fun VARIABLE ->@ %a)@])" pp l pp
@@ -375,7 +379,7 @@ module Construct = struct
   end
 
   module Magic = struct
-    let unit s : unit t = Raw_cmd s
+    let unit s : unit t = Raw_cmd (Some Magic_unit, s)
   end
 
   module Elist = struct
@@ -396,7 +400,7 @@ module Construct = struct
       of_string (fun e -> e)
 
     let serialize_c_string_list : c_string list t -> byte_array t =
-       to_string (fun e -> to_byte_array e)
+      to_string (fun e -> to_byte_array e)
 
     let deserialize_to_c_string_list : byte_array t -> c_string list t =
       of_string (fun e -> to_c_string e)
@@ -408,6 +412,7 @@ module Construct = struct
       of_string Integer.of_byte_array
 
     let to_string _ = `Do_not_use
+
     let of_string _ = `Do_not_use
   end
 end
@@ -424,7 +429,7 @@ type death_message =
   | C_string_failure of internal_error_details
   | String_to_int_failure of internal_error_details
 
-let pp_death_message ?(style= `Lispy) ~big_string fmt dm =
+let pp_death_message ?(style = `Lispy) ~big_string fmt dm =
   let open Format in
   match style with
   | `Lispy -> (
@@ -438,7 +443,7 @@ let pp_death_message ?(style= `Lispy) ~big_string fmt dm =
         fprintf fmt "@[<hov 2>(string-to-int-failure@ %a)@]"
           (pp_internal_error_details ~big_string)
           ied )
-  | `User ->
+  | `User -> (
     match dm with
     | User s -> fprintf fmt "@[<hov 2>%s@]" s
     | C_string_failure ied ->
@@ -449,7 +454,7 @@ let pp_death_message ?(style= `Lispy) ~big_string fmt dm =
     | String_to_int_failure ied ->
         fprintf fmt "@[String cannot be converted to an Integer@ @[<2>%a@]@]"
           (pp_internal_error_details ~big_string)
-          ied
+          ied )
 
 type death_function = comment_stack:string list -> death_message -> string
 
@@ -557,8 +562,11 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
     let argument ?declaration ?variable_name argument =
       object
         method declaration = declaration
+
         method export = Option.map ~f:(sprintf "export %s ; ") declaration
+
         method variable_name = variable_name
+
         method argument = argument
       end
     in
@@ -571,7 +579,7 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       | Some _ -> s
     in
     function
-    | `C_string (c_str: c_string t) -> (
+    | `C_string (c_str : c_string t) -> (
       match c_str with
       | Byte_array_to_c_string (Literal (Literal.String s))
         when Literal.Str.easy_to_escape s ->
@@ -612,7 +620,7 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       in
       List.rev !variables @ args
       |> String.concat ~sep:" " |> sprintf " { %s ; } " |> ir_unit
-  | Raw_cmd s -> s |> ir_unit
+  | Raw_cmd (_, s) -> s |> ir_unit
   | Byte_array_to_c_string ba ->
       let bac = continue ba in
       let var = Unique_name.variable "byte_array_to_c_string" in
@@ -702,9 +710,11 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       | one :: more ->
           continue
             (Seq
-               ( Raw_cmd (sprintf "( %s" (make_redirection one))
-                 :: List.map more ~f:(fun r -> Raw_cmd (make_redirection r))
-               @ [unit_t] @ [Raw_cmd ")"] )) )
+               ( Raw_cmd (None, sprintf "( %s" (make_redirection one))
+                 :: List.map more ~f:(fun r ->
+                        Raw_cmd (None, make_redirection r) )
+               @ [unit_t]
+               @ [Raw_cmd (None, ")")] )) )
       |> ir_unit
   | Write_output {expr; stdout; stderr; return_value} ->
       let ret_arg =
@@ -726,7 +736,8 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
         in
         [make 1 stdout; make 2 stderr] |> List.filter_opt
       in
-      continue (Redirect_output (Raw_cmd with_potential_return, redirections))
+      continue
+        (Redirect_output (Raw_cmd (None, with_potential_return), redirections))
       |> ir_unit
   | Literal lit -> (
       let open Literal in
@@ -744,7 +755,8 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       |> ir_octostring
   | Int_to_string i ->
       continue
-        (Output_as_string (Raw_cmd (sprintf "printf -- '%%d' %s" (continue i))))
+        (Output_as_string
+           (Raw_cmd (None, sprintf "printf -- '%%d' %s" (continue i))))
       |> ir_octostring
   | String_to_int s ->
       let var = Unique_name.variable "string_to_int" in
@@ -765,22 +777,23 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       continue
         (Output_as_string
            (Raw_cmd
-              (sprintf
-                 "{ if %s ; then printf true ; else printf false ; fi ; }"
-                 (continue b))))
+              ( None
+              , sprintf
+                  "{ if %s ; then printf true ; else printf false ; fi ; }"
+                  (continue b) )))
       |> ir_octostring
   | String_to_bool s ->
       continue
         (If
            ( String_operator
                (C_string_to_byte_array s, `Eq, Literal (Literal.String "true"))
-           , Raw_cmd "true"
+           , Raw_cmd (None, "true")
            , If
                ( String_operator
                    ( C_string_to_byte_array s
                    , `Eq
                    , Literal (Literal.String "false") )
-               , Raw_cmd "false"
+               , Raw_cmd (None, "false")
                , Fail (sprintf "String_to_bool") ) ))
       |> ir_bool
   | List l ->
@@ -795,7 +808,7 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
       in
       seq (build outputs) |> ir_list
   | List_to_string (l, f) ->
-      continue (Output_as_string (Raw_cmd (continue l))) |> ir_octostring
+      continue (Output_as_string (Raw_cmd (None, continue l))) |> ir_octostring
   | String_to_list (s, f) ->
       continue s |> expand_octal
       |> sprintf "printf -- '%%s' \"$(%s)\""
@@ -818,7 +831,7 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
           continue
             (f (fun () ->
                  (* Here we remove the `G` from the internal represetation: *)
-                 Raw_cmd (sprintf "${%s#G}" variter) ))
+                 Raw_cmd (None, sprintf "${%s#G}" variter) ))
         ; "done" ]
       |> ir_unit
   | Int_bin_op (ia, op, ib) ->
@@ -870,19 +883,20 @@ let rec to_ir : type a. _ -> _ -> a t -> internal_representation =
           (continue s |> expand_octal)
           value
       in
-      continue (Output_as_string (Raw_cmd cmd_outputs_value)) |> ir_octostring
+      continue (Output_as_string (Raw_cmd (None, cmd_outputs_value)))
+      |> ir_octostring
   | Setenv (variable, value) ->
       sprintf "export $(%s)=\"$(%s)\""
         (continue variable |> expand_octal)
         (continue value |> expand_octal)
       |> ir_unit
   | Fail s -> die (User s) |> ir_death
-  | Comment (cmt, expr) ->
+  | Comment (cmt, expr) -> (
     match continue_match ~add_comment:cmt expr with
     | Unit u ->
         sprintf " { %s ; %s ; }" Construct.(exec [":"; cmt] |> continue) u
         |> ir_unit
-    | (Octostring _ | Int _ | Bool _ | List _ | Death _) as d -> d
+    | (Octostring _ | Int _ | Bool _ | List _ | Death _) as d -> d )
 
 let to_shell options expr = to_ir [] options expr |> ir_to_shell
 
@@ -892,7 +906,7 @@ let to_shell options expr = to_ir [] options expr |> ir_to_shell
      ["trap"] to choose the exit status.
   *)
 let with_die_function ~print_failure ~statement_separator ~signal_name
-    ?(trap= `Exit_with 77) script =
+    ?(trap = `Exit_with 77) script =
   let variable_name = Unique_name.variable "genspio_trap" in
   let die ~comment_stack s =
     let pr = print_failure ~comment_stack s in
