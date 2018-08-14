@@ -15,7 +15,9 @@ mkdir -p $output_path
 cp -r _build/default/_doc/_html/* $output_path/
 
 
-cat > $output_path/caml2html.css <<EOF
+caml2html -make-css /tmp/c2h.css
+insert_bg_color=#ede1e1
+cat > /tmp/morecode.css <<EOF
 a.sourceLine { display: inline-block; line-height: 1.25; }
 a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
 a.sourceLine:empty { height: 1.2em; position: absolute; }
@@ -79,14 +81,25 @@ code span.st { color: #4070a0; } /* String */
 code span.va { color: #19177c; } /* Variable */
 code span.vs { color: #4070a0; } /* VerbatimString */
 code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+.insert {background-color: $insert_bg_color ;
+         padding-left: 6px; padding-top: 1em; padding-bottom: 1em }
+body { margin-left: 5% ; width: 90% }
+h1 code { font-size: 200% ; font-family: serif; color: #300 }
+.insert pre { background-color: $insert_bg_color ;
+      margin-left: 3em ;
+      margin-right: 3em;
+      border-left: 1px solid #aaaaaa; }
+.insert code { background-color: $insert_bg_color }
 EOF
-caml2html -make-css /tmp/c2h.css
-cat /tmp/c2h.css >> $output_path/caml2html.css
+cat /tmp/c2h.css /tmp/morecode.css > $output_path/caml2html.css
 
 caml2html src/lib/to_slow_flow.ml -charset UTF-8 \
           -t -cssurl caml2html.css \
-          -ext md:'pandoc -w html' \
-          -ln -o $output_path/to-slow-flow.html
+          -ext md:'cat | { printf "<div class=insert>" ; pandoc -w html ; printf "</div>" ; } ' \
+          -o $output_path/to-slow-flow.html
+sed -i 's:src/lib/to_slow_flow.ml:The Slow-flow Compiler:' $output_path/to-slow-flow.html
+sed -i 's@<em>This document was generated using@<em>Back to <a href="index.html">home</a>.</em>@' $output_path/to-slow-flow.html
+sed -i 's@<a href="http://martin.jambon.free.fr/caml2html.html">caml2html</a></em>@@' $output_path/to-slow-flow.html
 
 pandocify () {
     local title="$(head -n 1 $1)"

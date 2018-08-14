@@ -1,3 +1,20 @@
+(*md
+
+The `To_slow_flow` Compiler is meant to be more portable than the
+“standard” one by using less complex constructs.
+
+In particular, the default `bash` installed on MacOSX is old and contains (at least) one bug
+which breaks many standard-compiled Genspio scripts,
+cf. the issue [`hammerlab/genspio#68`](https://github.com/hammerlab/genspio/issues/68),
+
+The `To_slow_flow` compiler is often tested
+on the “old darwin” VM (cf.
+[`src/examples/vm_tester.ml`](https://github.com/hammerlab/genspio/blob/4ad23712e7af5a2cd1471f5ca00165cd18a93011/src/examples/vm_tester.ml#L401)), and all the Genspio tests succeed, see also
+[comment](https://github.com/hammerlab/genspio/pull/75#issuecomment-411843975)
+on the initial PR
+[`hammerlab/genspio#75`](https://github.com/hammerlab/genspio/pull/75).
+
+*)
 open Common
 open Language
 
@@ -32,14 +49,14 @@ module Script = struct
         ; block_then: command list
         ; block_else: command list }
     | While of {condition: string; block: command list}
-    | Sub_shell of command list
+    | Sub_shell of command list (* As is in `( ... ; )` in POSIX shells. *)
     | Pipe of {blocks: command list list}
 
   type compiled_value =
     | Unit
     | Literal_value of string
     | File of string
-    | File_in_variable of string
+    | File_in_variable of string (** File-path contained in variable. *)
     | Raw_inline of string
 
   type t = {commands: command list; result: compiled_value}
@@ -72,7 +89,14 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
         if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
     | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
+(*md
+  
+There are special cases where `to_argument` does not work with
+arbitrary content: when we need to compare strings with
+`[ ... <op> ... ]` constructs.
+In that case, we compare the octal representations.
 
+*)
   let to_ascii = function
     | Unit -> assert false
     | Raw_inline s -> s
