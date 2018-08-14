@@ -140,6 +140,18 @@ From here, one can explore:
   operating systems.
 <!--TOSLOWFLOW-->
 
+Building The Documentation
+--------------------------
+
+To build the documentation one needs `pandoc` and `caml2html`:
+
+    sh tools/build-doc.sh
+
+The build of the whole website, including the 
+[web-based demo](https://smondet.gitlab.io/genspio-doc/demo/master/index.html),
+happens in a different repository:
+<https://gitlab.com/smondet/genspio-doc>.
+
 License
 -------
 
