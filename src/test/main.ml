@@ -230,7 +230,7 @@ let () =
   add_tests
   @@
   let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
-  let make ?(anon3= "BBBBBBB") ret minus_g single count =
+  let make ?(anon3 = "BBBBBBB") ret minus_g single count =
     let anon1 = "annonlkjde" in
     let anon2 = "annon 02e930 99e3\n d \t eij" in
     (* let anon3 = "annon deid \t dlsij" in *)
@@ -624,7 +624,7 @@ let () =
          if_then_else cond nop
            (seq [tprintf "Fail: %d" ret; fail "assert_or_return"])
        in
-       let set_and_test ?(varname= "XXXX") value =
+       let set_and_test ?(varname = "XXXX") value =
          let var = string varname in
          seq
            [ setenv ~var (string value)
@@ -908,6 +908,10 @@ let () =
                    [ eprintf
                        (string "Concatenating: '%s'\\n")
                        [v () |> Byte_array.to_c]
+                   ; assert_or_fail
+                       (* See issue #76 *)
+                       "list-item-inside-condition"
+                       Byte_array.(v () =$= v ())
                    ; tmp#set
                        ( C_string.concat_list
                            [tmp#get_c; string ":"; v () |> Byte_array.to_c]
@@ -958,6 +962,10 @@ let () =
                  seq
                    [ eprintf (string "Adding: '%s'\\n")
                        [v () |> Integer.to_string]
+                   ; assert_or_fail
+                       (* See issue #76 *)
+                       "list-item-inside-condition"
+                       Integer.(v () = v ())
                    ; tmp#set
                        Integer.(
                          (tmp#get |> of_byte_array) + v () |> to_byte_array) ]
