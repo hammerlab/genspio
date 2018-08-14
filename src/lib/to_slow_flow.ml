@@ -13,6 +13,15 @@ let expand_octal_command s =
     {sh| printf -- "$(printf -- '%%s\n' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
     s
 
+(*md
+
+The `Script` module defines an intermediate representation for the compiler:
+
+- a sequence of “commands,” and
+- a return value.
+
+
+*)
 module Script = struct
   type command =
     | Raw of string
@@ -35,6 +44,17 @@ module Script = struct
 
   type t = {commands: command list; result: compiled_value}
 
+  (*md
+
+The function `to_argument` converts a return value into a piece of
+shell script that can be used as the argument of a shell command.
+
+The oddly named `~arithmetic` option instructs the function to remove
+quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
+``$(( ... ))`` shell constructs do not allow quoted arguments.
+
+
+  *)
   let to_argument ?(arithmetic = false) = function
     | Unit -> "\"$(exit 42)\""
     | Literal_value s when String.exists s ~f:(( = ) '\x00') ->
@@ -64,6 +84,17 @@ module Script = struct
 
   let commands s = s.commands
 
+  (*md
+
+ The last stage is `pp`, it compiles the IR to a POSIX shell script:
+
+ ```ocaml
+   let compiled = (* ... *) in
+   fprintf fmt "%a" Script.pp compiled
+   (* profit ! *)
+```
+
+ *)
   let pp fmt script =
     let open Format in
     let rec pp_command fmt = function
@@ -113,13 +144,7 @@ module Script = struct
   let if_then_else cond t e =
     assert_unit t ;
     assert_unit e ;
-    let condition =
-      to_argument cond.result
-      (* match cond.result with
-       * | Unit -> assert false
-       * | Literal_value s -> s
-       * | File f -> sprintf "$(cat %s)" (Filename.quote f) *)
-    in
+    let condition = to_argument cond.result in
     let commands =
       cond.commands
       @ [ If_then_else
@@ -194,6 +219,12 @@ let tmp_path ~tmpdir ?expression ?script tag =
 
 type Language.raw_command_annotation += Cat_variable of string
 
+(*md
+
+The compilation from a `'a Language.t` to the intermediary
+representation.
+
+*)
 let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
  fun ~fail_commands ~tmpdir e ->
   let continue : type a. a t -> _ = fun x -> to_ir ~fail_commands ~tmpdir x in
@@ -605,6 +636,23 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let script = continue expr in
       make (Comment cmt :: script.commands) script.result
 
+(*md
+
+The main entry point (still compilation from a `'a Language.t` to the
+intermediary representation) but higher level.
+
+It is accessed through `Compile.To_slow_flow.compile`:
+
+```ocaml
+  val compile :
+       ?tmp_dir_path:[`Fresh | `Use of string]
+    -> ?signal_name:string
+    -> ?trap:[`Exit_with of int | `None]
+    -> 'a EDSL.t
+    -> Script.t
+  (** Compile and {!EDSL.t} value to a script. *)
+```
+*)
 let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
     ?(trap = `Exit_with 77) expr =
   let open Script in
@@ -637,8 +685,12 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
   let s = to_ir ~fail_commands ~tmpdir expr in
   make (before @ s.commands) s.result
 
-(** Extra tests which can be activated for debugging purposes (option
-    ["--run-slow-stack-tests"] in the main tests). *)
+(*md
+
+Extra tests which can be activated for debugging purposes (option
+`--run-slow-stack-tests` in the main tests).
+
+*)
 let test () =
   let open Format in
   let open EDSL in
