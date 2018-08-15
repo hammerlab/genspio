@@ -282,7 +282,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
         let esc = string_to_octal v ~prefix:"\\" in
         (rawf "printf -- '%s' > %s" esc tmparg, tmp)
     | Literal_value v ->
-        (rawf "printf -- %s > %s" (Filename.quote v) tmparg, tmp)
+        (rawf "printf -- '%%s' %s > %s" (Filename.quote v) tmparg, tmp)
     | File p -> (rawf ":", p)
     | File_in_variable p -> (rawf "cp \"${%s}\" %s" p tmp, tmp)
     | Raw_inline s -> (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
