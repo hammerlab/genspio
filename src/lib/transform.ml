@@ -196,11 +196,19 @@ end
 
 module Constant_propagation = struct
   open Language
+(*md
 
+The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only the constructs that matter.
+
+ *)
   class propagator ?trace () =
     object (self)
       inherit Visitor.nothing_doer ?trace () as super
 
+(*md
+Boolean operators are not commutative, the left side has to be
+evaluated first and may break the execution flow (e.g. with `fail`).
+*)
       method bool_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
@@ -208,7 +216,12 @@ module Constant_propagation = struct
         | Literal (Literal.Bool true), `And, b -> b
         | Literal (Literal.Bool false), `Or, b -> b
         | _ -> Bool_operator (ga, op, gb)
+(*md
+We can only know how to simplify expressions when they are about
+literals (all non-literals can be non-deterministic and
+side-effectful).
 
+ *)
       method string_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
@@ -255,7 +268,6 @@ module Constant_propagation = struct
         match transformed with
         | [] -> No_op
         | [one] -> one
-        (* | l when List.for_all transformed ~f:(( = ) No_op) -> No_op *)
         | l -> Seq l
 
       method pipe l =
