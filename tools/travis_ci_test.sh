@@ -113,7 +113,8 @@ jbuilder build $genspio_vm_tester
 
 echo "================== TESTS ======================================================="
 
-$genspio_test --important-shells $important_shells _test/
+$genspio_test --run-constant-propagation-tests \
+              --important-shells $important_shells _test/
 (
     cd _test
     case $TRAVIS_OS_NAME in
