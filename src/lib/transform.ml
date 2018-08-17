@@ -248,13 +248,13 @@ side-effectful).
         let gt = self#expression t in
         let ge = self#expression e in
         match gc with
-        | Literal Literal.(Bool true) -> gt
-        | Literal Literal.(Bool false) -> ge
+        | Literal (Literal.Bool true) -> gt
+        | Literal (Literal.Bool false) -> ge
         | _ -> If (gc, gt, ge)
 
       method while_ ~condition ~body =
         match self#expression condition with
-        | Literal Literal.(Bool false) -> No_op
+        | Literal (Literal.Bool false) -> No_op
         | cond -> While {condition= cond; body= self#expression body}
 
       method not b =
@@ -340,7 +340,7 @@ side-effectful).
         match (ga, op, gb) with
         (* Any non-literal may have side effects that we cannot eliminate.
            Most operations cannot be ocamlized because of unknown semantics.*)
-        | Literal Literal.(Int na), op, Literal (Literal.Int nb) -> (
+        | Literal (Literal.Int na), op, Literal (Literal.Int nb) -> (
           match (na, op, nb) with
           | 0, `Plus, _ -> lit nb
           | 0, (`Mult | `Div | `Mod), _ -> lit 0
@@ -356,7 +356,7 @@ side-effectful).
         let gb = self#expression b in
         let default = Int_bin_comparison (ga, op, gb) in
         match (ga, op, gb) with
-        | Literal Literal.(Int na), op, Literal Literal.(Int nb) ->
+        | Literal (Literal.Int na), op, Literal (Literal.Int nb) ->
             Literal
               (Literal.Bool
                  (( match op with
