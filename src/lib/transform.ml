@@ -1,3 +1,15 @@
+(*md
+
+This module implements basic AST (type-preserving) transformations.
+  
+- The class `Visitor.nothing_doer` is an “open-recursion” AST visitor
+  (cf.
+  [chapter 12](https://v1.realworldocaml.org/v1/en/html/classes.html#open-recursion)
+  of RWO).
+- The module `Constant_propagation` implements many constant
+  propagation transformations using the visitor.
+
+*)
 open Common
 
 module Visitor = struct
