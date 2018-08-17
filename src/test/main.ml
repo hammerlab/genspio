@@ -1129,10 +1129,15 @@ let () =
           List.concat_map
             Shell.(known_shells ())
             ~f:(fun shell ->
-              let make compilation =
-                Shell_directory.{shell; verbose= true; compilation}
+              let make compilation optimization_passes =
+                Shell_directory.
+                  {shell; verbose= true; compilation; optimization_passes}
               in
-              [make `Std_one_liner; make `Std_multi_line; make `Slow_stack] )
+              [ make `Std_one_liner []
+              ; make `Std_multi_line []
+              ; make `Std_multi_line [`Cst_prop]
+              ; make `Slow_stack []
+              ; make `Slow_stack [`Cst_prop] ] )
         in
         let open Test_directory in
         {shell_tests= tests; important_shells= !important_shells; verbose= true}
