@@ -162,7 +162,7 @@ module Visitor = struct
           | Not x -> self#not x
           | Returns {expr; value} -> self#returns ~expr ~value
           | No_op -> self#no_op
-          | If (x, y, z) -> self#if_ (x, y, y)
+          | If (x, y, z) -> self#if_ (x, y, z)
           | Seq x -> self#seq x
           | Literal x -> self#literal x
           | Output_as_string x -> self#output_as_string x
@@ -196,7 +196,8 @@ end
 
 module Constant_propagation = struct
   open Language
-(*md
+
+  (*md
 
 The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only the constructs that matter.
 
@@ -205,7 +206,7 @@ The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only 
     object (self)
       inherit Visitor.nothing_doer ?trace () as super
 
-(*md
+      (*md
 Boolean operators are not commutative, the left side has to be
 evaluated first and may break the execution flow (e.g. with `fail`).
 *)
@@ -216,7 +217,8 @@ evaluated first and may break the execution flow (e.g. with `fail`).
         | Literal (Literal.Bool true), `And, b -> b
         | Literal (Literal.Bool false), `Or, b -> b
         | _ -> Bool_operator (ga, op, gb)
-(*md
+
+      (*md
 We can only know how to simplify expressions when they are about
 literals (all non-literals can be non-deterministic and
 side-effectful).
@@ -265,10 +267,7 @@ side-effectful).
         let transformed =
           List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op)
         in
-        match transformed with
-        | [] -> No_op
-        | [one] -> one
-        | l -> Seq l
+        match transformed with [] -> No_op | [one] -> one | l -> Seq l
 
       method pipe l =
         let tr = List.map ~f:self#expression l in
