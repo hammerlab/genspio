@@ -15,7 +15,6 @@ type 'a t = 'a Language.t
     to a C-string. *)
 type str = Language.byte_array
 
-
 (** {3 Literals } *)
 
 val str : string -> str t
@@ -100,7 +99,6 @@ end
 
 (** Functions on [int t] values (arithmetic, comparisons, conversions, etc.). *)
 module Integer : sig
-
   val to_str : int t -> str t
 
   val of_str : str t -> int t
@@ -274,11 +272,7 @@ val with_redirections : unit t -> fd_redirection list -> unit t
 *)
 
 val write_output :
-     ?stdout:str t
-  -> ?stderr:str t
-  -> ?return_value:str t
-  -> unit t
-  -> unit t
+  ?stdout:str t -> ?stderr:str t -> ?return_value:str t -> unit t -> unit t
 (** Redirect selected streams or the return value to files ([stdout],
     [stderr], [return_value] are paths). *)
 
@@ -398,21 +392,18 @@ module Command_line : sig
   type 'a cli_option = {switches: string list; doc: string; default: 'a}
 
   type _ option_spec =
-    | Opt_flag: bool t cli_option -> bool t option_spec
-    | Opt_string: str t cli_option -> str t option_spec
+    | Opt_flag : bool t cli_option -> bool t option_spec
+    | Opt_string : str t cli_option -> str t option_spec
 
   and (_, _) cli_options =
-    | Opt_end: string -> ('a, 'a) cli_options
-    | Opt_cons:
+    | Opt_end : string -> ('a, 'a) cli_options
+    | Opt_cons :
         'c option_spec * ('a, 'b) cli_options
         -> ('c -> 'a, 'b) cli_options
 
   module Arg : sig
     val string :
-         ?default:str t
-      -> doc:string
-      -> string list
-      -> str t option_spec
+      ?default:str t -> doc:string -> string list -> str t option_spec
 
     val flag :
       ?default:bool t -> doc:string -> string list -> bool t option_spec
@@ -423,8 +414,7 @@ module Command_line : sig
     val usage : string -> ('a, 'a) cli_options
   end
 
-  val parse :
-    ('a, unit t) cli_options -> (anon:str list t -> 'a) -> unit t
+  val parse : ('a, unit t) cli_options -> (anon:str list t -> 'a) -> unit t
 end
 
 (** {3 Additional Higher-Level Utilities} *)
@@ -508,6 +498,39 @@ val on_stdin_lines : (str t -> unit t) -> unit t
     file descriptor. The argument of `body` is the current line.
     Note that this is for text-like input, ['\000']
     characters in the input lead to undefined behavior. *)
+
+val which_finds : string -> bool t
+
+val get_stdout_one_line :
+  ?first_line:bool -> ?remove_spaces:bool -> unit t -> str t
+
+val verbose_call : ?prefix:string -> ?verbose:bool t -> str t list -> unit t
+
+val check_sequence_with_output : unit t list -> unit t
+
+val is_regular_file : str t -> bool t
+
+val is_directory : str t -> bool t
+
+val is_executable : str t -> bool t
+
+val is_readable : str t -> bool t
+
+val mkdir_p : str t -> unit t
+
+val exit : int -> unit t
+
+val home_path : unit -> str t
+
+val ( ^$^ ) : str t -> str t -> str t
+
+val ( /// ) : str t -> str t -> str t
+
+val say : string -> str t list -> unit t
+
+val ensure : string -> condition:bool t -> how:(string * unit t) list -> unit t
+
+val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
 
 (** {3 Very Unsafe Operations} *)
 

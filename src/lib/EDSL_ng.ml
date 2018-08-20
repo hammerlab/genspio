@@ -435,3 +435,69 @@ let on_stdin_lines body =
   loop_while
     (exec ["read"; "-r"; fresh] |> succeeds)
     ~body:(seq [exec ["export"; fresh]; body (getenv (string fresh))])
+
+let which_finds executable = succeeds_silently (exec ["which"; executable])
+
+let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
+  get_stdout
+    ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
+    ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
+
+let verbose_call ?(prefix = "CALL: ") ?(verbose = bool true) l =
+  if_seq verbose
+    ~t:
+      [ eprintf (ksprintf str "%s: [" prefix) []
+      ; seq @@ List.map l ~f:(fun ex -> eprintf (string "%s ") [ex])
+      ; eprintf (string "]\\n") []
+      ; call l ]
+    ~e:[call l]
+
+let check_sequence_with_output l =
+  check_sequence ~verbosity:`Output_all
+    (List.mapi l ~f:(fun i c -> (sprintf "Step-%d" i, c)))
+
+let is_regular_file path =
+  call [string "test"; string "-f"; path] |> succeeds_silently
+
+let is_directory path =
+  call [string "test"; string "-d"; path] |> succeeds_silently
+
+let is_executable path = succeeds_silently @@ call [str "test"; str "-x"; path]
+
+let is_readable path = succeeds_silently @@ call [str "test"; str "-r"; path]
+
+let mkdir_p path = call [str "mkdir"; str "-p"; path]
+
+let exit n = exec ["exit"; string_of_int n]
+
+let home_path () = getenv (str "HOME")
+
+let ( ^$^ ) a b = Str.concat_list [a; b]
+
+let ( /// ) a b = Str.concat_list [a; str "/"; b]
+
+let say fmt l = eprintf (ksprintf string "%s\\n" fmt) l
+
+let ensure what ~condition ~how =
+  if_seq condition
+    ~t:[ksprintf say "%s -> already done" what []]
+    ~e:
+      [ check_sequence
+          ~verbosity:(`Announce (sprintf "-> %s: in-progress" what))
+          ~on_failure:(fun ~step ~stdout ~stderr ->
+            seq
+              [ say "FAILURE: %s" [str (fst step)]
+              ; cat_markdown "stdout" stdout
+              ; cat_markdown "stderr" stderr
+              ; fail "FATAL ERROR" ] )
+          how
+      ; if_then_else condition nop
+          (seq
+             [ say "FAILURE: %s did not ensure condition!" [str what]
+             ; fail "FATAL ERROR" ]) ]
+
+let greps_to ?(extended_re = false) re u =
+  let c =
+    [string "grep"] @ (if extended_re then [string "-E"] else []) @ [re]
+  in
+  succeeds_silently (u ||> call c)
