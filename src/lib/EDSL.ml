@@ -63,7 +63,7 @@ let tmp_file ?tmp_dir name : file =
   let path =
     let clean =
       String.map name ~f:(function
-        | ('a'..'z' | 'A'..'Z' | '0'..'9' | '_' | '-') as c -> c
+        | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-') as c -> c
         | other -> '_' )
     in
     C_string.concat_list
@@ -76,8 +76,11 @@ let tmp_file ?tmp_dir name : file =
   let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = get_stdout (call [string "cat"; path])
+
     method get_c = self#get |> to_c_string
+
     method path = path
+
     method set v =
       seq
         [ (* call [string "echo"; string "Setting "; string name]; *)
@@ -85,12 +88,15 @@ let tmp_file ?tmp_dir name : file =
           (* call [string "echo"; tmp]; *)
           v >> exec ["cat"] |> write_output ~stdout:tmp
         ; call [string "mv"; string "-f"; tmp; path] ]
+
     method set_c c = self#set (to_byte_array c)
+
     method append v =
       seq
         [ seq [call [string "cat"; path]; v >> exec ["cat"]]
           |> write_output ~stdout:tmp
         ; call [string "mv"; string "-f"; tmp; path] ]
+
     method delete = call [string "rm"; string "-f"; path; tmp]
   end
 
@@ -107,20 +113,20 @@ module Command_line = struct
   type 'a cli_option = {switches: string list; doc: string; default: 'a}
 
   type _ option_spec =
-    | Opt_flag: bool t cli_option -> bool t option_spec
-    | Opt_string: c_string t cli_option -> c_string t option_spec
+    | Opt_flag : bool t cli_option -> bool t option_spec
+    | Opt_string : c_string t cli_option -> c_string t option_spec
 
   and (_, _) cli_options =
-    | Opt_end: string -> ('a, 'a) cli_options
-    | Opt_cons:
+    | Opt_end : string -> ('a, 'a) cli_options
+    | Opt_cons :
         'c option_spec * ('a, 'b) cli_options
         -> ('c -> 'a, 'b) cli_options
 
   module Arg = struct
-    let string ?(default= string "") ~doc switches =
+    let string ?(default = string "") ~doc switches =
       Opt_string {switches; doc; default}
 
-    let flag ?(default= bool false) ~doc switches =
+    let flag ?(default = bool false) ~doc switches =
       Opt_flag {switches; doc; default}
 
     let ( & ) x y = Opt_cons (x, y)
@@ -128,8 +134,8 @@ module Command_line = struct
     let usage s = Opt_end s
   end
 
-  let parse (options: ('a, unit t) cli_options)
-      (action: anon:c_string list t -> 'a) : unit t =
+  let parse (options : ('a, unit t) cli_options)
+      (action : anon:c_string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
     let variable {switches; doc} =
       sprintf "%s_%s" prefix
@@ -267,13 +273,14 @@ module Command_line = struct
           nop applied_action ]
 end
 
-let loop_until_true ?(attempts= 20) ?(sleep= 2)
-    ?(on_failed_attempt= fun nth ->
-                           printf (string "%d.") [Integer.to_string nth]) cmd =
+let loop_until_true ?(attempts = 20) ?(sleep = 2)
+    ?(on_failed_attempt =
+      fun nth -> printf (string "%d.") [Integer.to_string nth]) cmd =
   let intvar =
     let varname = string "C_ATTEMPTS" in
     object
       method set v = setenv ~var:varname (Integer.to_string v)
+
       method get = getenv varname |> Integer.of_string
     end
   in
@@ -323,7 +330,7 @@ let fresh_name suf =
 
 let sanitize_name n =
   String.map n ~f:(function
-    | ('0'..'9' | 'a'..'z' | 'A'..'Z' | '-') as c -> c
+    | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
     | other -> '_' )
 
 let default_on_failure ~step:(i, u) ~stdout ~stderr =
@@ -333,9 +340,9 @@ let default_on_failure ~step:(i, u) ~stdout ~stderr =
     ; cat_markdown "stderr" stderr
     ; exec ["false"] ]
 
-let check_sequence ?(verbosity= `Announce ">> ")
-    ?(on_failure= default_on_failure)
-    ?(on_success= fun ~step ~stdout ~stderr -> nop) ?(tmpdir= "/tmp") cmds =
+let check_sequence ?(verbosity = `Announce ">> ")
+    ?(on_failure = default_on_failure)
+    ?(on_success = fun ~step ~stdout ~stderr -> nop) ?(tmpdir = "/tmp") cmds =
   let tmp_prefix = fresh_name "-cmd" in
   let tmpout which id =
     c_string
@@ -373,3 +380,56 @@ let on_stdin_lines body =
   loop_while
     (exec ["read"; "-r"; fresh] |> succeeds)
     ~body:(seq [exec ["export"; fresh]; body (getenv (string fresh))])
+
+let which_finds executable = succeeds_silently (exec ["which"; executable])
+
+let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
+  get_stdout
+    ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
+    ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
+  |> Byte_array.to_c
+
+let verbose_call ?(prefix = "CALL: ") ?(verbose = bool true) l =
+  if_seq verbose
+    ~t:
+      [ eprintf (ksprintf string "%s [" prefix) []
+      ; seq @@ List.map l ~f:(fun ex -> eprintf (string "%s ") [ex])
+      ; eprintf (string "]\\n") []
+      ; call l ]
+    ~e:[call l]
+
+let check_sequence_with_output l =
+  check_sequence ~verbosity:`Output_all
+    (List.mapi l ~f:(fun i c -> (sprintf "Step-%d" i, c)))
+
+let is_regular_file path =
+  call [string "test"; string "-f"; path] |> succeeds_silently
+
+let is_directory path =
+  call [string "test"; string "-d"; path] |> succeeds_silently
+
+let is_executable path =
+  succeeds_silently @@ call [c_string "test"; c_string "-x"; path]
+
+let is_readable path =
+  succeeds_silently @@ call [c_string "test"; c_string "-r"; path]
+
+let mkdir_p path = call [c_string "mkdir"; c_string "-p"; path]
+
+let exit n = exec ["exit"; string_of_int n]
+
+let home_path () = getenv (c_string "HOME")
+
+let ( ^$^ ) a b = C_string.concat_list [a; b]
+
+let ( /// ) a b = C_string.concat_list [a; c_string "/"; b]
+
+let say fmt l = eprintf (ksprintf string "%s\\n" fmt) l
+
+let c_strings = List.map ~f:c_string
+
+let greps_to ?(extended_re = false) re u =
+  let c =
+    [string "grep"] @ (if extended_re then [string "-E"] else []) @ [re]
+  in
+  succeeds_silently (u ||> call c)

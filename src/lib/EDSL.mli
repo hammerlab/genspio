@@ -418,12 +418,12 @@ module Command_line : sig
   type 'a cli_option = {switches: string list; doc: string; default: 'a}
 
   type _ option_spec =
-    | Opt_flag: bool t cli_option -> bool t option_spec
-    | Opt_string: c_string t cli_option -> c_string t option_spec
+    | Opt_flag : bool t cli_option -> bool t option_spec
+    | Opt_string : c_string t cli_option -> c_string t option_spec
 
   and (_, _) cli_options =
-    | Opt_end: string -> ('a, 'a) cli_options
-    | Opt_cons:
+    | Opt_end : string -> ('a, 'a) cli_options
+    | Opt_cons :
         'c option_spec * ('a, 'b) cli_options
         -> ('c -> 'a, 'b) cli_options
 
@@ -528,6 +528,66 @@ val on_stdin_lines : (c_string t -> unit t) -> unit t
     file descriptor. The argument of `body` is the current line.
     Note that this is for text-like input, ['\000']
     characters in the input lead to undefined behavior. *)
+
+val which_finds : string -> bool Language.t
+
+val get_stdout_one_line :
+     ?first_line:bool
+  -> ?remove_spaces:bool
+  -> unit Language.t
+  -> Language.c_string Language.t
+
+val verbose_call :
+     ?prefix:string
+  -> ?verbose:bool Language.t
+  -> Language.c_string Language.t list
+  -> unit Language.t
+
+val check_sequence_with_output :
+  unit Language.t list -> unit Language.t
+
+val is_regular_file :
+  Language.c_string Language.t -> bool Language.t
+
+val is_directory :
+  Language.c_string Language.t -> bool Language.t
+
+val is_executable :
+  Language.c_string Language.t -> bool Language.t
+
+val is_readable :
+  Language.c_string Language.t -> bool Language.t
+
+val mkdir_p :
+  Language.c_string Language.t -> unit Language.t
+
+val exit : int -> unit Language.t
+
+val home_path : unit -> Language.c_string Language.t
+
+val ( ^$^ ) :
+     Language.c_string Language.t
+  -> Language.c_string Language.t
+  -> Language.c_string Language.t
+
+val ( /// ) :
+     Language.c_string Language.t
+  -> Language.c_string Language.t
+  -> Language.c_string Language.t
+
+val say :
+     string
+  -> Language.c_string Language.t list
+  -> unit Language.t
+
+val c_strings :
+  string list -> Language.c_string Language.t list
+
+val greps_to :
+     ?extended_re:bool
+  -> Language.c_string Language.t
+  -> unit Language.t
+  -> bool Language.t
 
 (** {3 Very Unsafe Operations} *)
 
