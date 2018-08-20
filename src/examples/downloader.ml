@@ -2,7 +2,7 @@ open Nonstd
 module String = Sosa.Native_string
 
 let downloader () =
-  let open Genspio.EDSL in
+  let open Genspio.EDSL_ng in
   let say strings =
     let sayone ?(prompt= false) s =
       let prompt = if prompt then "downloader: " else "" in
@@ -61,18 +61,17 @@ let downloader () =
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
-    string |> C_string.to_bytes >> exec (["grep"; "-q"] @ options) |> succeeds
+    string >> exec (["grep"; "-q"] @ options) |> succeeds
   in
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      C_string.concat_list [input; string "\n"]
-      |> C_string.to_bytes
+      Str.concat_list [input; string "\n"]
       >> exec ["sed"; expr]
       |> get_stdout
     in
     with_potential_newline
     >> exec ["tr"; "-d"; "\\n"]
-    |> get_stdout |> Byte_array.to_c
+    |> get_stdout
   in
   let module Unwrapper = struct
     type cmd = unit t
@@ -87,45 +86,45 @@ let downloader () =
     let to_switch name_variable t_list =
       let make_case t =
         case
-          (string_matches_any name_variable#get_c [sprintf "\\.%s$" t.extension])
-          [ say [ksprintf string "%s: " t.verb; name_variable#get_c]
+          (string_matches_any name_variable#get [sprintf "\\.%s$" t.extension])
+          [ say [ksprintf string "%s: " t.verb; name_variable#get]
           ; succeed_in_silence_or_fail
               ~name:(sprintf "%s-%s" t.verb t.extension)
               (t.commands name_variable)
           ; name_variable#set
-              ( remove_suffix name_variable#get_c (sprintf "\\.%s" t.extension)
-              |> C_string.to_bytes ) ]
+              ( remove_suffix name_variable#get (sprintf "\\.%s" t.extension)
+               ) ]
       in
       seq
-        [ say [string "Extract loop: "; name_variable#get_c]
+        [ say [string "Extract loop: "; name_variable#get]
         ; switch (List.map t_list ~f:make_case) ]
 
     let to_loop name_variable t_list =
       loop_while
-        (string_matches_any name_variable#get_c
+        (string_matches_any name_variable#get
            (List.map t_list (fun t -> sprintf "\\.%s$" t.extension)))
         ~body:(to_switch name_variable t_list)
 
     let all =
       [ make ~ext:"gz" ~verb:"Gunzipping" (fun current_name ->
-            [call [string "gunzip"; string "-f"; current_name#get_c]] )
+            [call [string "gunzip"; string "-f"; current_name#get]] )
       ; make ~ext:"bz2" ~verb:"Bunzip2-ing" (fun current_name ->
-            [call [string "bunzip2"; string "-f"; current_name#get_c]] )
+            [call [string "bunzip2"; string "-f"; current_name#get]] )
       ; make ~ext:"zip" ~verb:"Unzipping" (fun current_name ->
-            [call [string "unzip"; current_name#get_c]] )
+            [call [string "unzip"; current_name#get]] )
       ; make ~ext:"tar" ~verb:"Untarring" (fun current_name ->
-            [call [string "tar"; string "xf"; current_name#get_c]] )
+            [call [string "tar"; string "xf"; current_name#get]] )
       ; make ~ext:"tgz" ~verb:"Untar-gzip-ing" (fun name ->
-            [call [string "tar"; string "zxf"; name#get_c]] )
+            [call [string "tar"; string "zxf"; name#get]] )
       ; make ~ext:"tbz2" ~verb:"Untar-bzip2-ing" (fun name ->
-            [call [string "tar"; string "xfj"; name#get_c]] )
+            [call [string "tar"; string "xfj"; name#get]] )
       ; make ~ext:"gpg" ~verb:"Decyphering" (fun name ->
             [ call
                 [ string "gpg"
                 ; string "--output"
-                ; remove_suffix name#get_c "\\.gpg"
+                ; remove_suffix name#get "\\.gpg"
                 ; string "-d"
-                ; name#get_c ] ] ) ]
+                ; name#get ] ] ) ]
   end in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   let cli_spec =
@@ -135,7 +134,7 @@ let downloader () =
     & string ["-f"; "--local-filename"]
         ~doc:"Override the downloaded file-name" ~default:no_value
     & string ["-t"; "--tmp-dir"] ~doc:"Use <dir> as temp-dir"
-        ~default:(Genspio.EDSL.string "/tmp/genspio-downloader-tmpdir")
+        ~default:(str "/tmp/genspio-downloader-tmpdir")
     & usage
         "Download archives and decrypt/unarchive them.\n\
          ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
@@ -144,20 +143,18 @@ let downloader () =
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         if_seq
-          C_string.(filename_ov =$= no_value)
+          Str.(filename_ov =$= no_value)
           ~t:
             (let filename =
                no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/"
              in
              let output_path =
-               C_string.concat_list [tmp_dir; string "/"; filename]
-               |> C_string.to_bytes
+               Str.concat_list [tmp_dir; string "/"; filename]
              in
              [current_name#set output_path])
           ~e:
             (let output_path =
-               C_string.concat_list [tmp_dir; string "/"; filename_ov]
-               |> C_string.to_bytes
+               Str.concat_list [tmp_dir; string "/"; filename_ov]
              in
              [current_name#set output_path])
       in
@@ -166,14 +163,14 @@ let downloader () =
         ; if_then all_in_tmp
             (seq [sayf "Going to the tmpdir"; call [string "cd"; tmp_dir]])
         ; if_then
-            C_string.(url =$= no_value)
+            Str.(url =$= no_value)
             (failf "Argument URL is mandatory")
         ; if_then_else
             (string_matches_any url ["^http://"; "^https://"; "^ftp://"])
             (seq
                [ set_output_of_download ()
-               ; download ~url ~output:current_name#get_c
-               ; say [string "Downloaded "; current_name#get_c]
+               ; download ~url ~output:current_name#get
+               ; say [string "Downloaded "; current_name#get]
                ; Unwrapper.to_loop current_name Unwrapper.all ])
             (seq
                [ fail
