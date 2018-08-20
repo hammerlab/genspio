@@ -210,26 +210,6 @@ module Construct = struct
 
   let to_byte_array c = C_string_to_byte_array c
 
-  let literal l = Literal l
-
-  let byte_array s = Literal.String s |> literal
-
-  let int s = Literal.Int s |> literal
-
-  let bool t = Literal.Bool t |> literal
-
-  let c_string s = byte_array s |> to_c_string
-
-  let string = c_string
-
-  let exec l = Exec (List.map l ~f:(fun s -> string s))
-
-  let call l = Exec l
-
-  let ( &&& ) a b = Bool_operator (a, `And, b)
-
-  let ( ||| ) a b = Bool_operator (a, `Or, b)
-
   module C_string = struct
     let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
 
@@ -256,64 +236,88 @@ module Construct = struct
     let to_c ba = Byte_array_to_c_string ba
   end
 
-  let returns expr ~value = Returns {expr; value}
+  module Base = struct
+    let literal l = Literal l
 
-  let succeeds expr = returns expr ~value:0
+    let byte_array s = Literal.String s |> literal
 
-  let nop = No_op
+    let int s = Literal.Int s |> literal
 
-  let if_then_else a b c = If (a, b, c)
+    let bool t = Literal.Bool t |> literal
 
-  let if_then a b = if_then_else a b nop
+    let c_string s = byte_array s |> to_c_string
 
-  let seq l = Seq l
+    let string = c_string
 
-  let not t = Not t
+    let exec l = Exec (List.map l ~f:(fun s -> string s))
 
-  let fail s = Fail s
+    let call l = Exec l
 
-  let comment s u = Comment (s, u)
+    let ( &&& ) a b = Bool_operator (a, `And, b)
 
-  let ( %%% ) s u = comment s u
+    let ( ||| ) a b = Bool_operator (a, `Or, b)
 
-  let make_switch : type a. (bool t * unit t) list -> default:unit t -> unit t
-      =
-   fun conds ~default ->
-    List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
-        if_then_else x body prev )
+    let returns expr ~value = Returns {expr; value}
 
-  let write_output ?stdout ?stderr ?return_value expr =
-    Write_output {expr; stdout; stderr; return_value}
+    let succeeds expr = returns expr ~value:0
 
-  let write_stdout ~path expr = write_output expr ~stdout:path
+    let nop = No_op
 
-  let to_fd take fd = {take; redirect_to= `Fd fd}
+    let if_then_else a b c = If (a, b, c)
 
-  let to_file take file = {take; redirect_to= `Path file}
+    let if_then a b = if_then_else a b nop
 
-  let with_redirections cmd l = Redirect_output (cmd, l)
+    let seq l = Seq l
 
-  let file_exists p = call [c_string "test"; c_string "-f"; p] |> succeeds
+    let not t = Not t
 
-  let getenv v = Getenv v
+    let fail s = Fail s
 
-  let setenv ~var v = Setenv (var, v)
+    let comment s u = Comment (s, u)
 
-  let get_stdout e = Output_as_string e
+    let ( %%% ) s u = comment s u
 
-  let feed ~string e = Feed (string, e)
+    let make_switch : type a.
+        (bool t * unit t) list -> default:unit t -> unit t =
+     fun conds ~default ->
+      List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
+          if_then_else x body prev )
 
-  let ( >> ) string e = feed ~string e
+    let write_output ?stdout ?stderr ?return_value expr =
+      Write_output {expr; stdout; stderr; return_value}
 
-  let pipe l = Pipe l
+    let write_stdout ~path expr = write_output expr ~stdout:path
 
-  let ( ||> ) a b = Pipe [a; b]
+    let to_fd take fd = {take; redirect_to= `Fd fd}
 
-  let loop_while condition ~body = While {condition; body}
+    let to_file take file = {take; redirect_to= `Path file}
 
-  let loop_seq_while condition body = While {condition; body= Seq body}
+    let with_redirections cmd l = Redirect_output (cmd, l)
 
-  let byte_array_concat_list l = Byte_array_concat l
+    let file_exists p = call [c_string "test"; c_string "-f"; p] |> succeeds
+
+    let getenv v = Getenv v
+
+    let setenv ~var v = Setenv (var, v)
+
+    let get_stdout e = Output_as_string e
+
+    let feed ~string e = Feed (string, e)
+
+    let ( >> ) string e = feed ~string e
+
+    let pipe l = Pipe l
+
+    let ( ||> ) a b = Pipe [a; b]
+
+    let loop_while condition ~body = While {condition; body}
+
+    let loop_seq_while condition body = While {condition; body= Seq body}
+
+    let byte_array_concat_list l = Byte_array_concat l
+  end
+
+  include Base
 
   module Bool = struct
     let of_string s = String_to_bool s
