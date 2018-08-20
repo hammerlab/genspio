@@ -2,11 +2,12 @@
 
 (** The type of a Genspio expression. *)
 type 'a t = 'a Language.t
-
+(*
 (** Type to encode arbitrary byte-arrays in the EDSL as
     [byte_array t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays. *)
 type byte_array = Language.byte_array
+*)
 
 (** Type to encode NUL-terminated strings in the EDSL as
     [c_string t] values. C-strings cannot contain the ['\x00'] character.
@@ -22,7 +23,8 @@ val c_string : string -> c_string t
 val string : string -> c_string t
 (** [string] is an alias for {!function:c_string}. *)
 
-val byte_array : string -> byte_array t
+(* val byte_array : string -> byte_array t *)
+
 (** Create a {!type:byte_array} literal. *)
 
 val int : int -> int t
@@ -103,11 +105,11 @@ end
 module Integer : sig
   val to_string : int t -> c_string t
 
-  val to_byte_array : int t -> byte_array t
+  (* val to_byte_array : int t -> byte_array t *)
 
   val of_string : c_string t -> int t
 
-  val of_byte_array : byte_array t -> int t
+  (* val of_byte_array : byte_array t -> int t *)
 
   val bin_op :
     int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
@@ -173,41 +175,41 @@ module Elist : sig
   (** Iterate over a list, the body of the loop [~f] takes as argument
       function that returns the current eletment at the EDSL level. *)
 
-  val serialize_byte_array_list : byte_array list t -> byte_array t
+  (* val serialize_byte_array_list : byte_array list t -> byte_array t
+   * 
+   * val deserialize_to_byte_array_list : byte_array t -> byte_array list t *)
 
-  val deserialize_to_byte_array_list : byte_array t -> byte_array list t
+  val serialize_c_string_list : c_string list t -> c_string t
 
-  val serialize_c_string_list : c_string list t -> byte_array t
+  val deserialize_to_c_string_list : c_string t -> c_string list t
 
-  val deserialize_to_c_string_list : byte_array t -> c_string list t
+  val serialize_int_list : int list t -> c_string t
 
-  val serialize_int_list : int list t -> byte_array t
-
-  val deserialize_to_int_list : byte_array t -> int list t
+  val deserialize_to_int_list : c_string t -> int list t
 end
 
 (** {3 String Manipulation} *)
 
-module Byte_array : sig
-  val ( =$= ) : byte_array t -> byte_array t -> bool t
+(* module Byte_array : sig
+ *   val ( =$= ) : byte_array t -> byte_array t -> bool t
+ * 
+ *   val ( <$> ) : byte_array t -> byte_array t -> bool t
+ * 
+ *   val to_c_string : byte_array t -> c_string t
+ * 
+ *   val to_c : byte_array t -> c_string t
+ * end *)
 
-  val ( <$> ) : byte_array t -> byte_array t -> bool t
+val ( =$= ) : c_string t -> c_string t -> bool t
 
-  val to_c_string : byte_array t -> c_string t
-
-  val to_c : byte_array t -> c_string t
-end
+val ( <$> ) : c_string t -> c_string t -> bool t
 
 module C_string : sig
   val equals : c_string t -> c_string t -> bool t
 
-  val ( =$= ) : c_string t -> c_string t -> bool t
-
-  val ( <$> ) : c_string t -> c_string t -> bool t
-
-  val to_byte_array : c_string t -> byte_array t
-
-  val to_bytes : c_string t -> byte_array t
+  (* val to_byte_array : c_string t -> byte_array t
+   * 
+   * val to_bytes : c_string t -> byte_array t *)
 
   val concat_list : c_string t list -> c_string t
   (** Concatenate an (OCaml) list of [c_string t] values. *)
@@ -310,15 +312,15 @@ val pipe : unit t list -> unit t
 val ( ||> ) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
-val get_stdout : unit t -> byte_array t
+val get_stdout : unit t -> c_string t
 (** Get the contents of [stdout] into a byte array (in previous
     versions this function was called [output_as_string]).  *)
 
-val feed : string:byte_array t -> unit t -> unit t
+val feed : string:c_string t -> unit t -> unit t
 (** Feed some content ([~string]) into the ["stdin"] filedescriptor of
     a [unit t] expression. *)
 
-val ( >> ) : byte_array t -> unit t -> unit t
+val ( >> ) : c_string t -> unit t -> unit t
 (** [str >> cmd] is [feed ~string:str cmd]. *)
 
 val printf : c_string t -> c_string t list -> unit t
@@ -338,11 +340,11 @@ val fail : string -> unit t
 
 (** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
-  < get: byte_array t  (** Get the current contents of the file *)
-  ; get_c: c_string t
-  ; set: byte_array t -> unit t
-  ; set_c: c_string t -> unit t
-  ; append: byte_array t -> unit t
+  < (* get: byte_array t  (** Get the current contents of the file *)
+  ; *)
+  get: c_string t (* ; set: byte_array t -> unit t *)
+  ; set: c_string t -> unit t
+  ; append: c_string t -> unit t
   ; delete: unit t
   ; path: c_string t >
 
@@ -543,23 +545,17 @@ val verbose_call :
   -> Language.c_string Language.t list
   -> unit Language.t
 
-val check_sequence_with_output :
-  unit Language.t list -> unit Language.t
+val check_sequence_with_output : unit Language.t list -> unit Language.t
 
-val is_regular_file :
-  Language.c_string Language.t -> bool Language.t
+val is_regular_file : Language.c_string Language.t -> bool Language.t
 
-val is_directory :
-  Language.c_string Language.t -> bool Language.t
+val is_directory : Language.c_string Language.t -> bool Language.t
 
-val is_executable :
-  Language.c_string Language.t -> bool Language.t
+val is_executable : Language.c_string Language.t -> bool Language.t
 
-val is_readable :
-  Language.c_string Language.t -> bool Language.t
+val is_readable : Language.c_string Language.t -> bool Language.t
 
-val mkdir_p :
-  Language.c_string Language.t -> unit Language.t
+val mkdir_p : Language.c_string Language.t -> unit Language.t
 
 val exit : int -> unit Language.t
 
@@ -575,13 +571,9 @@ val ( /// ) :
   -> Language.c_string Language.t
   -> Language.c_string Language.t
 
-val say :
-     string
-  -> Language.c_string Language.t list
-  -> unit Language.t
+val say : string -> Language.c_string Language.t list -> unit Language.t
 
-val c_strings :
-  string list -> Language.c_string Language.t list
+val c_strings : string list -> Language.c_string Language.t list
 
 val greps_to :
      ?extended_re:bool

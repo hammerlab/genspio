@@ -208,7 +208,7 @@ module Run_environment = struct
     | {name} ->
         let open Shell_script in
         let open Genspio.EDSL in
-        let pid = get_stdout (exec ["cat"; "qemu.pid"]) |> Byte_array.to_c in
+        let pid = get_stdout (exec ["cat"; "qemu.pid"]) in
         Shell_script.(make (sprintf "kill-qemu-%s" name))
         @@ check_sequence
              (* ~name:(sprintf "Killing Qemu VM")
@@ -238,22 +238,22 @@ module Run_environment = struct
         let there_was_a_failure = tmp_file "bool-failure" in
         let cmds =
           [ report#set
-              (byte_array "Configuration Report\n====================\n\n")
-          ; there_was_a_failure#set_c (bool false |> Bool.to_string) ]
+              (c_string "Configuration Report\n====================\n\n")
+          ; there_was_a_failure#set (bool false |> Bool.to_string) ]
           @ List.map local_dependencies ~f:(function `Command name ->
                 if_seq
                   (exec ["which"; name] |> silently |> succeeds)
                   ~t:
                     [ report#append
-                        (ksprintf byte_array "* `%s`: found.\n" name) ]
+                        (ksprintf string "* `%s`: found.\n" name) ]
                   ~e:
                     [ report#append
-                        (ksprintf byte_array "* `%s`: NOT FOUND!\n" name)
-                    ; there_was_a_failure#set_c (bool true |> Bool.to_string)
+                        (ksprintf string "* `%s`: NOT FOUND!\n" name)
+                    ; there_was_a_failure#set (bool true |> Bool.to_string)
                     ] )
           @ [ call [string "cat"; report#path]
             ; if_seq
-                (there_was_a_failure#get_c |> Bool.of_string)
+                (there_was_a_failure#get |> Bool.of_string)
                 ~t:
                   [ exec ["printf"; "\\nThere were *failures* :(\\n"]
                   ; exec ["false"] ]

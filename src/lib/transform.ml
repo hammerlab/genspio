@@ -301,7 +301,7 @@ side-effectful).
       method byte_array_concat l =
         let gl = self#expression l in
         match gl with
-        | List [] -> EDSL.byte_array ""
+        | List [] -> Construct.byte_array ""
         | List more -> (
             let build =
               List.fold more ~init:[] ~f:(fun prev item ->
@@ -396,7 +396,7 @@ side-effectful).
         if_then_else
           (not
              ( bool false
-             ||| Byte_array.(byte_array "bouh" =$= byte_array "bah") ))
+             ||| (string "bouh" =$= string "bah") ))
           (fail "then") (fail "else"))
       EDSL.(fail "then") ;
     check "seq []" EDSL.(seq []) EDSL.(nop) ;
@@ -411,7 +411,7 @@ side-effectful).
     check "concat one-two"
       EDSL.(C_string.concat_list [string "one"; string "-"; string "two"])
       EDSL.(string "one-two") ;
-    let s n = EDSL.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
+    let s n = EDSL.(get_stdout (exec [Int.to_string n])) in
     check "concat one-two"
       EDSL.(
         C_string.concat_list

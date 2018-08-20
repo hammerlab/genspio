@@ -230,12 +230,12 @@ module Construct = struct
 
   let ( ||| ) a b = Bool_operator (a, `Or, b)
 
+  let ( =$= ) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
+
+  let ( <$> ) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
+
   module C_string = struct
     let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-
-    let ( =$= ) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-
-    let ( <$> ) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
 
     let to_byte_array c = C_string_to_byte_array c
 
@@ -299,9 +299,9 @@ module Construct = struct
 
   let setenv ~var v = Setenv (var, v)
 
-  let get_stdout e = Output_as_string e
+  let get_stdout e = Output_as_string e |> to_c_string
 
-  let feed ~string e = Feed (string, e)
+  let feed ~string e = Feed (to_byte_array string, e)
 
   let ( >> ) string e = feed ~string e
 
@@ -400,17 +400,17 @@ module Construct = struct
     let deserialize_to_byte_array_list : byte_array t -> byte_array list t =
       of_string (fun e -> e)
 
-    let serialize_c_string_list : c_string list t -> byte_array t =
-      to_string (fun e -> to_byte_array e)
+    let serialize_c_string_list : c_string list t -> c_string t =
+     fun l -> to_string (fun e -> to_byte_array e) l |> to_c_string
 
-    let deserialize_to_c_string_list : byte_array t -> c_string list t =
-      of_string (fun e -> to_c_string e)
+    let deserialize_to_c_string_list : c_string t -> c_string list t =
+     fun s -> to_byte_array s |> of_string (fun e -> to_c_string e)
 
-    let serialize_int_list : int list t -> byte_array t =
-      to_string Integer.to_byte_array
+    let serialize_int_list : int list t -> c_string t =
+     fun l -> to_string Integer.to_byte_array l |> to_c_string
 
-    let deserialize_to_int_list : byte_array t -> int list t =
-      of_string Integer.of_byte_array
+    let deserialize_to_int_list : c_string t -> int list t =
+     fun s -> to_byte_array s |> of_string Integer.of_byte_array
 
     let to_string _ = `Do_not_use
 

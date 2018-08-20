@@ -49,14 +49,15 @@ module Script = struct
         ; block_then: command list
         ; block_else: command list }
     | While of {condition: string; block: command list}
-    | Sub_shell of command list (* As is in `( ... ; )` in POSIX shells. *)
+    | Sub_shell of command list
+    (* As is in `( ... ; )` in POSIX shells. *)
     | Pipe of {blocks: command list list}
 
   type compiled_value =
     | Unit
     | Literal_value of string
     | File of string
-    | File_in_variable of string (** File-path contained in variable. *)
+    | File_in_variable of string  (** File-path contained in variable. *)
     | Raw_inline of string
 
   type t = {commands: command list; result: compiled_value}
@@ -89,7 +90,8 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
         if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
     | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
-(*md
+
+  (*md
   
 There are special cases where `to_argument` does not work with
 arbitrary content: when we need to compare strings with
@@ -224,8 +226,8 @@ In that case, we compare the octal representations.
       @ [ While
             { condition= to_argument cond.result
             ; block=
-                body.commands
-                @ cond.commands (* We need re-evaluate the condition *) } ] )
+                body.commands @ cond.commands
+                (* We need re-evaluate the condition *) } ] )
 
   let sub_shell ~pre l = unit @@ pre @ [Sub_shell l]
 end
@@ -723,13 +725,9 @@ let test () =
     let two = call [c_string "echo"; c_string "echo"] in
     let three = call [c_string "printf"; c_string " world"] in
     [ one
-    ; call [c_string "echo"; get_stdout one |> Byte_array.to_c_string]
-    ; call
-        [ get_stdout two |> Byte_array.to_c_string
-        ; get_stdout (seq [one; three]) |> Byte_array.to_c_string ]
-    ; if_seq
-        Byte_array.(get_stdout one =$= byte_array "hello")
-        ~t:[one] ~e:[three]
+    ; call [c_string "echo"; get_stdout one]
+    ; call [get_stdout two; get_stdout (seq [one; three])]
+    ; if_seq (get_stdout one =$= string "hello") ~t:[one] ~e:[three]
     ; loop_seq_while
         ((not (bool true)) ||| returns ~value:0 (exec ["ls"; "/crazypath"]))
         [three]
@@ -744,16 +742,13 @@ let test () =
         [ write_output
             ~stderr:(string "/tmp/testgenspio6-err")
             ~return_value:
-              ( get_stdout (exec ["printf"; "/tmp/testgenspio6-ret"])
-              |> Byte_array.to_c )
+              (get_stdout (exec ["printf"; "/tmp/testgenspio6-ret"]))
             (seq
                [printf (string "hello test 6\n") []; exec ["ls"; "/crazypath"]])
         ; printf
             (string "ERR: <<%s>>\\nRET: <<%s>>\\n")
             [ get_stdout (exec ["cat"; "/tmp/testgenspio6-err"])
-              |> Byte_array.to_c
-            ; get_stdout (exec ["cat"; "/tmp/testgenspio6-ret"])
-              |> Byte_array.to_c ] ]
+            ; get_stdout (exec ["cat"; "/tmp/testgenspio6-ret"]) ] ]
     ; seq
         [ write_output
             ~stdout:(string "/tmp/testgenspio-7-out")
@@ -761,9 +756,8 @@ let test () =
                [ C_string.concat_elist
                    (Elist.make [string "hello"; string " "; string "world"]) ])
         ; if_seq
-            Byte_array.(
-              get_stdout (exec ["cat"; "/tmp/testgenspio-7-out"])
-              =$= byte_array "s:hello world:")
+            ( get_stdout (exec ["cat"; "/tmp/testgenspio-7-out"])
+            =$= string "s:hello world:" )
             ~t:[printf (string "SUCCESS\\n") []]
             ~e:[printf (string "FAILURE\\n") []] ]
     ; printf (string "`%s`")
@@ -790,7 +784,7 @@ let test () =
           &&& (int 2 * int 2 = int 8 / int 2))
         (printf (string "SUCCESS\\n") [])
         (printf (string "FAILURE\\n") [])
-    ; byte_array "Hello World" >> exec ["cat"]
+    ; string "Hello World" >> exec ["cat"]
     ; pipe
         [ printf (string "HELLX_WXRLD") []
         ; exec ["sed"; "s/_/ /g"]
@@ -802,7 +796,7 @@ let test () =
     ; seq
         [ setenv
             (C_string.concat_list [string "A"; string "A"; string "A"])
-            (get_stdout (exec ["echo"; "HELLO WORLD"]) |> Byte_array.to_c)
+            (get_stdout (exec ["echo"; "HELLO WORLD"]))
         ; "Calling a sub-shell with `sh`,\nit should display HELLO WORLD"
           %%% exec ["sh"; "-c"; "echo \"$AAA\""] ]
     ; seq [printf (string "Returns 77?\\n") []; fail "Should fail indeed"]

@@ -204,7 +204,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
         (exec ["ls"; "-1"; dir] ||> exec ["wc"; "-l"])
         (exec ["echo"; "No-dir"])
       ||> exec ["tr"; "-d"; "\\n"]
-      |> get_stdout |> Byte_array.to_c
+      |> get_stdout
     in
     seq
       [ exec

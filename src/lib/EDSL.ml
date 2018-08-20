@@ -38,11 +38,9 @@ let string_list_of_string s =
  *)
 
 type file =
-  < get: byte_array t
-  ; get_c: c_string t
-  ; set: byte_array t -> unit t
-  ; set_c: c_string t -> unit t
-  ; append: byte_array t -> unit t
+  < get: c_string t
+  ; set: c_string t -> unit t
+  ; append: c_string t -> unit t
   ; delete: unit t
   ; path: c_string t >
 
@@ -51,14 +49,13 @@ let tmp_file ?tmp_dir name : file =
   let get_tmp_dir =
     Option.value tmp_dir
       ~default:
-        ( get_stdout
-            ((* https://en.wikipedia.org/wiki/TMPDIR *)
-             if_then_else
-               C_string.(getenv (c_string "TMPDIR") <$> c_string "")
-               (call
-                  [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
-               (exec ["printf"; "%s"; default_tmp_dir]))
-        |> to_c_string )
+        (get_stdout
+           ((* https://en.wikipedia.org/wiki/TMPDIR *)
+            if_then_else
+              C_string.(getenv (c_string "TMPDIR") <$> c_string "")
+              (call
+                 [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
+              (exec ["printf"; "%s"; default_tmp_dir])))
   in
   let path =
     let clean =
@@ -77,8 +74,6 @@ let tmp_file ?tmp_dir name : file =
   object (self)
     method get = get_stdout (call [string "cat"; path])
 
-    method get_c = self#get |> to_c_string
-
     method path = path
 
     method set v =
@@ -89,8 +84,7 @@ let tmp_file ?tmp_dir name : file =
           v >> exec ["cat"] |> write_output ~stdout:tmp
         ; call [string "mv"; string "-f"; tmp; path] ]
 
-    method set_c c = self#set (to_byte_array c)
-
+    (* method set c = self#set ( c) *)
     method append v =
       seq
         [ seq [call [string "cat"; path]; v >> exec ["cat"]]
@@ -227,9 +221,9 @@ module Command_line = struct
           seq
             [ anon_tmp#set
                 ( Elist.append
-                    (anon_tmp#get |> Elist.deserialize_to_byte_array_list)
-                    (Elist.make [getenv (string "1") |> C_string.to_byte_array])
-                |> Elist.serialize_byte_array_list ) ]
+                    (anon_tmp#get |> Elist.deserialize_to_c_string_list)
+                    (Elist.make [getenv (string "1")])
+                |> Elist.serialize_c_string_list ) ]
         in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
@@ -237,7 +231,7 @@ module Command_line = struct
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
                  p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
             [ setenv help_flag_var (Bool.to_string (bool true))
-            ; byte_array help_msg >> exec ["cat"]
+            ; string help_msg >> exec ["cat"]
             ; exec ["break"] ]
         in
         let dash_dash_case =
@@ -265,7 +259,7 @@ module Command_line = struct
     in
     seq
       [ setenv help_flag_var (Bool.to_string (bool false))
-      ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
+      ; anon_tmp#set (Elist.serialize_c_string_list (Elist.make []))
       ; seq (List.rev !inits)
       ; while_loop
       ; if_then_else
@@ -387,7 +381,6 @@ let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
   get_stdout
     ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
     ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
-  |> Byte_array.to_c
 
 let verbose_call ?(prefix = "CALL: ") ?(verbose = bool true) l =
   if_seq verbose

@@ -86,8 +86,7 @@ let () =
     {md|Here we use the constructs:
 
 ```ocaml
-val get_stdout : unit t -> byte_array t
-val Byte_array.to_c: byte_array t -> c_string t
+val get_stdout : unit t -> c_string t
 val (||>) : unit t -> unit t -> unit t
 ```
 
@@ -95,14 +94,16 @@ We use `let (s : …) = …` to show the types; we see then that we need to “c
 the output to a C-String with `Byte_array.to_c` in order to pass it to `call`.
 Indeed, commands can output arbitrary byte-arrays but Unix commands
 only accept `NUL`-terminated strings.
+    
+**TODO**: update this!
 
 We then “pipe” the output to another `exec` call with `||>` (which is
 a 2-argument shortcut for `EDSL.pipe`).
 |md}
     {ocaml|
 Genspio.EDSL.(
-  let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
-  call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
+  let (s : c_string t) = get_stdout (exec ["cat"; "README.md"]) in
+  call [string "printf"; string "%s"; s] ||> exec ["wc"; "-l"];
 )
 |ocaml}
 
@@ -114,7 +115,7 @@ let () =
     {ocaml|
 Genspio.EDSL.(
   (* Let's see wether `wc -l` is fine with a NUL in the middle of a “line:” *)
-  byte_array "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
+  string "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
 )
 |ocaml}
 
@@ -127,10 +128,10 @@ let () =
     {ocaml|
 Genspio.EDSL.(
     (* With a 🐱: *)
-  let original = byte_array "one\ntwo\nth\000ree\n" in
+  let original = string "one\ntwo\nth\000ree\n" in
   let full_cycle = original >> exec ["cat"] |> get_stdout in
   if_seq
-    Byte_array.(full_cycle =$= original)
+    (full_cycle =$= original)
     ~t:[
       exec ["echo"; "They are the same"];
     ]
@@ -150,16 +151,16 @@ Genspio.EDSL.(
   let tmp = tmp_file "genspio-example" in
   let body =
     seq [
-      if_then_else C_string.(tmp#get_c =$= c_string "")
-         (tmp#set_c (c_string "magic-"))
-         (if_then_else C_string.(tmp#get_c =$= string "magic-")
-            (tmp#append (c_string "string" |> C_string.to_bytes))
+      if_then_else C_string.(tmp#get =$= c_string "")
+         (tmp#set (c_string "magic-"))
+         (if_then_else C_string.(tmp#get =$= string "magic-")
+            (tmp#append (c_string "string"))
             nop);
-      call [string "printf"; string "Currently '%s'\\n"; tmp#get_c];
+      call [string "printf"; string "Currently '%s'\\n"; tmp#get];
     ] in
   seq [
-    tmp#set (byte_array "");
-    loop_while C_string.(tmp#get_c <$> c_string "magic-string") ~body
+    tmp#set (c_string "");
+    loop_while (tmp#get <$> c_string "magic-string") ~body
   ]
 )
 |ocaml}
@@ -189,8 +190,8 @@ Genspio.EDSL.(
       to_fd (int 1) (int 2);
     ];
     call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
-          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> Byte_array.to_c;
-          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> Byte_array.to_c];
+          exec ["cat"; "/tmp/genspio-one"] |> get_stdout;
+          exec ["cat"; "/tmp/genspio-two"] |> get_stdout];
   ]
 )
 |ocaml}
@@ -298,9 +299,9 @@ Genspio.EDSL.(
   printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
   ||> on_stdin_lines begin fun line ->
     printf (c_string "→ %s bytes\\n")
-      [C_string.to_byte_array line
+     [ line
        >> exec ["wc"; "-c"] ||> exec ["tr"; "-d"; "\\n"]
-       |> get_stdout |> Byte_array.to_c]
+       |> get_stdout ]
   end
 )
 |ocaml}
