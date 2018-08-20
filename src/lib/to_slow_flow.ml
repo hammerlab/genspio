@@ -701,7 +701,7 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
   let fail_commands s =
     match trap with
     | `Exit_with _ ->
-        [ rawf "printf '%%s' %s > %s " (Filename.quote s) tmp
+        [ rawf "printf '%%s\\n' %s > %s " (Filename.quote s) tmp
         ; rawf "kill -s %s ${%s}" signal_name pid ]
     | `None ->
         failwith "You cannot use the `fail` construct with no `trap` strategy"

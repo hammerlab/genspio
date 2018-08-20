@@ -15,9 +15,13 @@ mkdir -p $output_path
 cp -r _build/default/_doc/_html/* $output_path/
 
 
-caml2html -make-css /tmp/c2h.css
-insert_bg_color=#ede1e1
-cat > /tmp/morecode.css <<EOF
+call_caml2html () {
+    local input_file="$1"
+    local output_file="$2"
+    local title="$3"
+    caml2html -make-css /tmp/c2h.css
+    insert_bg_color=#ede1e1
+    cat > /tmp/morecode.css <<EOF
 a.sourceLine { display: inline-block; line-height: 1.25; }
 a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
 a.sourceLine:empty { height: 1.2em; position: absolute; }
@@ -91,15 +95,20 @@ h1 code { font-size: 200% ; font-family: serif; color: #300 }
       border-left: 1px solid #aaaaaa; }
 .insert code { background-color: $insert_bg_color }
 EOF
-cat /tmp/c2h.css /tmp/morecode.css > $output_path/caml2html.css
+    cat /tmp/c2h.css /tmp/morecode.css > $output_path/caml2html.css
+    caml2html $input_file -charset UTF-8 \
+              -t -cssurl caml2html.css \
+              -ext md:'cat | { printf "<div class=insert>" ; pandoc -w html ; printf "</div>" ; } ' \
+              -o $output_file
+    sed -i "s:${input_file}:${title}:" $output_file
+    sed -i 's@<em>This document was generated using@<em>Back to <a href="index.html">home</a>.</em>@' $output_file
+    sed -i 's@<a href="http://martin.jambon.free.fr/caml2html.html">caml2html</a></em>@@' $output_file
+}
 
-caml2html src/lib/to_slow_flow.ml -charset UTF-8 \
-          -t -cssurl caml2html.css \
-          -ext md:'cat | { printf "<div class=insert>" ; pandoc -w html ; printf "</div>" ; } ' \
-          -o $output_path/to-slow-flow.html
-sed -i 's:src/lib/to_slow_flow.ml:The Slow-flow Compiler:' $output_path/to-slow-flow.html
-sed -i 's@<em>This document was generated using@<em>Back to <a href="index.html">home</a>.</em>@' $output_path/to-slow-flow.html
-sed -i 's@<a href="http://martin.jambon.free.fr/caml2html.html">caml2html</a></em>@@' $output_path/to-slow-flow.html
+call_caml2html src/lib/to_slow_flow.ml $output_path/to-slow-flow.html \
+               "The Slow-flow Compiler"
+call_caml2html src/lib/transform.ml $output_path/transform-module.html \
+               "The AST Transformations"
 
 pandocify () {
     local title="$(head -n 1 $1)"
@@ -110,6 +119,7 @@ pandocify () {
         | sed 's:\(`Genspio.\([^`]*\)`\):[\1](genspio/Genspio/\2/index.html):g' \
         | sed 's:usage examples:[usage examples](./small-examples.html):' \
         | sed 's:<!--TOSLOWFLOW-->:- Code [documentation](./to-slow-flow.html) for the `To_slow_flow` *compiler.*:' \
+        | sed 's:<!--TRANSFORM-->:- Code [documentation](./transform-module.html) for the `Transform` module (AST *optimizations*).:' \
         | pandoc -c odoc.css -s \
                  --variable title="$title" --variable pagetitle="$title" \
                  --toc -o $output_path/$2.html

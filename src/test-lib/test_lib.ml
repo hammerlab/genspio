@@ -12,7 +12,7 @@ module Test = struct
         ; returns: int
         ; script: unit Genspio.Language.t }
 
-  let exits ?(no_trap= false) ?name ?(args= []) returns script =
+  let exits ?(no_trap = false) ?name ?(args = []) returns script =
     let name = Option.value name ~default:(sprintf "no-name-%d" returns) in
     [Exits {no_trap; name; args; returns; script}]
 end
@@ -60,14 +60,20 @@ module Shell_directory = struct
   type t =
     { shell: Shell.t
     ; compilation: [`Std_one_liner | `Std_multi_line | `Slow_stack]
+    ; optimization_passes: [`Cst_prop] list
     ; verbose: bool }
 
   let name t =
-    sprintf "%s-%s" (Shell.to_string t.shell)
+    let opti =
+      List.map t.optimization_passes ~f:(function `Cst_prop -> "-cp")
+      |> String.concat ~sep:""
+    in
+    sprintf "%s-%s%s" (Shell.to_string t.shell)
       ( match t.compilation with
       | `Std_multi_line -> "StdML"
       | `Std_one_liner -> "Std1L"
       | `Slow_stack -> "SlowFlow" )
+      opti
 
   let unique_name = function
     | Exits {no_trap; name; args; returns; script} ->
@@ -86,6 +92,13 @@ module Shell_directory = struct
           |> Digest.string |> Digest.to_hex
           |> String.sub_exn ~index:0 ~length:10 )
 
+  (*
+let optimize : type a. _ -> a Genspio.Language.t -> _ =
+   fun t script ->
+    List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
+      | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev )
+ *)
+
   let script_path test = "script" // sprintf "%s-script.sh" (unique_name test)
 
   let run_test_path test =
@@ -93,6 +106,9 @@ module Shell_directory = struct
 
   let script_display test =
     "script" // sprintf "%s-display.scm" (unique_name test)
+
+  let script_opti_display test =
+    "script" // sprintf "%s-opti-display.scm" (unique_name test)
 
   let success_path test = sprintf "_success/%s.txt" @@ unique_name test
 
@@ -106,6 +122,12 @@ module Shell_directory = struct
     | Exits {no_trap; name; args; returns; script} ->
         Genspio.Compile.to_string_hum script
 
+  let display_opti_script t = function
+    | Exits {no_trap; name; args; returns; script} ->
+        List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
+          | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev )
+        |> Genspio.Compile.to_string_hum
+
   let run_test_script t =
     let test_name = name t in
     function
@@ -115,6 +137,8 @@ module Shell_directory = struct
             [ sprintf "- Returns $RRR (expected: %d)." returns
             ; sprintf "- Script: \\`%s\\`" (script_path test)
             ; sprintf "- Pretty-printed: \\`%s\\`" (script_display test)
+            ; sprintf "- Pretty-printed after optimizations: \\`%s\\`"
+                (script_opti_display test)
             ; sprintf "- Test-runner: \\`%s\\`" (run_test_path test)
             ; sprintf "- STDOUT: \\`%s\\`" (stdout_path test)
             ; sprintf "- STDERR: \\`%s\\`" (stderr_path test) ]
@@ -156,14 +180,19 @@ module Shell_directory = struct
           else "" )
 
   let script_content t = function
-    | Exits {no_trap; name; args; returns; script} ->
-      match t.compilation with
-      | `Std_one_liner -> Genspio.Compile.to_one_liner ~no_trap script
-      | `Std_multi_line -> Genspio.Compile.to_many_lines ~no_trap script
-      | `Slow_stack ->
-          Genspio.Compile.To_slow_flow.compile script
-            ~trap:(if no_trap then `None else `Exit_with 77)
-          |> Format.asprintf "%a\n" Genspio.Compile.To_slow_flow.Script.pp
+    | Exits {no_trap; name; args; returns; script} -> (
+        let script =
+          List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
+            | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev
+          )
+        in
+        match t.compilation with
+        | `Std_one_liner -> Genspio.Compile.to_one_liner ~no_trap script
+        | `Std_multi_line -> Genspio.Compile.to_many_lines ~no_trap script
+        | `Slow_stack ->
+            Genspio.Compile.To_slow_flow.compile script
+              ~trap:(if no_trap then `None else `Exit_with 77)
+            |> Format.asprintf "%a\n" Genspio.Compile.To_slow_flow.Script.pp )
 
   let make_report_path t = "script" // "make_report.sh"
 
@@ -180,12 +209,16 @@ module Shell_directory = struct
     seq
       [ exec
           [ "printf"
-          ; sprintf "* Shell: %s, compilation; %s, total tests: %d\\n"
+          ; sprintf
+              "* Shell: %s, compilation; %s, opti: %s, total tests: %d\\n"
               (Shell.to_string t.shell)
               ( match t.compilation with
               | `Std_one_liner -> "Standard-one-liner"
               | `Std_multi_line -> "Standard-multi-line"
               | `Slow_stack -> "Slow-stack" )
+              ( List.map t.optimization_passes ~f:(function `Cst_prop ->
+                    "cst-prop" )
+              |> String.concat ~sep:"→" )
               (List.length testlist) ]
       ; call
           [ string "printf"
@@ -222,7 +255,8 @@ module Shell_directory = struct
     List.concat_map testlist ~f:(fun test ->
         [ (script_path test, script_content t test)
         ; (run_test_path test, run_test_script t test)
-        ; (script_display test, display_script t test) ] )
+        ; (script_display test, display_script t test)
+        ; (script_opti_display test, display_opti_script t test) ] )
 
   let contents t ~path testlist =
     let test_path = path in
@@ -309,7 +343,7 @@ end
 
 module Example = struct
   type t =
-    | EDSL:
+    | EDSL :
         { name: string
         ; description: string
         ; code: 'a Genspio.EDSL.t
@@ -317,7 +351,7 @@ module Example = struct
         ; show: [`Stdout | `Stderr | `Pretty_printed | `Compiled] list }
         -> t
 
-  let make ?(show= [`Pretty_printed]) ~ocaml name description code =
+  let make ?(show = [`Pretty_printed]) ~ocaml name description code =
     EDSL {name; description; code; show; ocaml_code= ocaml}
 
   let default_demo_url =

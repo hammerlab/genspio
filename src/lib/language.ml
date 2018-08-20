@@ -34,6 +34,7 @@ module Literal = struct
 end
 
 type raw_command_annotation = ..
+
 type raw_command_annotation += Magic_unit
 
 type fd_redirection =
@@ -200,7 +201,7 @@ let rec pp : type a. Format.formatter -> a t -> unit =
     | C_string_to_byte_array c ->
         pp_fun_call fmt "c-string-to-byte-array" pp [c]
     | Getenv s -> pp_fun_call fmt "getenv" pp [s]
-    | Setenv (s, v) -> pp_fun_call fmt "setenv" pp [s]
+    | Setenv (s, v) -> pp_fun_call fmt "setenv" pp [s; v]
     | Comment (cmt, expr) ->
         fprintf fmt "@[<hov 1>(comment@ %S@ %a)@]" cmt pp expr
 

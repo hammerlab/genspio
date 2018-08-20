@@ -259,11 +259,10 @@ let () =
                     C_string.(string single =$= string "-v")
                     [ assert_or_fail "bone-is-true"
                         ( bone
-                        &&&
-                        C_string.(
-                          concat_elist anon
-                          =$= string
-                                (String.concat ~sep:"" [anon1; anon2; anon3]))
+                        &&& C_string.(
+                              concat_elist anon
+                              =$= string
+                                    (String.concat ~sep:"" [anon1; anon2; anon3]))
                         ) ]
                 ; case
                     C_string.(string single =$= string "--")
@@ -286,21 +285,20 @@ let () =
                            printf (string "=== anonth: %s\\n") [v ()] )
                      ; assert_or_fail "dash-dash"
                          ( (not bone)
-                         &&&
-                         C_string.(
-                           concat_elist anon
-                           =$= string
-                                 (String.concat ~sep:""
-                                    [anon1; "-g"; minus_g; anon2; anon3])) ) ])
+                         &&& C_string.(
+                               concat_elist anon
+                               =$= string
+                                     (String.concat ~sep:""
+                                        [anon1; "-g"; minus_g; anon2; anon3]))
+                         ) ])
                 ; default
                     [ assert_or_fail "single-is-anon"
                         ( (not bone)
-                        &&&
-                        C_string.(
-                          concat_elist anon
-                          =$= string
-                                (String.concat ~sep:""
-                                   [single; anon1; anon2; anon3])) ) ] ]
+                        &&& C_string.(
+                              concat_elist anon
+                              =$= string
+                                    (String.concat ~sep:""
+                                       [single; anon1; anon2; anon3])) ) ] ]
             ; if_then_else
                 (C_string.(one =$= two) ||| bone)
                 (return 11)
@@ -1092,6 +1090,7 @@ let () =
   let anon_fun p = anon := p :: !anon in
   let no_compilation_tests = ref false in
   let extra_slow_flow_tests = ref false in
+  let extra_transform_cp_tests = ref false in
   let args =
     Arg.align
       [ ( "--important-shells"
@@ -1108,6 +1107,9 @@ let () =
       ; ( "--run-slow-stack-tests"
         , Arg.Set extra_slow_flow_tests
         , " Run the To_slow_flow.test tests." )
+      ; ( "--run-constant-propagation-tests"
+        , Arg.Set extra_transform_cp_tests
+        , " Run the Transform.Constant_propagation tests." )
       ; ( "--"
         , Rest anon_fun
         , "<args> Arguments following are not interpreted as CL options." ) ]
@@ -1127,10 +1129,15 @@ let () =
           List.concat_map
             Shell.(known_shells ())
             ~f:(fun shell ->
-              let make compilation =
-                Shell_directory.{shell; verbose= true; compilation}
+              let make compilation optimization_passes =
+                Shell_directory.
+                  {shell; verbose= true; compilation; optimization_passes}
               in
-              [make `Std_one_liner; make `Std_multi_line; make `Slow_stack] )
+              [ make `Std_one_liner []
+              ; make `Std_multi_line []
+              ; make `Std_multi_line [`Cst_prop]
+              ; make `Slow_stack []
+              ; make `Slow_stack [`Cst_prop] ] )
         in
         let open Test_directory in
         {shell_tests= tests; important_shells= !important_shells; verbose= true}
@@ -1145,4 +1152,6 @@ let () =
     if !no_compilation_tests then false else compilation_error_tests ()
   in
   if !extra_slow_flow_tests then Genspio.To_slow_flow.test () ;
+  if !extra_transform_cp_tests then
+    Genspio.Transform.Constant_propagation.test () ;
   exit (if errors then 23 else 0)
