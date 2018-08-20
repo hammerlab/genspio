@@ -499,6 +499,8 @@ val on_stdin_lines : (str t -> unit t) -> unit t
     Note that this is for text-like input, ['\000']
     characters in the input lead to undefined behavior. *)
 
+val strs : string list -> str t list
+
 val which_finds : string -> bool t
 
 val get_stdout_one_line :
