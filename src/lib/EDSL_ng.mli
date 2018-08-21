@@ -554,7 +554,11 @@ end
 
 module Dispatcher_script : sig
   val make :
-    name:string -> description:string -> unit -> unit Genspio__Language.t
+       ?aliases:(Genspio__Language.byte_array Genspio__Language.t * str t) list
+    -> name:string
+    -> description:string
+    -> unit
+    -> unit Genspio__Language.t
 end
 
 (** {3 Very Unsafe Operations} *)

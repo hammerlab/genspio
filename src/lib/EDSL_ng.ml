@@ -523,7 +523,7 @@ struct
 end
 
 module Dispatcher_script = struct
-  let make ~name ~description () =
+  let make ?(aliases = []) ~name ~description () =
     let tmp = ksprintf tmp_file "%s-call" name in
     let eq_or ~eq s1 l =
       match l with
@@ -566,7 +566,11 @@ module Dispatcher_script = struct
                      [ line
                      ; get_stdout
                          ( call [line; string "--describe"]
-                         ||> exec ["tr"; "-d"; "\\n"] ) ] )) ]
+                         ||> exec ["tr"; "-d"; "\\n"] ) ] ))
+        ; printf (str "Aliases:\\n") []
+        ; seq
+            (List.map aliases ~f:(fun (a, v) ->
+                 printf (str "* %s -> %s\\n") [a; v] )) ]
     in
     let dollar_one_empty = Str.(getenv (string "1") =$= string "") in
     seq
@@ -582,7 +586,11 @@ module Dispatcher_script = struct
                 ~t:[printf (ksprintf string "%s\\n" description) []]
                 ~e:
                   [ tmp#set (ksprintf string "%s-" name)
-                  ; tmp#append (getenv (string "1"))
+                  ; switch
+                      ( List.map aliases ~f:(fun (a, v) ->
+                            case Str.(a =$= getenv (string "1")) [tmp#append v]
+                        )
+                      @ [default [tmp#append (getenv (string "1"))]] )
                   ; tmp#append (str " ")
                   ; exec ["shift"]
                   ; loop_seq_while (not dollar_one_empty)
