@@ -534,6 +534,29 @@ val ensure : string -> condition:bool t -> how:(string * unit t) list -> unit t
 
 val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
 
+(** Make scripts that provide a ["--describe"] option/command. *)
+module Script_with_describe (P : sig
+  val name : string
+
+  val description : string
+end) : sig
+  val name : string
+
+  val description : string
+
+  val describe_option_and_usage :
+       ?more_usage:string list
+    -> unit
+    -> (bool t -> 'a, 'a) Command_line.cli_options
+
+  val deal_with_describe : bool t -> unit t list -> unit t
+end
+
+module Dispatcher_script : sig
+  val make :
+    name:string -> description:string -> unit -> unit Genspio__Language.t
+end
+
 (** {3 Very Unsafe Operations} *)
 
 (** The {!Magic} module is like OCaml's {!Obj.magic} function for the

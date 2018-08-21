@@ -501,3 +501,99 @@ let greps_to ?(extended_re = false) re u =
     [string "grep"] @ (if extended_re then [string "-E"] else []) @ [re]
   in
   succeeds_silently (u ||> call c)
+
+module Script_with_describe (P : sig
+  val name : string
+
+  val description : string
+end) =
+struct
+  include P
+
+  let describe_option_and_usage ?(more_usage = []) () =
+    let open Command_line.Arg in
+    flag ["--describe"] ~doc:P.description
+    & ksprintf usage "usage: %s <args>\n%s.%s" P.name P.description
+        (List.map more_usage ~f:(sprintf "\n%s") |> String.concat ~sep:"")
+
+  let deal_with_describe describe more =
+    if_seq describe
+      ~t:[printf (ksprintf string "%s\\n" P.description) []]
+      ~e:more
+end
+
+module Dispatcher_script = struct
+  let make ~name ~description () =
+    let tmp = ksprintf tmp_file "%s-call" name in
+    let eq_or ~eq s1 l =
+      match l with
+      | [] -> bool true
+      | h :: t ->
+          List.fold
+            ~init:(eq s1 (string h))
+            t
+            ~f:(fun p v -> p ||| eq s1 (string v))
+    in
+    let pr_usage =
+      seq
+        [ printf
+            (ksprintf string
+               "usage: %s <cmd> [OPTIONS/ARGS]\\n\\n%s.\\n\\nSub-commands:\\n"
+               name description)
+            []
+        ; (let findgrep =
+             call
+               [ string "find"
+               ; call
+                   [ string "dirname"
+                   ; exec ["which"; name]
+                     ||> exec ["tr"; "-d"; " \\n"]
+                     |> get_stdout ]
+                 ||> exec ["tr"; "-d"; " \\n"]
+                 |> get_stdout
+               ; string "-type"
+               ; string "f"
+               ; string "-exec"
+               ; string "basename"
+               ; string "{}"
+               ; string ";" ]
+             ||> exec ["grep"; "-E"; sprintf "%s-[^\\-]*$" name]
+           in
+           findgrep
+           ||> exec ["sort"]
+           ||> on_stdin_lines (fun line ->
+                   printf (string "* %s: %s\\n")
+                     [ line
+                     ; get_stdout
+                         ( call [line; string "--describe"]
+                         ||> exec ["tr"; "-d"; "\\n"] ) ] )) ]
+    in
+    let dollar_one_empty = Str.(getenv (string "1") =$= string "") in
+    seq
+      [ if_seq
+          ( dollar_one_empty
+          ||| eq_or ~eq:Str.( =$= )
+                (getenv (string "1"))
+                ["-h"; "--help"; "help"] )
+          ~t:[pr_usage]
+          ~e:
+            [ if_seq
+                Str.(getenv (string "1") =$= string "--describe")
+                ~t:[printf (ksprintf string "%s\\n" description) []]
+                ~e:
+                  [ tmp#set (ksprintf string "%s-" name)
+                  ; tmp#append (getenv (string "1"))
+                  ; tmp#append (str " ")
+                  ; exec ["shift"]
+                  ; loop_seq_while (not dollar_one_empty)
+                      [ (*  printf (string "arg: %s\\n") [getenv (string "1")] ;  *)
+                        tmp#append (str " '")
+                      ; tmp#append
+                          ( getenv (string "1")
+                          >> exec ["sed"; "s/'/'\\\\''/g"]
+                          |> get_stdout )
+                      ; tmp#append (str "'")
+                      ; exec ["shift"] ]
+                    (* ; eprintf (string "calling: %s\\n") [tmp#get] *)
+                  ; call [string "sh"; string "-c"; tmp#get] ] ] ]
+end
