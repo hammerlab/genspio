@@ -18,16 +18,17 @@ Quite a few scripts will have been created:
 
     $BINPATH/cosc
     $BINPATH/cosc-manual
-    $BINPATH/cosc-start
     $BINPATH/cosc-attach
     $BINPATH/cosc-example
-    $BINPATH/cosc-configuration-removejob
     $BINPATH/cosc-logs
-    $BINPATH/cosc-configuration-display
     $BINPATH/cosc-configuration
-    $BINPATH/cosc-status
+    $BINPATH/cosc-configuration-initialize
+    $BINPATH/cosc-configuration-display
     $BINPATH/cosc-configuration-addjob
+    $BINPATH/cosc-configuration-removejob
     $BINPATH/cosc-configuration-destroy
+    $BINPATH/cosc-start
+    $BINPATH/cosc-status
     $BINPATH/cosc-kill
 
 The scripts generated with `Dispatcher_script` also know about aliases, e.g.
@@ -53,7 +54,8 @@ let cmdf fmt =
     fmt
 
 (*md A lot of (too much?) attention has been spent making the “root”
-name of the scripts parametrizable (`cosc` in the example above).
+name of the scripts parametrizable (the string `cosc` in the example
+above).
 
 The `Script` module wraps the scripts as “relative” paths,
 descriptions, and the actual script contents.
@@ -98,10 +100,11 @@ The function `write` is the only real I/O of this whole OCaml program.
     close_out o ; cmdf "chmod +x %s" path
 end
 
-(*md Configuration of the scripts is bootstrapped with environment variables, which
-give the script a root-path and a screen-session-name. Then, the remaining
-configuration lies in files within the root path, it is editable by
-the scripts (e.g. with `cosc config addjob`).
+(*md Configuration of the scripts is bootstrapped with an environment
+variable, which gives the script a root-path to start from. Then, the
+remaining configuration lies in files within the root path, it is
+editable by the scripts (e.g. with `cosc config init`,
+`cosc config addjob`, etc.).
 
  *)
 module Environment = struct
@@ -110,12 +113,22 @@ module Environment = struct
     ; default_screen_name: string
     ; default_configuration_path: string }
 
-  let make ?(default_screen_name = "service_composer_default_screen")
+  let make ?default_screen_name
       ?(default_configuration_path = "/tmp/service_composer_config.d") prefix =
+    let default_screen_name =
+      Option.value default_screen_name
+        ~default:
+          (sprintf "%s-screen-session-%s" prefix
+             Digest.(
+               string default_configuration_path
+               |> to_hex
+               |> String.sub_exn ~index:0 ~length:16))
+    in
     {default_screen_name; default_configuration_path; prefix}
 
+  open Gedsl
+
   let env_or s default_value =
-    let open Gedsl in
     let g = getenv (str s) in
     get_stdout
       (if_then_else
@@ -123,14 +136,34 @@ module Environment = struct
          (exec ["printf"; "%s"; default_value])
          (call [str "printf"; str "%s"; g]))
 
-  let var_screen_name t = t.prefix ^ "_screen_name"
-
   let var_configuration_path t = t.prefix ^ "_root"
-
-  let screen_name t = env_or (var_screen_name t) t.default_screen_name
 
   let configuration_path t =
     env_or (var_configuration_path t) t.default_configuration_path
+
+  let screen_name_path t = configuration_path t /// str "screen-session-name"
+
+  let init ?screen_name t =
+    check_sequence
+      [ ("mkdir-path", mkdir_p @@ configuration_path t)
+      ; ( "set-screen-name"
+        , write_stdout ~path:(screen_name_path t)
+            (printf (str "%s\\n")
+               [Option.value screen_name ~default:(str t.default_screen_name)])
+        ) ]
+
+  let is_initialized t =
+    call [str "test"; str "-s"; screen_name_path t] |> succeeds_silently
+
+  let ensure_init t =
+    if_then_else (is_initialized t) nop
+      (seq
+         [ say "Configuration is not initialized (%s)" [configuration_path t]
+         ; fail "ERROR: Not-initialized" ])
+
+  let screen_name t =
+    get_stdout_one_line
+      (seq [ensure_init t; call [string "cat"; screen_name_path t]])
 
   let on_jobs t f =
     let open Gedsl in
@@ -146,8 +179,11 @@ module Environment = struct
     in
     seq
       [ say "Environment variables: " []
-      ; env_var var_screen_name t.default_screen_name
-      ; env_var var_configuration_path t.default_configuration_path ]
+        (* ; env_var var_screen_name t.default_screen_name *)
+      ; env_var var_configuration_path t.default_configuration_path
+      ; if_seq (is_initialized t)
+          ~t:[say "Screen session name: '%s'" [screen_name t]]
+          ~e:[say "Screen session name not initialized." []] ]
 end
 
 (*md The output of the `cosc manual` command is the processed content of the
@@ -372,7 +408,10 @@ module Configuration_script = struct
     Script.make [name] ~description (fun ~root ->
         Gedsl.Dispatcher_script.make
           ~aliases:
-            Gedsl.[(str "show", str "display"); (str "rmjob", str "removejob")]
+            Gedsl.
+              [ (str "show", str "display")
+              ; (str "rmjob", str "removejob")
+              ; (str "init", str "initialize") ]
           ~name:(sprintf "%s-%s" root name)
           ~description () )
 end
@@ -394,6 +433,32 @@ module Manual_script = struct
         in
         parse opts (fun ~anon describe ->
             deal_with_describe describe [Manual.output ~root ~env] ) )
+end
+
+module Init_script = struct
+  include Gedsl.Script_with_describe (struct
+    let name = "initialize"
+
+    let description = "Initialize the configuration."
+  end)
+
+  let make ~env () =
+    Script.make ["configuration"; name] ~description (fun ~root ->
+        let open Gedsl in
+        let open Command_line in
+        let opts =
+          let open Arg in
+          string
+            ["--screen-session-name"; "-S"]
+            ~doc:
+              (sprintf "Set the screen session name (default: %s)"
+                 env.Environment.default_screen_name)
+            ~default:(str env.Environment.default_screen_name)
+          & describe_option_and_usage ()
+        in
+        parse opts (fun ~anon screen_name describe ->
+            deal_with_describe describe
+              [Environment.init ~screen_name env; say "Done." []] ) )
 end
 
 module Add_job_script = struct
@@ -753,13 +818,12 @@ module Example_script = struct
     let conf = "/tmp/example-basic.d" in
     let cmt fmt = sprintf ("# " ^^ fmt) in
     ( "basic"
-    , [ cmt "We setup the configuration root path and the screen name:"
+    , [ cmt "We setup the configuration root path:"
       ; sprintf "export %s=%s" (Environment.var_configuration_path env) conf
-      ; sprintf "export %s=%s"
-          (Environment.var_screen_name env)
-          "example_basic_screen_session"
       ; cmt "Show the current configuration:"
       ; call "config show"
+      ; cmt "OK, let's initialize configuration:"
+      ; call "config init"
       ; cmt "Let's configure a few jobs:"
       ; call
           {sh|config addjob --name DMesg --no-log watch -c -d -n 30 dmesg|sh}
@@ -867,7 +931,6 @@ module Base_script = struct
           ~name:root ~description () )
 end
 
-
 (*md
 The `make` function drives the generation of the list of scripts.
 
@@ -881,6 +944,7 @@ let make ~name ~output_path =
     ; Configuration_display_script.make ~env ()
     ; Configuration_destroy_script.make ~env ()
     ; Add_job_script.make ~env ()
+    ; Init_script.make ~env ()
     ; Remove_job_script.make ~env ()
     ; Start_script.make ~env ()
     ; Logs_script.make ~env ()
