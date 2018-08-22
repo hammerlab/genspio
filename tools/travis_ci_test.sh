@@ -184,3 +184,6 @@ $genspio_vm_tester amd64-fb /tmp/vmt/amd64-fb/
 ( cd /tmp/vmt/amd64-fb ; make help ; )
 
 
+echo "================== EXAMPLES: Service-composer======================================="
+
+$genspio_service_composer --name cosc --output-path $HOME/bin
