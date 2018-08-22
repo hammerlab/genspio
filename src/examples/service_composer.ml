@@ -1,3 +1,40 @@
+(*md This example creates a family of scripts using the `EDSL_ng` API,
+and in particular the `Dispatcher_script` and `Script_with_describe`
+modules.
+
+A simple way to generate and install the scripts is:
+
+    genspio_service_composer=_build/default/src/examples/service_composer.exe
+    jbuilder build $genspio_service_composer
+    $genspio_service_composer --name cosc --output-path $BINNPATH
+  
+The `cosc*` scripts will be installed and ready to use in `$BINPATH`
+as long as the path is part of the `$PATH` variable.
+Then one can just try:
+
+    cosc --help
+
+Quite a few scripts will have been created:
+
+    $BINPATH/cosc
+    $BINPATH/cosc-manual
+    $BINPATH/cosc-start
+    $BINPATH/cosc-attach
+    $BINPATH/cosc-example
+    $BINPATH/cosc-configuration-removejob
+    $BINPATH/cosc-logs
+    $BINPATH/cosc-configuration-display
+    $BINPATH/cosc-configuration
+    $BINPATH/cosc-status
+    $BINPATH/cosc-configuration-addjob
+    $BINPATH/cosc-configuration-destroy
+    $BINPATH/cosc-kill
+
+The scripts generated with `Dispatcher_script` also know about aliases, e.g.
+`cosc config show` is actually able to call `cosc-configuration-display`.
+
+
+*)
 open Nonstd
 module String = Sosa.Native_string
 
@@ -15,6 +52,14 @@ let cmdf fmt =
       | other -> ksprintf failwith "CMD: %S failed with %d" s other )
     fmt
 
+(*md A lot of (too much?) attention has been spent making the “root”
+name of the scripts parametrizable (`cosc` in the example above).
+
+The `Script` module wraps the scripts as “relative” paths,
+descriptions, and the actual script contents.
+
+
+ *)
 module Script = struct
   type t =
     { relative_path: string list
@@ -23,6 +68,16 @@ module Script = struct
 
   let make relative_path ~description make = {relative_path; description; make}
 
+  (*md
+See below what `relative_path` means:
+
+```ocaml
+let path =
+  output_path // String.concat ~sep:"-" (root :: t.relative_path)
+```
+
+The function `write` is the only real I/O of this whole OCaml program.
+ *)
   let write ?(compiler = `Slow_flow) t ~output_path ~root =
     let path =
       output_path // String.concat ~sep:"-" (root :: t.relative_path)
@@ -43,6 +98,12 @@ module Script = struct
     close_out o ; cmdf "chmod +x %s" path
 end
 
+(*md Configuration of the scripts is bootstrapped with environment variables, which
+give the script a root-path and a screen-session-name. Then, the remaining
+configuration lies in files within the root path, it is editable by
+the scripts (e.g. with `cosc config addjob`).
+
+ *)
 module Environment = struct
   type t =
     { prefix: string
@@ -89,6 +150,10 @@ module Environment = struct
       ; env_var var_configuration_path t.default_configuration_path ]
 end
 
+(*md The output of the `cosc manual` command is the processed content of the
+`Manual._global_` variable; a list of Markdown strings, accumulated
+through this file.
+*)
 module Manual = struct
   type item =
     | Raw of string
@@ -156,6 +221,22 @@ module Manual = struct
     seq (List.map !_global_ ~f:one)
 end
 
+(*md The `Job` module provides Genspio expressions to uniformly define
+the notion of “job:” a process attached to a given `screen` window,
+with potential log-keeping.
+  
+Within the “root” configuration path, a give job “`TheJob`” is
+attached to a few files:
+
+* `TheJob.job`: contains the shell command to execute.
+* `TheJob.log`: contains the logs (mostly empty if `--no-log` is set).
+* `TheJob.options`: contains the options, one per line in
+  shell-variable-syntax (e.g. `no_log=true`)
+* `TheJob.pid`: stores the PID of the job once started.
+* `TheJob-run.sh`: script that is generated to run the job (the PID is
+  actually the one of this script, i.e. the parent of all potential
+  processes created by the job).
+*)
 module Job = struct
   open Gedsl
 
@@ -244,12 +325,17 @@ module Job = struct
          [ job_path env name
          ; log_path env name
          ; pid_path env name
-         ; run_path env name ])
+         ; run_path env name
+         ; Options.path env name ])
 end
 
+(*md The `Screen` module contains Genspio expressions to manipulate a
+GNU-Screen session,
+see the relevant
+[manual](https://www.gnu.org/software/screen/manual/screen.html).
+ *)
 module Screen = struct
   (*
-    See https://www.gnu.org/software/screen/manual/screen.html#Commands 
   *)
   open Gedsl
 
@@ -269,6 +355,14 @@ module Screen = struct
       ~e:[call env [str "-d"; str "-m"]]
 end
 
+(*md
+
+## The Scripts
+
+All the `*_script` modules define one actual script to be generated.
+
+
+*)
 module Configuration_script = struct
   let description = "Manage the configuration."
 
@@ -773,6 +867,12 @@ module Base_script = struct
           ~name:root ~description () )
 end
 
+
+(*md
+The `make` function drives the generation of the list of scripts.
+
+ *)
+
 let make ~name ~output_path =
   let env = Environment.make name in
   let scripts =
@@ -794,6 +894,8 @@ let make ~name ~output_path =
   List.iter scripts ~f:(Script.write ~output_path ~root:name) ;
   msg "Done."
 
+(*md Finally the “main” program, uses the venerable `Arg` module to
+call `make`. *)
 let () =
   let anon = ref [] in
   let anon_fun p = anon := p :: !anon in
