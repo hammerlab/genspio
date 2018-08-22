@@ -936,8 +936,8 @@ The `make` function drives the generation of the list of scripts.
 
  *)
 
-let make ~name ~output_path =
-  let env = Environment.make name in
+let make ?default_configuration_path ~name ~output_path () =
+  let env = Environment.make ?default_configuration_path name in
   let scripts =
     [ Base_script.make ()
     ; Configuration_script.make ()
@@ -966,11 +966,15 @@ let () =
   let usage = sprintf "%s [-help] <path>" Sys.argv.(0) in
   let name = ref None in
   let output_path = ref None in
+  let config_path = ref None in
   let args =
     Arg.align
       [ ( "--name"
         , Arg.String (fun s -> name := Some s)
         , sprintf "<script-name> Name of the script." )
+      ; ( "--configuration-path"
+        , Arg.String (fun s -> config_path := Some s)
+        , sprintf "<path> Path to the default configuration root." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
         , sprintf "<script-name> Where to write the scripts." ) ]
@@ -984,5 +988,6 @@ let () =
         msg "Option `%s` is mandatory" opt ;
         die ()
   in
-  make ~name:(need "--name" !name)
+  make ~name:(need "--name" !name) ?default_configuration_path:!config_path
     ~output_path:(need "--output-path" !output_path)
+    ()
