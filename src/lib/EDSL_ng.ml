@@ -446,7 +446,7 @@ let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
 let verbose_call ?(prefix = "CALL: ") ?(verbose = bool true) l =
   if_seq verbose
     ~t:
-      [ eprintf (ksprintf str "%s: [" prefix) []
+      [ eprintf (ksprintf str "%s[" prefix) []
       ; seq @@ List.map l ~f:(fun ex -> eprintf (string "%s ") [ex])
       ; eprintf (string "]\\n") []
       ; call l ]
