@@ -99,6 +99,7 @@ genspio_test=_build/default/src/test/main.exe
 genspio_downloader_maker=_build/default/src/examples/downloader.exe
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 genspio_vm_tester=_build/default/src/examples/vm_tester.exe
+genspio_service_composer=_build/default/src/examples/service_composer.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.mlt configure
@@ -108,6 +109,7 @@ jbuilder build $genspio_test
 jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
 jbuilder build $genspio_vm_tester
+jbuilder build $genspio_service_composer
 
 
 
@@ -182,3 +184,6 @@ $genspio_vm_tester amd64-fb /tmp/vmt/amd64-fb/
 ( cd /tmp/vmt/amd64-fb ; make help ; )
 
 
+echo "================== EXAMPLES: Service-composer======================================="
+
+$genspio_service_composer --name cosc --output-path $HOME/bin

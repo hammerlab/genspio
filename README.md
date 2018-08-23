@@ -140,6 +140,7 @@ From here, one can explore:
   operating systems.
 <!--TOSLOWFLOW-->
 <!--TRANSFORM-->
+<!--SERCOEX-->
 
 Building The Documentation
 --------------------------
