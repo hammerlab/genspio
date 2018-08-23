@@ -478,37 +478,37 @@ module Add_job_script = struct
     Script.make ["configuration"; name] ~description (fun ~root ->
         let open Gedsl in
         let open Command_line in
-        let default_none = str "--no-job-name--" in
+        let default_none = str "--none--" in
         let opts =
           let open Arg in
           string ["--name"] ~doc:"Job name" ~default:default_none
+          & string ["--command"; "-c"] ~doc:"Job command" ~default:default_none
+          & string ["--interpreter"; "-i"]
+              ~doc:"Job interpreter (default: sh -c)" ~default:(str "sh -c")
           & flag ["--no-log"]
               ~doc:
                 "Don't save logs (useful for commands that grab the terminal \
                  like `top`)"
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon name no_log describe ->
-            let path = Job.job_path env name in
+        parse opts (fun ~anon name shell_command interpreter no_log describe ->
+            let jpath = Job.job_path env name in
             deal_with_describe describe
               [ if_then
                   Str.(name =$= default_none)
                   (fail "option --name is mandatory")
-              ; say "Creating %s" [path]
+              ; if_then
+                  Str.(shell_command =$= default_none)
+                  (fail "option --command is mandatory")
               ; mkdir_p @@ Environment.configuration_path env
               ; Job.Options.write ~no_log env name
-              ; (let tmp = tmp_file "creating-job-configuration" in
-                 seq
-                   [ tmp#set (str "")
-                   ; Elist.iter anon ~f:(fun cmd ->
-                         seq
-                           [ tmp#append (str " '")
-                           ; tmp#append
-                               ( cmd ()
-                               >> exec ["sed"; "s/'/'\\\\''/g"]
-                               |> get_stdout )
-                           ; tmp#append (str "'") ] )
-                   ; verbose_call [str "mv"; tmp#path; path] ])
+              ; say "Creating %s" [jpath]
+              ; write_stdout ~path:jpath
+                  (seq
+                     [ interpreter >> exec ["cat"]
+                     ; str " '" >> exec ["cat"]
+                     ; shell_command >> exec ["sed"; "s/'/'\\\\''/g"]
+                     ; str "'\n" >> exec ["cat"] ])
               ; say "Done." [] ] ) )
 end
 
@@ -833,11 +833,11 @@ module Example_script = struct
       ; call "config init"
       ; cmt "Let's configure a few jobs:"
       ; call
-          {sh|config addjob --name DMesg --no-log watch -c -d -n 30 dmesg|sh}
-      ; call {sh|config addjob --name Top --no-log top|sh}
+          {sh|config addjob --name DMesg --no-log -c "watch -c -d -n 30 'dmesg -P'"|sh}
+      ; call {sh|config addjob --name Top --no-log -c top|sh}
       ; call
-          "config addjob --name Dummy \\\n\
-           \    sh -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
+          "config addjob --name Dummy --interpreter 'bash -c' \\\n\
+           \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
       ; cmt "Show the updated configuration:"
       ; call "config show"
       ; cmt "Show the current status:"
