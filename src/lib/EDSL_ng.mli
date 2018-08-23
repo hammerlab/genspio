@@ -500,39 +500,77 @@ val on_stdin_lines : (str t -> unit t) -> unit t
     characters in the input lead to undefined behavior. *)
 
 val strs : string list -> str t list
+(** [strs] is simply just [List.map ~f:str]. *)
 
-val which_finds : string -> bool t
+val command_available : str t -> bool t
+(** Call ["command -v"] to know if an executable is in ["$PATH"] (note that
+    ["which"] is not POSIX, we use ["command -v ..."] which is
+    {{:http://pubs.opengroup.org/onlinepubs/009696899/utilities/command.html}expected}
+    to return a failure if the command is not found). *)
 
 val get_stdout_one_line :
   ?first_line:bool -> ?remove_spaces:bool -> unit t -> str t
+(** Get the output of a command as a string without new lines,
+potentially cutting at the first line:
+{[
+  get_stdout
+    ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
+    ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
+]}
+*)
 
 val verbose_call : ?prefix:string -> ?verbose:bool t -> str t list -> unit t
+(** Like {!call} but print on [stderr] the command being run. *)
 
 val check_sequence_with_output : unit t list -> unit t
+(** A shortcut for [check_sequence] with [~verbosity:`Output_all]
+    hence ignoring the “names” of the commands. *)
 
 val is_regular_file : str t -> bool t
+(** Call ["test -f ..."]. *)
 
 val is_directory : str t -> bool t
+(** Call ["test -d ..."]. *)
 
 val is_executable : str t -> bool t
+(** Call ["test -x ..."]. *)
 
 val is_readable : str t -> bool t
+(** Call ["test -r ..."]. *)
 
 val mkdir_p : str t -> unit t
+(** Call ["mkdir -p ..."]. *)
 
 val exit : int -> unit t
+(** Call ["exit ..."], warning: depending on the compiler, the call
+    maybe nested in various sub-shells, to really exit a script use
+    {!fail}. *)
 
 val home_path : unit -> str t
+(** The value of ["$HOME"]. *)
 
 val ( ^$^ ) : str t -> str t -> str t
+(** Concatenate two EDSL strings. *)
 
 val ( /// ) : str t -> str t -> str t
+(** [a /// b] is [a ^$^ str "/" ^$^ b]. *)
 
 val say : string -> str t list -> unit t
+(** [say fmt l] is a shortcut to call [eprintf (str fmt) l]. *)
 
 val ensure : string -> condition:bool t -> how:(string * unit t) list -> unit t
+(** Ensure a [condition]:
+
+- Test the condition.
+- If [true] do nothing, succeed
+- If [false], run [~how] with {!check_sequence}.
+- Test the condition again, if [true] succeed, if [false] fail.
+    
+Failures happen thanks to the !{fail} call.
+ *)
 
 val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
+(** Test a string or regular expression again the output of an expression. *)
 
 (** Make scripts that provide a ["--describe"] option/command. *)
 module Script_with_describe (P : sig
@@ -552,9 +590,11 @@ end) : sig
   val deal_with_describe : bool t -> unit t list -> unit t
 end
 
+(** Create a script that mostly behaves like ["git"], it concatenates
+    its name with its first argument to call ["${0}-${1}"]. *)
 module Dispatcher_script : sig
   val make :
-       ?aliases:(Genspio__Language.byte_array Genspio__Language.t * str t) list
+       ?aliases:(byte_array t * str t) list
     -> name:string
     -> description:string
     -> unit

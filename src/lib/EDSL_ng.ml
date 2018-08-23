@@ -430,7 +430,8 @@ let on_stdin_lines body =
     (exec ["read"; "-r"; fresh] |> succeeds)
     ~body:(seq [exec ["export"; fresh]; body (getenv (string fresh))])
 
-let which_finds executable = succeeds_silently (exec ["which"; executable])
+let command_available executable =
+  succeeds_silently (call [str "command"; str "-v"; executable])
 
 let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
   get_stdout
