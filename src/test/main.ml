@@ -1021,6 +1021,108 @@ let () =
                      |> Byte_array.to_c =$= string "01:02:03")
                ; return 42 ]) ]
 
+let () =
+  let tests =
+    [ exits 12 ~name:"edsl-ng-on-stdin-lines"
+        Genspio.EDSL_ng.(
+          let tmp1 = tmp_file "edsl-ng-on-stdin-lines-tmp1" in
+          let tmp2 = tmp_file "edsl-ng-on-stdin-lines-tmp2" in
+          let cmd = exec ["ls"; "/"] in
+          seq
+            [ write_stdout cmd ~path:tmp1#path
+            ; tmp2#set (str "")
+            ; cmd
+              ||> on_stdin_lines (fun line ->
+                      seq [tmp2#append line; tmp2#append (str "\n")] )
+            ; say "<<%s>> Vs <<%s>>" [tmp1#get; tmp2#get]
+            ; assert_or_fail "tmp1 = tmp2" Str.(tmp1#get =$= tmp2#get)
+            ; return 12 ])
+    ; exits 12 ~name:"edsl-ng-cmd-avail"
+        Genspio.EDSL_ng.(
+          seq
+            [ assert_or_fail "ls is there" (command_available (str "ls"))
+            ; assert_or_fail "lslslsls is not there"
+                (not (command_available (str "lslslsls")))
+            ; return 12 ])
+    ; exits 12 ~name:"edsl-ng-getout-1line"
+        Genspio.EDSL_ng.(
+          let make_test f input output =
+            assert_or_fail (sprintf "%S" output)
+              Str.(f (printf (str input) []) =$= str output)
+          in
+          seq
+            [ make_test get_stdout_one_line "one two\\nthree\\nfo ur"
+                "one twothreefo ur"
+            ; make_test get_stdout_one_line "one two\\n  three\\nfo ur"
+                "one two  threefo ur"
+            ; make_test
+                (get_stdout_one_line ~remove_spaces:true)
+                "one two\\n  three\\nfo ur" "onetwothreefour"
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:true)
+                "one two\\n  three\\nfo ur" "onetwo"
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:false)
+                "one two  \\n  three\\nfo ur" "one two  "
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:false)
+                "\\n  three\\nfo ur" ""
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:false)
+                "" ""
+            ; make_test
+                (get_stdout_one_line ~first_line:false ~remove_spaces:false)
+                "  " "  "
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:true)
+                "  \\nAA" ""
+            ; make_test
+                (get_stdout_one_line ~first_line:true ~remove_spaces:true)
+                "     " ""
+            ; return 12 ])
+    ; exits 12 ~name:"edsl-ng-is-stuff"
+        Genspio.EDSL_ng.(
+          let tmp = tmp_file "bouh" in
+          seq
+            [ tmp#set (str "")
+            ; assert_or_fail "is-reg" (is_regular_file tmp#path)
+            ; assert_or_fail "is-not-reg" (is_regular_file (str "/tmp") |> not)
+            ; assert_or_fail "is-not-dir" (is_directory tmp#path |> not)
+            ; assert_or_fail "is-dir" (is_directory (str "/tmp"))
+            ; assert_or_fail "is-not-exec" (is_executable tmp#path |> not)
+            ; verbose_call [str "chmod"; str "+x"; tmp#path]
+            ; assert_or_fail "is-exec" (is_executable tmp#path)
+            ; assert_or_fail "is-read" (is_readable tmp#path)
+            ; assert_or_fail "is-not-read"
+                (is_readable (str "/etc/shadow") |> not)
+            ; return 12 ])
+    ; exits 12 ~name:"edsl-ng-greps-to"
+        Genspio.EDSL_ng.(
+          let tst extended_re re pre does =
+            assert_or_fail
+              (sprintf "%s does %smatch %s (E: %b)" re
+                 (if does then "" else "not")
+                 pre extended_re)
+              ( greps_to ~extended_re (str re) (printf (str pre) [])
+              |> if does then fun e -> e else not )
+          in
+          let tn = tst false in
+          let te = tst true in
+          seq
+            [ tn "hello" "hello" true
+            ; te "hello" "hello" true
+            ; te "hello" "\\n ldje hello  dleijsd\\n" true
+            ; tn "helllo" "\\n ldje hello  dleijsd\\n" false
+            ; tn "hel\\*o" "\\n ldje hello  dleijsd\\n" false
+            ; te "hel\\*o" "\\n ldje hello  dleijsd\\n" false
+            ; tn "hel*o" "\\n ldje hello  dleijsd\\n" true
+            ; te "hel*o" "\\n ldje hello  dleijsd\\n" true
+            ; tn " hell?o " "\\n ldje hello  dleijsd\\n" false
+            ; te " hell?o " "\\n ldje hello  dleijsd\\n" true
+            ; return 12 ]) ]
+  in
+  add_tests (List.concat tests)
+
 let compilation_error_tests () =
   let results = ref [] in
   let test ?options e expect =
@@ -1091,6 +1193,7 @@ let () =
   let no_compilation_tests = ref false in
   let extra_slow_flow_tests = ref false in
   let extra_transform_cp_tests = ref false in
+  let filter_tests = ref None in
   let args =
     Arg.align
       [ ( "--important-shells"
@@ -1101,6 +1204,9 @@ let () =
              “important”\n\
              \t(default: '%s')."
             (String.concat ~sep:"," !important_shells) )
+      ; ( "--filter-tests"
+        , Arg.String (fun s -> filter_tests := Some s)
+        , "<match> Just keep the tests matching <match>" )
       ; ( "--no-compilation-tests"
         , Arg.Set no_compilation_tests
         , " Do not do the compilation tests." )
@@ -1123,7 +1229,22 @@ let () =
   in
   Option.iter path_opt ~f:(fun path ->
       let open Test in
-      let testlist = List.concat !tests in
+      let testlist =
+        List.concat !tests
+        |>
+        match !filter_tests with
+        | None -> fun e -> e
+        | Some s ->
+            let matches name = String.index_of_string name ~sub:s <> None in
+            fun tests ->
+              List.filter tests ~f:(function
+                | Tests.Test_lib.Test.Exits
+                    {no_trap; name; args; returns; script}
+                  when matches name ->
+                    true
+                | other -> false )
+      in
+      printf "Testlist: %d\n%!" (List.length testlist) ;
       let testdir =
         let tests =
           List.concat_map
