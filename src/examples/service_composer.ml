@@ -570,18 +570,19 @@ module Start_script = struct
                         [Environment.configuration_path env]
                     ; Screen.ensure_running env
                     ; Environment.on_jobs env (fun path ->
-                          let mk, mkpath =
-                            Job.run_script env (Job.name path)
-                          in
-                          seq
-                            [ mk
-                            ; Screen.call env
-                                [ str "-X"
-                                ; str "screen"
-                                ; str "-t"
-                                ; Screen.window_name @@ Job.name path
-                                ; str "sh"
-                                ; mkpath ] ] ) ]
+                          let name = Job.name path in
+                          if_then_else (Job.is_running env name)
+                            (say "Job '%s' is already running!" [name])
+                            (let mk, mkpath = Job.run_script env name in
+                             seq
+                               [ mk
+                               ; Screen.call env
+                                   [ str "-X"
+                                   ; str "screen"
+                                   ; str "-t"
+                                   ; Screen.window_name @@ Job.name path
+                                   ; str "sh"
+                                   ; mkpath ] ]) ) ]
                   ~e:[say "Starting job '%s' from %s" [dot_job name]]
               ; say "Done." [] ] ) )
 end
