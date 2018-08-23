@@ -594,7 +594,7 @@ end
     its name with its first argument to call ["${0}-${1}"]. *)
 module Dispatcher_script : sig
   val make :
-       ?aliases:(byte_array t * str t) list
+       ?aliases:(str t * str t) list
     -> name:string
     -> description:string
     -> unit
