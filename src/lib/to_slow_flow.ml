@@ -717,8 +717,9 @@ Extra tests which can be activated for debugging purposes (option
 *)
 let test () =
   let open Format in
-  let open EDSL in
+  let open Language.Construct in
   let exprs =
+    let printf c l = call ([c_string "printf"; c] @ l) in
     let one = seq [call [c_string "printf"; c_string "hello"]; nop] in
     let two = call [c_string "echo"; c_string "echo"] in
     let three = call [c_string "printf"; c_string " world"] in
@@ -727,97 +728,97 @@ let test () =
     ; call
         [ get_stdout two |> Byte_array.to_c_string
         ; get_stdout (seq [one; three]) |> Byte_array.to_c_string ]
-    ; if_seq
+    ; if_then_else
         Byte_array.(get_stdout one =$= byte_array "hello")
-        ~t:[one] ~e:[three]
+        one three
     ; loop_seq_while
         ((not (bool true)) ||| returns ~value:0 (exec ["ls"; "/crazypath"]))
         [three]
     ; seq
         [ with_redirections
-            (seq [exec ["ls"; "/crazypath"]; printf (string "HELLO") []])
-            [ to_file (int 1) (string "/tmp/testgenspio5")
+            (seq [exec ["ls"; "/crazypath"]; printf (c_string "HELLO") []])
+            [ to_file (int 1) (c_string "/tmp/testgenspio5")
             ; to_fd (int 2) (int 1) ]
-        ; printf (string "NOW CAT:\\n") []
+        ; printf (c_string "NOW CAT:\\n") []
         ; exec ["cat"; "/tmp/testgenspio5"] ]
     ; seq
         [ write_output
-            ~stderr:(string "/tmp/testgenspio6-err")
+            ~stderr:(c_string "/tmp/testgenspio6-err")
             ~return_value:
               ( get_stdout (exec ["printf"; "/tmp/testgenspio6-ret"])
               |> Byte_array.to_c )
             (seq
-               [printf (string "hello test 6\n") []; exec ["ls"; "/crazypath"]])
+               [printf (c_string "hello test 6\n") []; exec ["ls"; "/crazypath"]])
         ; printf
-            (string "ERR: <<%s>>\\nRET: <<%s>>\\n")
+            (c_string "ERR: <<%s>>\\nRET: <<%s>>\\n")
             [ get_stdout (exec ["cat"; "/tmp/testgenspio6-err"])
               |> Byte_array.to_c
             ; get_stdout (exec ["cat"; "/tmp/testgenspio6-ret"])
               |> Byte_array.to_c ] ]
     ; seq
         [ write_output
-            ~stdout:(string "/tmp/testgenspio-7-out")
-            (printf (string "s:%s:")
+            ~stdout:(c_string "/tmp/testgenspio-7-out")
+            (printf (c_string "s:%s:")
                [ C_string.concat_elist
-                   (Elist.make [string "hello"; string " "; string "world"]) ])
-        ; if_seq
+                   (Elist.make [c_string "hello"; c_string " "; c_string "world"]) ])
+        ; if_then_else
             Byte_array.(
               get_stdout (exec ["cat"; "/tmp/testgenspio-7-out"])
               =$= byte_array "s:hello world:")
-            ~t:[printf (string "SUCCESS\\n") []]
-            ~e:[printf (string "FAILURE\\n") []] ]
-    ; printf (string "`%s`")
+            (printf (c_string "SUCCESS\\n") [])
+            (printf (c_string "FAILURE\\n") []) ]
+    ; printf (c_string "`%s`")
         [ C_string.concat_elist
             Elist.(
               append
-                (make [string "hel"; string "lo"])
+                (make [c_string "hel"; c_string "lo"])
                 (append
-                   (make [string " "; string "w"])
-                   (make [string "orl"; string "d"]))) ]
+                   (make [c_string " "; c_string "w"])
+                   (make [c_string "orl"; c_string "d"]))) ]
     ; Elist.(
         iter
           (make
              [ int 1
              ; int 2
              ; Integer.(int 1 + int 2)
-             ; Integer.(int 1 + int 1 + of_string (string "2")) ])
+             ; Integer.(int 1 + int 1 + of_string (c_string "2")) ])
           ~f:(fun item ->
-            printf (string "> %d\\n") [Integer.to_string (item ())] ))
+            printf (c_string "> %d\\n") [Integer.to_string (item ())] ))
     ; if_then_else
         Integer.(
-          int 1 + int 1 + of_string (string "2")
+          int 1 + int 1 + of_string (c_string "2")
           = int 4
           &&& (int 2 * int 2 = int 8 / int 2))
-        (printf (string "SUCCESS\\n") [])
-        (printf (string "FAILURE\\n") [])
+        (printf (c_string "SUCCESS\\n") [])
+        (printf (c_string "FAILURE\\n") [])
     ; byte_array "Hello World" >> exec ["cat"]
     ; pipe
-        [ printf (string "HELLX_WXRLD") []
+        [ printf (c_string "HELLX_WXRLD") []
         ; exec ["sed"; "s/_/ /g"]
         ; exec ["tr"; "X"; "O"] ]
     ; printf
-        (string "HOME: '%s'\\nPWD: '%s'")
-        [ getenv (string "HOME")
-        ; getenv (C_string.concat_list [string "P"; string "W"; string "D"]) ]
+        (c_string "HOME: '%s'\\nPWD: '%s'")
+        [ getenv (c_string "HOME")
+        ; getenv (C_string.concat_list [c_string "P"; c_string "W"; c_string "D"]) ]
     ; seq
         [ setenv
-            (C_string.concat_list [string "A"; string "A"; string "A"])
+            (C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
             (get_stdout (exec ["echo"; "HELLO WORLD"]) |> Byte_array.to_c)
         ; "Calling a sub-shell with `sh`,\nit should display HELLO WORLD"
           %%% exec ["sh"; "-c"; "echo \"$AAA\""] ]
-    ; seq [printf (string "Returns 77?\\n") []; fail "Should fail indeed"]
+    ; seq [printf (c_string "Returns 77?\\n") []; fail "Should fail indeed"]
     ; if_then_else
         (Bool.to_string (bool true) |> Bool.of_string)
-        (printf (string "SUCESSSSS\\n") [])
-        (printf (string "FAIL FAIL FAIL\\n") [])
-    ; (let var = string "AAA" in
-       let v1 = string "V1" in
-       let v2 = string "V2" in
+        (printf (c_string "SUCESSSSS\\n") [])
+        (printf (c_string "FAIL FAIL FAIL\\n") [])
+    ; (let var = c_string "AAA" in
+       let v1 = c_string "V1" in
+       let v2 = c_string "V2" in
        seq
          [ setenv var v1
          ; loop_seq_while
              C_string.(getenv var =$= v1)
-             [printf (string "Iteration\\n") []; setenv var v2] ]) ]
+             [printf (c_string "Iteration\\n") []; setenv var v2] ]) ]
   in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in

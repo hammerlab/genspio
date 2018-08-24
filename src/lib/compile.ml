@@ -5,17 +5,19 @@ type 'a t = 'a Language.t
 let default_max_argument_length = Some 100_000
 
 module To_posix = struct
-  type internal_error_details = Language.internal_error_details =
+  open Standard_compiler
+
+  type internal_error_details = Standard_compiler.internal_error_details =
     {variable: string; content: string; code: string}
 
-  type death_message = Language.death_message =
+  type death_message = Standard_compiler.death_message =
     | User of string
     | C_string_failure of internal_error_details
     | String_to_int_failure of internal_error_details
 
   type death_function = comment_stack:string list -> death_message -> string
 
-  type compilation_error = Language.compilation_error =
+  type compilation_error = Standard_compiler.compilation_error =
     { error:
         [ `No_fail_configured of death_message (* Argument of fail *)
         | `Max_argument_length of string (* Incriminated argument *)
@@ -23,7 +25,7 @@ module To_posix = struct
     ; code: string option
     ; comment_backtrace: string list }
 
-  let pp_error = Language.pp_error
+  let pp_error = Standard_compiler.pp_error
 
   let error_to_string = Format.asprintf "%a" pp_error
 
@@ -42,7 +44,7 @@ module To_posix = struct
     let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
     let msg_str =
       Format.asprintf "@[Error:@ @[%a@]%a@]"
-        (Language.pp_death_message ~style:`User ~big_string)
+        (Standard_compiler.pp_death_message ~style:`User ~big_string)
         msg
         (fun fmt () ->
           match comment_stack with
@@ -68,7 +70,7 @@ module To_posix = struct
 
   let default_options = one_liner
 
-  let string_exn ?(options= default_options) term =
+  let string_exn ?(options = default_options) term =
     let statement_separator =
       match options.style with `Multi_line -> "\n" | `One_liner -> " ; "
     in
@@ -95,19 +97,17 @@ module To_posix = struct
   let string ?options term =
     match string_exn ?options term with
     | s -> Ok s
-    | exception Language.Compilation ce -> Error ce
+    | exception Standard_compiler.Compilation ce -> Error ce
 end
 
 module To_slow_flow = struct
-
-  module Script= To_slow_flow.Script
+  module Script = To_slow_flow.Script
 
   let compile = To_slow_flow.compile
-
 end
 
-let to_legacy style ?(max_argument_length= default_max_argument_length)
-    ?(no_trap= false) e =
+let to_legacy style ?(max_argument_length = default_max_argument_length)
+    ?(no_trap = false) e =
   To_posix.string e
     ~options:
       { style

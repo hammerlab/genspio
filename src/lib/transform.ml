@@ -276,7 +276,7 @@ side-effectful).
       method c_string_concat l =
         let gl = self#expression l in
         match gl with
-        | List [] -> EDSL.c_string ""
+        | List [] -> Construct.c_string ""
         | List more -> (
             let build =
               List.fold more ~init:[] ~f:(fun prev item ->
@@ -301,7 +301,7 @@ side-effectful).
       method byte_array_concat l =
         let gl = self#expression l in
         match gl with
-        | List [] -> EDSL.byte_array ""
+        | List [] -> Construct.byte_array ""
         | List more -> (
             let build =
               List.fold more ~init:[] ~f:(fun prev item ->
@@ -389,31 +389,31 @@ side-effectful).
             (!count, name, Forget e, Forget res, Forget p) :: !failures
     in
     check "no-op" No_op No_op ;
-    check "some bool" EDSL.(bool true &&& bool false) EDSL.(bool false) ;
-    check "some bool" EDSL.(bool false ||| bool true) EDSL.(bool true) ;
+    check "some bool" Construct.(bool true &&& bool false) Construct.(bool false) ;
+    check "some bool" Construct.(bool false ||| bool true) Construct.(bool true) ;
     check "some bool and string"
-      EDSL.(
+      Construct.(
         if_then_else
           (not
              ( bool false
              ||| Byte_array.(byte_array "bouh" =$= byte_array "bah") ))
           (fail "then") (fail "else"))
-      EDSL.(fail "then") ;
-    check "seq []" EDSL.(seq []) EDSL.(nop) ;
-    check "seq [nops]" EDSL.(seq [seq []; seq [seq []]]) EDSL.(nop) ;
+      Construct.(fail "then") ;
+    check "seq []" Construct.(seq []) Construct.(nop) ;
+    check "seq [nops]" Construct.(seq [seq []; seq [seq []]]) Construct.(nop) ;
     check "seq [one-thing]"
-      EDSL.(seq [seq [nop]; seq [seq [fail "bouh"]]])
-      EDSL.(fail "bouh") ;
-    let e n = EDSL.exec [Int.to_string n] in
+      Construct.(seq [seq [nop]; seq [seq [fail "bouh"]]])
+      Construct.(fail "bouh") ;
+    let e n = Construct.exec [Int.to_string n] in
     check "pipes"
-      EDSL.(e 1 ||> e 2 ||> e 3 ||> e 4)
-      EDSL.(pipe [e 1; e 2; e 3; e 4]) ;
+      Construct.(e 1 ||> e 2 ||> e 3 ||> e 4)
+      Construct.(pipe [e 1; e 2; e 3; e 4]) ;
     check "concat one-two"
-      EDSL.(C_string.concat_list [string "one"; string "-"; string "two"])
-      EDSL.(string "one-two") ;
-    let s n = EDSL.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
+      Construct.(C_string.concat_list [string "one"; string "-"; string "two"])
+      Construct.(string "one-two") ;
+    let s n = Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
     check "concat one-two"
-      EDSL.(
+      Construct.(
         C_string.concat_list
           [ string "before"
           ; s 0
@@ -422,15 +422,15 @@ side-effectful).
           ; string "two"
           ; s 1
           ; string "" ])
-      EDSL.(C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
+      Construct.(C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
     check "list-append"
-      EDSL.(
+      Construct.(
         Elist.append
           (Elist.append (Elist.make []) (Elist.make [s 0; s 1]))
           (Elist.make [s 2]))
-      EDSL.(Elist.make [s 0; s 1; s 2]) ;
+      Construct.(Elist.make [s 0; s 1; s 2]) ;
     let make_deep expr =
-      EDSL.(
+      Construct.(
         seq
           [ e 42
           ; loop_seq_while
@@ -439,11 +439,11 @@ side-effectful).
           ])
     in
     check "deep1"
-      EDSL.(make_deep Integer.(to_string (int 1 + int 0)))
-      EDSL.(make_deep Integer.(to_string (int 1))) ;
+      Construct.(make_deep Integer.(to_string (int 1 + int 0)))
+      Construct.(make_deep Integer.(to_string (int 1))) ;
     check "deep int comparison"
-      EDSL.(make_deep Integer.(int 42 > int 44 |> Bool.to_string))
-      EDSL.(make_deep (bool false |> Bool.to_string)) ;
+      Construct.(make_deep Integer.(int 42 > int 44 |> Bool.to_string))
+      Construct.(make_deep (bool false |> Bool.to_string)) ;
     match !failures with
     | [] -> ()
     | more ->

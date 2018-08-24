@@ -18,7 +18,7 @@ val to_one_line_hum : 'a EDSL.t -> string
 module To_posix : sig
   (** When a compiled script runs into an error, these details are
       accessible to the user.  *)
-  type internal_error_details = Language.internal_error_details =
+  type internal_error_details = Standard_compiler.internal_error_details =
     { variable: string
           (** The incriminated issue was stored in a shell variable. *)
     ; content: string  (** The shell-code that produced the [variable]. *)
@@ -26,7 +26,7 @@ module To_posix : sig
 
   (** The kinds of messages that can be output or stored before
       exiting a script. *)
-  type death_message = Language.death_message =
+  type death_message = Standard_compiler.death_message =
     | User of string
         (** The argument of the {!EDSL.fail} is the “user” case. *)
     | C_string_failure of internal_error_details
@@ -41,7 +41,7 @@ module To_posix : sig
   type death_function = comment_stack:string list -> death_message -> string
 
   (** The potential compilation error. *)
-  type compilation_error = Language.compilation_error =
+  type compilation_error = Standard_compiler.compilation_error =
     { error:
         [ `No_fail_configured of death_message
           (** Argument of the
