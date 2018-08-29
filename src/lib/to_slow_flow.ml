@@ -173,10 +173,6 @@ In that case, we compare the octal representations.
 
   let assert_unit s = assert (s.result = Unit)
 
-  let get_file_exn script =
-    (* `sl_script`'s result is a file containing a sequence of file paths *)
-    match script.result with File s -> s | _ -> assert false
-
   let redirect ~stdout block =
     { stdout with
       commands= stdout.commands @ [Redirect {block; stdout= stdout.result}] }
