@@ -51,6 +51,7 @@ module Script = struct
     | While of {condition: string; block: command list}
     | Sub_shell of command list
     (* As is in `( ... ; )` in POSIX shells. *)
+    | Make_directory of string
     | Pipe of {blocks: command list list}
 
   and compiled_value =
@@ -130,6 +131,7 @@ In that case, we compare the octal representations.
  *)
   let pp fmt script =
     let open Format in
+    let mkdir_done = ref [] in
     let rec pp_command fmt = function
       | Raw s -> fprintf fmt "%s" s
       | Comment s ->
@@ -150,6 +152,10 @@ In that case, we compare the octal representations.
           fprintf fmt "%a"
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " | ") pp_block)
             blocks
+      | Make_directory f when List.mem ~set:!mkdir_done f -> ()
+      | Make_directory f ->
+          mkdir_done := f :: !mkdir_done ;
+          fprintf fmt "mkdir -p %s" f
     and pp_command_list fmt =
       pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@\n") pp_command fmt
     and pp_block fmt = fprintf fmt "{\n%a\n}" pp_command_list in
@@ -164,6 +170,8 @@ In that case, we compare the octal representations.
       script.result
 
   let rawf fmt = ksprintf (fun s -> Raw s) fmt
+
+  let cmtf fmt = ksprintf (fun s -> Comment s) fmt
 
   let make commands result = {commands; result}
 
@@ -181,13 +189,26 @@ In that case, we compare the octal representations.
 
   let var_name ?expression ?script tag =
     incr m ;
-    sprintf "genspio_%s_%d_%d_%s" tag (Random.int 100_000_000) !m
+    let stag = String.map tag ~f:(function '-' -> '_' | a -> a) in
+    sprintf "genspio_%s_%d_%d_%s" stag (Random.int 100_000_000) !m
       ( Marshal.to_string (expression, script) [Marshal.Closures]
       |> Digest.string |> Digest.to_hex )
 
+  let direct_file_paths = ref false
+
   let mktmp ~tmpdir ?expression ?script tag =
-    let f = sprintf "%s/%s" tmpdir (var_name ?expression ?script tag) in
-    make [rawf ": Making file %s" f] (File f)
+    if !direct_file_paths then
+      let f = sprintf "%s/%s" tmpdir (var_name ?expression ?script tag) in
+      make [rawf ": Making file %s" f] (File f)
+    else
+      let v = var_name ?expression ?script tag in
+      (* let f = sprintf "%s/%s" tmpdir () in *)
+      let dir = sprintf "\"${TMPDIR:-%s}\"" tmpdir in
+      make
+        [ cmtf "Making file %s" v
+        ; Make_directory dir
+        ; rawf "%s=%s/tmp-%s" v dir v ]
+        (File_in_variable v)
 
   let with_tmp ~tmpdir ?expression ?script tag f =
     let tmp = mktmp ~tmpdir ?expression ?script tag in
@@ -698,10 +719,7 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
   let open Script in
   let tmpdir =
     match tmp_dir_path with
-    | `Fresh ->
-        Filename.concat
-          (try Sys.getenv "TMPDIR" with _ -> "/tmp")
-          (var_name ~expression:expr "tmpdir")
+    | `Fresh -> Filename.concat "/tmp" (var_name ~expression:expr "tmpdir")
     | `Use p -> p
   in
   let pid = var_name ~expression:expr "script_pid" in
@@ -709,7 +727,6 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
   let tmparg = to_path_argument tmp.result in
   let before =
     [ rawf "export %s=$$" pid
-    ; rawf "mkdir -p %s" (Filename.quote tmpdir)
     ; ( match trap with
       | `None -> rawf ": No TRAP"
       | `Exit_with v ->
