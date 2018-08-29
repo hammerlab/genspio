@@ -49,14 +49,15 @@ module Script = struct
         ; block_then: command list
         ; block_else: command list }
     | While of {condition: string; block: command list}
-    | Sub_shell of command list (* As is in `( ... ; )` in POSIX shells. *)
+    | Sub_shell of command list
+    (* As is in `( ... ; )` in POSIX shells. *)
     | Pipe of {blocks: command list list}
 
   type compiled_value =
     | Unit
     | Literal_value of string
     | File of string
-    | File_in_variable of string (** File-path contained in variable. *)
+    | File_in_variable of string  (** File-path contained in variable. *)
     | Raw_inline of string
 
   type t = {commands: command list; result: compiled_value}
@@ -89,7 +90,8 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
         if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
     | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
-(*md
+
+  (*md
   
 There are special cases where `to_argument` does not work with
 arbitrary content: when we need to compare strings with
@@ -163,7 +165,31 @@ In that case, we compare the octal representations.
 
   let assert_unit s = assert (s.result = Unit)
 
-  let redirect ~stdout block = make [Redirect {block; stdout}] (File stdout)
+  let get_file_exn script =
+    (* `sl_script`'s result is a file containing a sequence of file paths *)
+    match script.result with File s -> s | _ -> assert false
+
+  let redirect ~stdout block =
+    { stdout with
+      commands=
+        stdout.commands @ [Redirect {block; stdout= get_file_exn stdout}] }
+
+  let m = ref 0
+
+  let var_name ?expression ?script tag =
+    incr m ;
+    sprintf "genspio_%s_%d_%d_%s" tag (Random.int 100_000_000) !m
+      ( Marshal.to_string (expression, script) [Marshal.Closures]
+      |> Digest.string |> Digest.to_hex )
+
+  let mktmp ~tmpdir ?expression ?script tag =
+    let f = sprintf "%s/%s" tmpdir (var_name ?expression ?script tag) in
+    make [] (File f)
+
+  let with_tmp ~tmpdir ?expression ?script tag f =
+    let tmp = mktmp ~tmpdir ?expression ?script tag in
+    let cmds = f tmp in
+    make (tmp.commands @ cmds) tmp.result
 
   let if_then_else cond t e =
     assert_unit t ;
@@ -179,6 +205,7 @@ In that case, we compare the octal representations.
   let bool_to_file b tmp = [rawf "printf %b > %s" b (Filename.quote tmp)]
 
   let bool_not ~tmp {commands; result} =
+    let tmparg = get_file_exn tmp in
     let r, morecmds =
       match result with
       | Unit -> assert false
@@ -188,35 +215,40 @@ In that case, we compare the octal representations.
           (Literal_value s, []) (* This should just be an error later *)
       | Raw_inline s -> (Raw_inline (sprintf "! %s" s), [])
       | File _ as p ->
-          ( File tmp
-          , [ If_then_else
-                { condition= to_argument p
-                ; block_then= bool_to_file false tmp
-                ; block_else= bool_to_file true tmp } ] )
+          ( tmp.result
+          , tmp.commands
+            @ [ If_then_else
+                  { condition= to_argument p
+                  ; block_then= bool_to_file false tmparg
+                  ; block_else= bool_to_file true tmparg } ] )
       | File_in_variable _ as p ->
-          ( File tmp
-          , [ If_then_else
-                { condition= to_argument p
-                ; block_then= bool_to_file false tmp
-                ; block_else= bool_to_file true tmp } ] )
+          ( tmp.result
+          , tmp.commands
+            @ [ If_then_else
+                  { condition= to_argument p
+                  ; block_then= bool_to_file false tmparg
+                  ; block_else= bool_to_file true tmparg } ] )
     in
     {commands= commands @ morecmds; result= r}
 
   let return_value_to_bool ~tmp {commands; result} v =
-    { commands=
+    let tmpfile = get_file_exn tmp in
+    { tmp with
+      commands=
         commands
         @ [ If_then_else
               { condition= sprintf " [ $? -eq %d ]" v
-              ; block_then= bool_to_file true tmp
-              ; block_else= bool_to_file false tmp } ]
-    ; result= File tmp }
+              ; block_then= bool_to_file true tmpfile
+              ; block_else= bool_to_file false tmpfile } ] }
 
   let make_bool ~condition ~tmp commands =
-    let block_then = bool_to_file true tmp in
-    let block_else = bool_to_file false tmp in
-    make
-      (commands @ [If_then_else {condition; block_then; block_else}])
-      (File tmp)
+    let tmpfile = get_file_exn tmp in
+    let block_then = bool_to_file true tmpfile in
+    let block_else = bool_to_file false tmpfile in
+    { tmp with
+      commands=
+        tmp.commands @ commands
+        @ [If_then_else {condition; block_then; block_else}] }
 
   let while_loop cond body =
     unit
@@ -224,22 +256,12 @@ In that case, we compare the octal representations.
       @ [ While
             { condition= to_argument cond.result
             ; block=
-                body.commands
-                @ cond.commands (* We need re-evaluate the condition *) } ] )
+                body.commands @ cond.commands
+                (* We need re-evaluate the condition *) } ] )
 
   let sub_shell ~pre l = unit @@ pre @ [Sub_shell l]
 end
 
-let m = ref 0
-
-let var_name ?expression ?script tag =
-  incr m ;
-  sprintf "genspio_%s_%d_%d_%s" tag (Random.int 100_000_000) !m
-    ( Marshal.to_string (expression, script) [Marshal.Closures]
-    |> Digest.string |> Digest.to_hex )
-
-let tmp_path ~tmpdir ?expression ?script tag =
-  sprintf "%s/%s" tmpdir (var_name ?expression ?script tag)
 
 type Language.raw_command_annotation += Cat_variable of string
 
@@ -252,40 +274,38 @@ representation.
 let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
  fun ~fail_commands ~tmpdir e ->
   let continue : type a. a t -> _ = fun x -> to_ir ~fail_commands ~tmpdir x in
-  let get_file_exn script =
-    let open Script in
-    (* `sl_script`'s result is a file containing a sequence of file paths *)
-    match script.result with File s -> s | _ -> assert false
-  in
   let concat_string_list sl_script =
     let open Script in
     let list_file = get_file_exn sl_script in
-    let tmp = tmp_path ~tmpdir ~expression:e "c-string-concat" in
+    let tmp = mktmp ~tmpdir ~expression:e "c-string-concat" in
+    let tmppath = get_file_exn tmp in
     let file_var = var_name ~expression:e "list_item" in
     let loop =
       [ rawf
           ": concat_string_list ; rm -f %s ; touch %s ; for %s in $(cat %s) ; \
            do cat ${%s} >> %s\n\
            done"
-          (Filename.quote tmp) (Filename.quote tmp) file_var
-          (Filename.quote list_file) file_var (Filename.quote tmp) ]
+          (Filename.quote tmppath) (Filename.quote tmppath) file_var
+          (Filename.quote list_file) file_var (Filename.quote tmppath) ]
     in
-    make (sl_script.commands @ loop) (File tmp)
+    make (tmp.commands @ sl_script.commands @ loop) tmp.result
   in
   let result_to_file s =
     let open Script in
-    let tmp = tmp_path ~tmpdir ~expression:e ~script:s "result-to-file" in
-    let tmparg = Filename.quote tmp in
+    (* let tmp = tmp_path ~tmpdir ~expression:e ~script:s "result-to-file" in *)
+    let tmp = mktmp ~tmpdir ~expression:e "c-string-concat" in
+    let tmparg = Filename.quote (get_file_exn tmp) in
+    let mk (cmd, res) = Script.make (res.commands @ [cmd]) res.result in
     match s.result with
-    | Unit -> (rawf "echo '' > %s" tmparg, tmp)
+    | Unit -> mk (rawf "echo '' > %s" tmparg, tmp)
     | Literal_value v when String.exists v ~f:(( = ) '\x00') ->
         let esc = string_to_octal v ~prefix:"\\" in
-        (rawf "printf -- '%s' > %s" esc tmparg, tmp)
+        mk (rawf "printf -- '%s' > %s" esc tmparg, tmp)
     | Literal_value v ->
-        (rawf "printf -- '%%s' %s > %s" (Filename.quote v) tmparg, tmp)
-    | File p -> (rawf ":", p)
-    | File_in_variable p -> (rawf "cp \"${%s}\" %s" p tmp, tmp)
-    | Raw_inline s -> (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
+        mk (rawf "printf -- '%%s' %s > %s" (Filename.quote v) tmparg, tmp)
+    | File p -> mk (rawf ":", make [] (File p))
+    | File_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
+    | Raw_inline s -> mk (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
   in
   match e with
   | Exec l ->
@@ -333,7 +353,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
   | C_string_to_byte_array c -> continue c
   | Returns {expr; value} ->
       let es = continue expr in
-      let tmp = tmp_path ~tmpdir ~expression:e "returns" in
+      let tmp = Script.mktmp ~tmpdir ~expression:e "returns" in
       Script.return_value_to_bool ~tmp es value
   | Bool_operator (a, op, b) ->
       let asc = continue a in
@@ -344,7 +364,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
         sprintf "{ %s %s %s ; }" (to_argument asc.result) ops
           (to_argument bsc.result)
       in
-      let tmp = tmp_path ~tmpdir ~expression:e "boolop" in
+      let tmp = mktmp ~tmpdir ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
   | String_operator (a, op, b) ->
       let asc = continue a in
@@ -355,7 +375,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
         sprintf "[ \"%s\" %s \"%s\" ]" (to_ascii asc.result) ops
           (to_ascii bsc.result)
       in
-      let tmp = tmp_path ~tmpdir ~expression:e "boolop" in
+      let tmp = mktmp ~tmpdir ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
   | No_op -> Script.unit [Raw ":"]
   | If (c, t, e) ->
@@ -377,7 +397,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       in
       Script.unit cmds
   | Not t ->
-      Script.bool_not ~tmp:(tmp_path ~tmpdir ~expression:e "not") (continue t)
+      Script.bool_not
+        ~tmp:(Script.mktmp ~tmpdir ~expression:e "not")
+        (continue t)
   | Redirect_output (unit_t, redirections) ->
       let pre_commands, sub_shell_commands =
         let open Script in
@@ -436,11 +458,12 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
           | String s -> s
           | Bool s -> string_of_bool s)
   | Output_as_string e ->
+      let open Script in
       let ir = continue e in
-      let cmds = Script.commands ir in
-      Script.assert_unit ir ;
-      let stdout = tmp_path ~tmpdir ~expression:e "out2str" in
-      Script.redirect cmds ~stdout
+      let cmds = commands ir in
+      assert_unit ir ;
+      let stdout = mktmp ~tmpdir ~expression:e "out2str" in
+      redirect cmds ~stdout
   | Int_to_string i -> continue i
   | String_to_int s ->
       let open Script in
@@ -459,14 +482,15 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
   | Bool_to_string b ->
       let open Script in
       let bs = continue b in
-      let tmp = tmp_path ~tmpdir ~expression:e "bool-to-string" in
-      let extra =
-        If_then_else
-          { condition= to_argument bs.result
-          ; block_then= [rawf "printf true > %s" (Filename.quote tmp)]
-          ; block_else= [rawf "printf false > %s" (Filename.quote tmp)] }
-      in
-      make (bs.commands @ [extra]) (File tmp)
+      with_tmp ~tmpdir ~expression:e "bool-to-string" (fun tmp ->
+          let tmparg = Filename.quote (get_file_exn tmp) in
+          let extra =
+            If_then_else
+              { condition= to_argument bs.result
+              ; block_then= [rawf "printf true > %s" tmparg]
+              ; block_else= [rawf "printf false > %s" tmparg] }
+          in
+          bs.commands @ [extra] )
   | String_to_bool s ->
       let scr = continue s in
       let extra_check =
@@ -486,53 +510,53 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       Script.make (scr.commands @ check.commands) scr.result
   | List l ->
       let scripts = List.map ~f:continue l in
-      let tmp = tmp_path ~tmpdir ~expression:e "list-make" in
-      let echos =
-        let open Script in
-        rawf "rm -f %s" (Filename.quote tmp)
-        ::
-        ( match scripts with
-        | [] -> [rawf "touch %s" (Filename.quote tmp)]
-        | _ ->
-            List.concat_map scripts ~f:(fun s ->
-                let echo, file = result_to_file s in
-                [ echo
-                ; rawf "echo %s >> %s" (Filename.quote file)
-                    (Filename.quote tmp) ] ) )
-      in
-      Script.make
-        (List.concat_map scripts ~f:(fun c -> c.commands) @ echos)
-        (Script.File tmp)
+      let open Script in
+      with_tmp ~tmpdir ~expression:e "list-make" (fun tmp ->
+          let tmparg = Filename.quote (get_file_exn tmp) in
+          let echos =
+            let open Script in
+            rawf "rm -f %s" tmparg
+            ::
+            ( match scripts with
+            | [] -> [rawf "touch %s" tmparg]
+            | _ ->
+                List.concat_map scripts ~f:(fun s ->
+                    let as_file = result_to_file s in
+                    let as_arg = get_file_exn as_file in
+                    as_file.commands @ [rawf "echo %s >> %s" as_arg tmparg] )
+            )
+          in
+          List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
   | List_to_string (l, f) -> continue l
   | String_to_list (s, f) -> (
       let str_script = continue s in
       let open Script in
       match str_script.result with
       | File flist ->
-          let tmp = tmp_path ~tmpdir ~expression:e "list-copy" in
-          (* let tmpfamily = tmp_path ~tmpdir ~expression:e "list-copy-family" in *)
-          let copy =
-            let posixish_hash path =
-              sprintf
-                "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')" path
-                path
-              (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
-            in
-            let file_var = var_name ~expression:e "list_copy" in
-            rawf
-              "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
-               {\n  \
-               tag=%s\n               \
-               cp ${%s} ${%s}-$tag \n\
-               echo ${%s}-$tag >> %s \n\
-               }\n\
-               done"
-              (Filename.quote tmp) (Filename.quote tmp) file_var
-              (Filename.quote flist)
-              (posixish_hash @@ sprintf "${%s}" file_var)
-              file_var file_var file_var (Filename.quote tmp)
-          in
-          make (str_script.commands @ [copy]) (File tmp)
+          with_tmp ~tmpdir ~expression:e "list-copy" (fun tmp ->
+              (* let tmpfamily = tmp_path ~tmpdir ~expression:e "list-copy-family" in *)
+              let copy =
+                let posixish_hash path =
+                  sprintf
+                    "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')"
+                    path path
+                  (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
+                in
+                let file_var = var_name ~expression:e "list_copy" in
+                let tmparg = Filename.quote (get_file_exn tmp) in
+                rawf
+                  "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
+                   {\n  \
+                   tag=%s\n               \
+                   cp ${%s} ${%s}-$tag \n\
+                   echo ${%s}-$tag >> %s \n\
+                   }\n\
+                   done"
+                  tmparg tmparg file_var (Filename.quote flist)
+                  (posixish_hash @@ sprintf "${%s}" file_var)
+                  file_var file_var file_var tmparg
+              in
+              str_script.commands @ [copy] )
       | other -> assert false )
   | C_string_concat sl ->
       let sl_script = continue sl in
@@ -544,14 +568,14 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let open Script in
       let a_script = continue la in
       let b_script = continue lb in
-      let tmp = tmp_path ~tmpdir ~expression:e "list-append" in
-      let cat =
-        rawf "cat %s %s > %s"
-          (get_file_exn a_script |> Filename.quote)
-          (get_file_exn b_script |> Filename.quote)
-          (Filename.quote tmp)
-      in
-      make (a_script.commands @ b_script.commands @ [cat]) (File tmp)
+      with_tmp ~tmpdir ~expression:e "list-append" (fun tmp ->
+          let cat =
+            rawf "cat %s %s > %s"
+              (get_file_exn a_script |> Filename.quote)
+              (get_file_exn b_script |> Filename.quote)
+              (Filename.quote (get_file_exn tmp))
+          in
+          a_script.commands @ b_script.commands @ [cat] )
   | List_iter (l, f) ->
       let open Script in
       let l_script = continue l in
@@ -577,53 +601,53 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let open Script in
       let a_script = continue ia in
       let b_script = continue ib in
-      let tmp = tmp_path ~tmpdir ~expression:e "list-append" in
-      let compute =
-        rawf "printf -- \"$(( %s %s %s ))\" > %s"
-          (to_argument ~arithmetic:true a_script.result)
-          ( match op with
-          | `Div -> "/"
-          | `Minus -> "-"
-          | `Mult -> "*"
-          | `Plus -> "+"
-          | `Mod -> "%" )
-          (to_argument ~arithmetic:true b_script.result)
-          (Filename.quote tmp)
-      in
-      make (a_script.commands @ b_script.commands @ [compute]) (File tmp)
+      with_tmp ~tmpdir ~expression:e "list-append" (fun tmp ->
+          let compute =
+            rawf "printf -- \"$(( %s %s %s ))\" > %s"
+              (to_argument ~arithmetic:true a_script.result)
+              ( match op with
+              | `Div -> "/"
+              | `Minus -> "-"
+              | `Mult -> "*"
+              | `Plus -> "+"
+              | `Mod -> "%" )
+              (to_argument ~arithmetic:true b_script.result)
+              (Filename.quote (get_file_exn tmp))
+          in
+          a_script.commands @ b_script.commands @ [compute] )
   | Int_bin_comparison (ia, op, ib) ->
       let open Script in
       let a_script = continue ia in
       let b_script = continue ib in
-      let tmp = tmp_path ~tmpdir ~expression:e "int-bin-comparison" in
-      let compute =
-        rawf
-          "{ if [ %s %s %s ] ; then printf true ; else printf false ; fi ; } \
-           > %s"
-          (to_argument a_script.result)
-          ( match op with
-          | `Eq -> "-eq"
-          | `Ge -> "-ge"
-          | `Gt -> "-gt"
-          | `Le -> "-le"
-          | `Lt -> "-lt"
-          | `Ne -> "-ne" )
-          (to_argument b_script.result)
-          (Filename.quote tmp)
-      in
-      make (a_script.commands @ b_script.commands @ [compute]) (File tmp)
+      with_tmp ~tmpdir ~expression:e "int-bin-comparison" (fun tmp ->
+          let compute =
+            rawf
+              "{ if [ %s %s %s ] ; then printf true ; else printf false ; fi \
+               ; } > %s"
+              (to_argument a_script.result)
+              ( match op with
+              | `Eq -> "-eq"
+              | `Ge -> "-ge"
+              | `Gt -> "-gt"
+              | `Le -> "-le"
+              | `Lt -> "-lt"
+              | `Ne -> "-ne" )
+              (to_argument b_script.result)
+              (Filename.quote (get_file_exn tmp))
+          in
+          a_script.commands @ b_script.commands @ [compute] )
   | Feed (string, u) ->
+      let open Script in
       let string_script = continue string in
       let u_script = continue u in
-      let cmd, file = result_to_file string_script in
-      let open Script in
+      let as_file = result_to_file string_script in
+      let filearg = get_file_exn as_file in
       unit
-        ( string_script.commands
-        @ [ cmd
-          ; Pipe
+        ( string_script.commands @ as_file.commands
+        @ [ Pipe
               { blocks=
-                  [[rawf "cat %s" (Filename.quote file)]; u_script.commands] }
-          ] )
+                  [[rawf "cat %s" (Filename.quote filearg)]; u_script.commands]
+              } ] )
   | Pipe l ->
       let open Script in
       let scripts = List.map ~f:continue l in
@@ -633,27 +657,25 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
   | Getenv s ->
       let open Script in
       let string_script = continue s in
-      let tmp =
-        tmp_path ~tmpdir ~expression:e ~script:string_script "getenv"
-      in
-      let cmd =
-        rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
-          (to_argument ~arithmetic:false string_script.result)
-          (Filename.quote tmp)
-      in
-      make (string_script.commands @ [cmd]) (File tmp)
+      with_tmp ~tmpdir ~expression:e ~script:string_script "getenv" (fun tmp ->
+          [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
+              (to_argument ~arithmetic:false string_script.result)
+              (Filename.quote (get_file_exn tmp)) ] )
   | Setenv (variable, value) ->
       let open Script in
       let var_script = continue variable in
       let val_script = continue value in
-      let val_cmd, val_file = val_script |> result_to_file in
+      let val_as_file = val_script |> result_to_file in
       (* let tmp = tmp_path ~tmpdir ~expression:e "setenv" in *)
       let cmd =
         rawf "eval 'export '%s'=\"$(cat %s)\"'"
           (to_argument ~arithmetic:false var_script.result)
-          val_file
+          (get_file_exn val_as_file |> Filename.quote)
       in
-      make (var_script.commands @ val_script.commands @ [val_cmd; cmd]) Unit
+      make
+        ( var_script.commands @ val_script.commands @ val_as_file.commands
+        @ [cmd] )
+        Unit
   | Fail s -> Script.unit (fail_commands s)
   | Comment (cmt, expr) ->
       let open Script in
@@ -689,25 +711,26 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
     | `Use p -> p
   in
   let pid = var_name ~expression:expr "script_pid" in
-  let tmp = tmp_path ~tmpdir ~expression:expr "fail-msg" in
+  let tmp = mktmp ~tmpdir ~expression:expr "fail-msg" in
+  let tmparg = Filename.quote (get_file_exn tmp) in
   let before =
     [ rawf "export %s=$$" pid
     ; rawf "mkdir -p %s" (Filename.quote tmpdir)
     ; ( match trap with
       | `None -> rawf ": No TRAP"
-      | `Exit_with v -> rawf "trap 'cat %s >&2 ; exit %d' %s" tmp v signal_name
-      ) ]
+      | `Exit_with v ->
+          rawf "trap 'cat %s >&2 ; exit %d' %s" tmparg v signal_name ) ]
   in
   let fail_commands s =
     match trap with
     | `Exit_with _ ->
-        [ rawf "printf '%%s\\n' %s > %s " (Filename.quote s) tmp
+        [ rawf "printf '%%s\\n' %s > %s " (Filename.quote s) tmparg
         ; rawf "kill -s %s ${%s}" signal_name pid ]
     | `None ->
         failwith "You cannot use the `fail` construct with no `trap` strategy"
   in
   let s = to_ir ~fail_commands ~tmpdir expr in
-  make (before @ s.commands) s.result
+  make (tmp.commands @ before @ s.commands) s.result
 
 (*md
 
@@ -728,9 +751,7 @@ let test () =
     ; call
         [ get_stdout two |> Byte_array.to_c_string
         ; get_stdout (seq [one; three]) |> Byte_array.to_c_string ]
-    ; if_then_else
-        Byte_array.(get_stdout one =$= byte_array "hello")
-        one three
+    ; if_then_else Byte_array.(get_stdout one =$= byte_array "hello") one three
     ; loop_seq_while
         ((not (bool true)) ||| returns ~value:0 (exec ["ls"; "/crazypath"]))
         [three]
@@ -748,7 +769,8 @@ let test () =
               ( get_stdout (exec ["printf"; "/tmp/testgenspio6-ret"])
               |> Byte_array.to_c )
             (seq
-               [printf (c_string "hello test 6\n") []; exec ["ls"; "/crazypath"]])
+               [ printf (c_string "hello test 6\n") []
+               ; exec ["ls"; "/crazypath"] ])
         ; printf
             (c_string "ERR: <<%s>>\\nRET: <<%s>>\\n")
             [ get_stdout (exec ["cat"; "/tmp/testgenspio6-err"])
@@ -760,7 +782,8 @@ let test () =
             ~stdout:(c_string "/tmp/testgenspio-7-out")
             (printf (c_string "s:%s:")
                [ C_string.concat_elist
-                   (Elist.make [c_string "hello"; c_string " "; c_string "world"]) ])
+                   (Elist.make
+                      [c_string "hello"; c_string " "; c_string "world"]) ])
         ; if_then_else
             Byte_array.(
               get_stdout (exec ["cat"; "/tmp/testgenspio-7-out"])
@@ -799,7 +822,9 @@ let test () =
     ; printf
         (c_string "HOME: '%s'\\nPWD: '%s'")
         [ getenv (c_string "HOME")
-        ; getenv (C_string.concat_list [c_string "P"; c_string "W"; c_string "D"]) ]
+        ; getenv
+            (C_string.concat_list [c_string "P"; c_string "W"; c_string "D"])
+        ]
     ; seq
         [ setenv
             (C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
