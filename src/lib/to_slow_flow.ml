@@ -279,7 +279,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
   let continue : type a. a t -> _ = fun x -> to_ir ~fail_commands ~tmpdir x in
   let concat_string_list sl_script =
     let open Script in
-    let list_file = get_file_exn sl_script in
+    let list_file = to_path_argument sl_script.result in
     let tmp = mktmp ~tmpdir ~expression:e "c-string-concat" in
     let tmppatharg = to_path_argument tmp.result in
     let file_var = var_name ~expression:e "list_item" in
@@ -288,8 +288,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
           ": concat_string_list ; rm -f %s ; touch %s ; for %s in $(cat %s) ; \
            do cat ${%s} >> %s\n\
            done"
-          tmppatharg tmppatharg file_var
-          (Filename.quote list_file) file_var tmppatharg ]
+          tmppatharg tmppatharg file_var list_file file_var tmppatharg ]
     in
     make (tmp.commands @ sl_script.commands @ loop) tmp.result
   in
@@ -525,42 +524,40 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
             | _ ->
                 List.concat_map scripts ~f:(fun s ->
                     let as_file = result_to_file s in
-                    let as_arg = get_file_exn as_file in
+                    let as_arg = to_path_argument as_file.result in
                     as_file.commands @ [rawf "echo %s >> %s" as_arg tmparg] )
             )
           in
           List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
   | List_to_string (l, f) -> continue l
-  | String_to_list (s, f) -> (
+  | String_to_list (s, f) ->
       let str_script = continue s in
       let open Script in
-      match str_script.result with
-      | File flist ->
-          with_tmp ~tmpdir ~expression:e "list-copy" (fun tmp ->
-              (* let tmpfamily = tmp_path ~tmpdir ~expression:e "list-copy-family" in *)
-              let copy =
-                let posixish_hash path =
-                  sprintf
-                    "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')"
-                    path path
-                  (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
-                in
-                let file_var = var_name ~expression:e "list_copy" in
-                let tmparg = to_path_argument tmp.result in
-                rawf
-                  "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
-                   {\n  \
-                   tag=%s\n               \
-                   cp ${%s} ${%s}-$tag \n\
-                   echo ${%s}-$tag >> %s \n\
-                   }\n\
-                   done"
-                  tmparg tmparg file_var (Filename.quote flist)
-                  (posixish_hash @@ sprintf "${%s}" file_var)
-                  file_var file_var file_var tmparg
-              in
-              str_script.commands @ [copy] )
-      | other -> assert false )
+      let flistarg = to_path_argument str_script.result in
+      with_tmp ~tmpdir ~expression:e "list-copy" (fun tmp ->
+          (* let tmpfamily = tmp_path ~tmpdir ~expression:e "list-copy-family" in *)
+          let copy =
+            let posixish_hash path =
+              sprintf
+                "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')" path
+                path
+              (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
+            in
+            let file_var = var_name ~expression:e "list_copy" in
+            let tmparg = to_path_argument tmp.result in
+            rawf
+              "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
+               {\n  \
+               tag=%s\n               \
+               cp ${%s} ${%s}-$tag \n\
+               echo ${%s}-$tag >> %s \n\
+               }\n\
+               done"
+              tmparg tmparg file_var flistarg
+              (posixish_hash @@ sprintf "${%s}" file_var)
+              file_var file_var file_var tmparg
+          in
+          str_script.commands @ [copy] )
   | C_string_concat sl ->
       let sl_script = continue sl in
       concat_string_list sl_script
@@ -574,15 +571,15 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       with_tmp ~tmpdir ~expression:e "list-append" (fun tmp ->
           let cat =
             rawf "cat %s %s > %s"
-              (get_file_exn a_script |> Filename.quote)
-              (get_file_exn b_script |> Filename.quote)
+              (to_path_argument a_script.result)
+              (to_path_argument b_script.result)
               (to_path_argument tmp.result)
           in
           a_script.commands @ b_script.commands @ [cat] )
   | List_iter (l, f) ->
       let open Script in
       let l_script = continue l in
-      let list_file = get_file_exn l_script in
+      let list_file = to_path_argument l_script.result in
       let file_var = var_name ~expression:e "list_iter" in
       (* We iterate on the list of paths, for each path we pass the
          contents through the transformation function `f` and append the
@@ -596,7 +593,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       in
       let loop =
         [ Script.rawf "for %s in $(cat %s) ; do\n{\n%s\n}\ndone" file_var
-            (Filename.quote list_file)
+            list_file
             (Format.asprintf "%a" Script.pp convert_script) ]
       in
       unit (l_script.commands @ loop)
@@ -644,13 +641,10 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let string_script = continue string in
       let u_script = continue u in
       let as_file = result_to_file string_script in
-      let filearg = get_file_exn as_file in
+      let filearg = to_path_argument as_file.result in
       unit
         ( string_script.commands @ as_file.commands
-        @ [ Pipe
-              { blocks=
-                  [[rawf "cat %s" (Filename.quote filearg)]; u_script.commands]
-              } ] )
+        @ [Pipe {blocks= [[rawf "cat %s" filearg]; u_script.commands]}] )
   | Pipe l ->
       let open Script in
       let scripts = List.map ~f:continue l in
@@ -674,7 +668,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let cmd =
         rawf "eval 'export '%s'=\"$(cat %s)\"'"
           (to_argument ~arithmetic:false var_script.result)
-          (get_file_exn val_as_file |> Filename.quote)
+          (to_path_argument val_as_file.result)
       in
       make
         ( var_script.commands @ val_script.commands @ val_as_file.commands
