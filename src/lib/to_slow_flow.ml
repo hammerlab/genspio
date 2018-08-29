@@ -43,7 +43,7 @@ module Script = struct
   type command =
     | Raw of string
     | Comment of string
-    | Redirect of {block: command list; stdout: string}
+    | Redirect of {block: command list; stdout: compiled_value}
     | If_then_else of
         { condition: string
         ; block_then: command list
@@ -53,7 +53,7 @@ module Script = struct
     (* As is in `( ... ; )` in POSIX shells. *)
     | Pipe of {blocks: command list list}
 
-  type compiled_value =
+  and compiled_value =
     | Unit
     | Literal_value of string
     | File of string
@@ -110,6 +110,13 @@ In that case, we compare the octal representations.
 
   let commands s = s.commands
 
+  let to_path_argument = function
+    | Unit -> assert false
+    | Raw_inline s -> s
+    | Literal_value s -> Filename.quote s
+    | File f -> Filename.quote f
+    | File_in_variable f -> sprintf "\"${%s}\"" f
+
   (*md
 
  The last stage is `pp`, it compiles the IR to a POSIX shell script:
@@ -131,7 +138,8 @@ In that case, we compare the octal representations.
             |> List.map ~f:(sprintf "##  %s")
             |> String.concat ~sep:"\n" )
       | Redirect {block; stdout} ->
-          fprintf fmt "%a > %s" pp_block block (Filename.quote stdout)
+          fprintf fmt ": redirect ; %a  > %s" pp_block block
+            (to_path_argument stdout)
       | If_then_else {condition; block_then; block_else} ->
           fprintf fmt "if %s ; then\n%a\nelse\n%a\nfi" condition pp_block
             block_then pp_block block_else
@@ -171,8 +179,7 @@ In that case, we compare the octal representations.
 
   let redirect ~stdout block =
     { stdout with
-      commands=
-        stdout.commands @ [Redirect {block; stdout= get_file_exn stdout}] }
+      commands= stdout.commands @ [Redirect {block; stdout= stdout.result}] }
 
   let m = ref 0
 
@@ -202,10 +209,9 @@ In that case, we compare the octal representations.
     in
     make commands Unit
 
-  let bool_to_file b tmp = [rawf "printf %b > %s" b (Filename.quote tmp)]
+  let bool_to_file b tmp = [rawf "printf %b > %s" b (to_path_argument tmp)]
 
   let bool_not ~tmp {commands; result} =
-    let tmparg = get_file_exn tmp in
     let r, morecmds =
       match result with
       | Unit -> assert false
@@ -219,32 +225,30 @@ In that case, we compare the octal representations.
           , tmp.commands
             @ [ If_then_else
                   { condition= to_argument p
-                  ; block_then= bool_to_file false tmparg
-                  ; block_else= bool_to_file true tmparg } ] )
+                  ; block_then= bool_to_file false tmp.result
+                  ; block_else= bool_to_file true tmp.result } ] )
       | File_in_variable _ as p ->
           ( tmp.result
           , tmp.commands
             @ [ If_then_else
                   { condition= to_argument p
-                  ; block_then= bool_to_file false tmparg
-                  ; block_else= bool_to_file true tmparg } ] )
+                  ; block_then= bool_to_file false tmp.result
+                  ; block_else= bool_to_file true tmp.result } ] )
     in
     {commands= commands @ morecmds; result= r}
 
   let return_value_to_bool ~tmp {commands; result} v =
-    let tmpfile = get_file_exn tmp in
     { tmp with
       commands=
         tmp.commands @ commands
         @ [ If_then_else
               { condition= sprintf " [ $? -eq %d ]" v
-              ; block_then= bool_to_file true tmpfile
-              ; block_else= bool_to_file false tmpfile } ] }
+              ; block_then= bool_to_file true tmp.result
+              ; block_else= bool_to_file false tmp.result } ] }
 
   let make_bool ~condition ~tmp commands =
-    let tmpfile = get_file_exn tmp in
-    let block_then = bool_to_file true tmpfile in
-    let block_else = bool_to_file false tmpfile in
+    let block_then = bool_to_file true tmp.result in
+    let block_else = bool_to_file false tmp.result in
     { tmp with
       commands=
         tmp.commands @ commands
@@ -277,15 +281,15 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
     let open Script in
     let list_file = get_file_exn sl_script in
     let tmp = mktmp ~tmpdir ~expression:e "c-string-concat" in
-    let tmppath = get_file_exn tmp in
+    let tmppatharg = to_path_argument tmp.result in
     let file_var = var_name ~expression:e "list_item" in
     let loop =
       [ rawf
           ": concat_string_list ; rm -f %s ; touch %s ; for %s in $(cat %s) ; \
            do cat ${%s} >> %s\n\
            done"
-          (Filename.quote tmppath) (Filename.quote tmppath) file_var
-          (Filename.quote list_file) file_var (Filename.quote tmppath) ]
+          tmppatharg tmppatharg file_var
+          (Filename.quote list_file) file_var tmppatharg ]
     in
     make (tmp.commands @ sl_script.commands @ loop) tmp.result
   in
@@ -293,7 +297,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
     let open Script in
     (* let tmp = tmp_path ~tmpdir ~expression:e ~script:s "result-to-file" in *)
     let tmp = mktmp ~tmpdir ~expression:e "c-string-concat" in
-    let tmparg = Filename.quote (get_file_exn tmp) in
+    let tmparg = to_path_argument tmp.result in
     let mk (cmd, res) = Script.make (res.commands @ [cmd]) res.result in
     match s.result with
     | Unit -> mk (rawf "echo '' > %s" tmparg, tmp)
@@ -482,7 +486,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let open Script in
       let bs = continue b in
       with_tmp ~tmpdir ~expression:e "bool-to-string" (fun tmp ->
-          let tmparg = Filename.quote (get_file_exn tmp) in
+          let tmparg = to_path_argument tmp.result in
           let extra =
             If_then_else
               { condition= to_argument bs.result
@@ -511,7 +515,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let scripts = List.map ~f:continue l in
       let open Script in
       with_tmp ~tmpdir ~expression:e "list-make" (fun tmp ->
-          let tmparg = Filename.quote (get_file_exn tmp) in
+          let tmparg = to_path_argument tmp.result in
           let echos =
             let open Script in
             rawf "rm -f %s" tmparg
@@ -542,7 +546,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
                   (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
                 in
                 let file_var = var_name ~expression:e "list_copy" in
-                let tmparg = Filename.quote (get_file_exn tmp) in
+                let tmparg = to_path_argument tmp.result in
                 rawf
                   "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
                    {\n  \
@@ -572,7 +576,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
             rawf "cat %s %s > %s"
               (get_file_exn a_script |> Filename.quote)
               (get_file_exn b_script |> Filename.quote)
-              (Filename.quote (get_file_exn tmp))
+              (to_path_argument tmp.result)
           in
           a_script.commands @ b_script.commands @ [cat] )
   | List_iter (l, f) ->
@@ -611,7 +615,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
               | `Plus -> "+"
               | `Mod -> "%" )
               (to_argument ~arithmetic:true b_script.result)
-              (Filename.quote (get_file_exn tmp))
+              (to_path_argument tmp.result)
           in
           a_script.commands @ b_script.commands @ [compute] )
   | Int_bin_comparison (ia, op, ib) ->
@@ -632,7 +636,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
               | `Lt -> "-lt"
               | `Ne -> "-ne" )
               (to_argument b_script.result)
-              (Filename.quote (get_file_exn tmp))
+              (to_path_argument tmp.result)
           in
           a_script.commands @ b_script.commands @ [compute] )
   | Feed (string, u) ->
@@ -660,7 +664,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
           string_script.commands
           @ [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
                 (to_argument ~arithmetic:false string_script.result)
-                (Filename.quote (get_file_exn tmp)) ] )
+                (to_path_argument tmp.result) ] )
   | Setenv (variable, value) ->
       let open Script in
       let var_script = continue variable in
@@ -712,7 +716,7 @@ let compile ?(tmp_dir_path = `Fresh) ?(signal_name = "USR1")
   in
   let pid = var_name ~expression:expr "script_pid" in
   let tmp = mktmp ~tmpdir ~expression:expr "fail-msg" in
-  let tmparg = Filename.quote (get_file_exn tmp) in
+  let tmparg = to_path_argument tmp.result in
   let before =
     [ rawf "export %s=$$" pid
     ; rawf "mkdir -p %s" (Filename.quote tmpdir)
