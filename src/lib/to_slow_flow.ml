@@ -184,7 +184,7 @@ In that case, we compare the octal representations.
 
   let mktmp ~tmpdir ?expression ?script tag =
     let f = sprintf "%s/%s" tmpdir (var_name ?expression ?script tag) in
-    make [] (File f)
+    make [rawf ": Making file %s" f] (File f)
 
   let with_tmp ~tmpdir ?expression ?script tag f =
     let tmp = mktmp ~tmpdir ?expression ?script tag in
@@ -235,7 +235,7 @@ In that case, we compare the octal representations.
     let tmpfile = get_file_exn tmp in
     { tmp with
       commands=
-        commands
+        tmp.commands @ commands
         @ [ If_then_else
               { condition= sprintf " [ $? -eq %d ]" v
               ; block_then= bool_to_file true tmpfile
@@ -261,7 +261,6 @@ In that case, we compare the octal representations.
 
   let sub_shell ~pre l = unit @@ pre @ [Sub_shell l]
 end
-
 
 type Language.raw_command_annotation += Cat_variable of string
 
@@ -658,9 +657,10 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let open Script in
       let string_script = continue s in
       with_tmp ~tmpdir ~expression:e ~script:string_script "getenv" (fun tmp ->
-          [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
-              (to_argument ~arithmetic:false string_script.result)
-              (Filename.quote (get_file_exn tmp)) ] )
+          string_script.commands
+          @ [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
+                (to_argument ~arithmetic:false string_script.result)
+                (Filename.quote (get_file_exn tmp)) ] )
   | Setenv (variable, value) ->
       let open Script in
       let var_script = continue variable in
