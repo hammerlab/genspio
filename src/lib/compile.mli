@@ -137,7 +137,19 @@ module To_slow_flow : sig
     -> ?trap:[`Exit_with of int | `None]
     -> 'a EDSL.t
     -> Script.t
-  (** Compile and {!EDSL.t} value to a script. *)
+  (** Compile and {!EDSL.t} value to a script.
+
+      - [?default_tmpdir]: set the value of the of the directory to
+        create temporary files in, generated scripts still obey the
+        ["$TMPDIR"] variable which takes precedence (default: [`Fresh]
+        which means that it will create a fresh directory within
+        ["/tmp"]).
+      - [?trap]: whether to setup a call to ["trap"] to handle the
+        calls to [fail] (default: [`Exit_with 77])).
+      - [?signal_name]: if [trap] is not [`None], this is the signal
+        to use to self-kill the script on calling [fail] (default:
+        ["USR1"]).
+  *)
 end
 
 (** {3 Legacy API}

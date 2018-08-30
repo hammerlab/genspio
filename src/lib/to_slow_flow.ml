@@ -718,12 +718,6 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let script = continue expr in
       make (Comment cmt :: script.commands) script.result
 
-(* module Script = struct
- *   type t = Ready : 'a * (Format.formatter -> 'a -> unit) -> t
- * 
- *   let pp fmt a = match a with Ready (x, pp_x) -> pp_x fmt x
- * end *)
-
 (*md
 
 The main entry point (still compilation from a `'a Language.t` to the
@@ -733,7 +727,7 @@ It is accessed through `Compile.To_slow_flow.compile`:
 
 ```ocaml
   val compile :
-       ?tmp_dir_path:[`Fresh | `Use of string]
+       ?default_tmpdir:[`Fresh | `Use of string]
     -> ?signal_name:string
     -> ?trap:[`Exit_with of int | `None]
     -> 'a EDSL.t
@@ -766,9 +760,7 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
         failwith "You cannot use the `fail` construct with no `trap` strategy"
   in
   let s = to_ir ~fail_commands ~tmpdb expr in
-  let delete_tmps =
-    Tmp_db.delete_function tmpdb delete_fname |> rawf "%s"
-  in
+  let delete_tmps = Tmp_db.delete_function tmpdb delete_fname |> rawf "%s" in
   let make_tmp_vars =
     Tmp_db.tmp_vars tmpdb
     |> List.concat_map ~f:(fun (v, dir, cmd) ->
