@@ -132,7 +132,7 @@ module To_slow_flow : sig
   end
 
   val compile :
-       ?tmp_dir_path:[`Fresh | `Use of string]
+       ?default_tmpdir:[`Fresh | `Use of string]
     -> ?signal_name:string
     -> ?trap:[`Exit_with of int | `None]
     -> 'a EDSL.t
