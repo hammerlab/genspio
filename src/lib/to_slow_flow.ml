@@ -58,7 +58,7 @@ module Script = struct
     | Unit
     | Literal_value of string
     | File of string
-    | File_in_variable of string  (** File-path contained in variable. *)
+    | Tmp_file_in_variable of string  (** File-path contained in variable. *)
     | Raw_inline of string
 
   type t = {commands: command list; result: compiled_value}
@@ -86,7 +86,7 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
     | File s ->
         let v = sprintf "$(cat %s)" (Filename.quote s) in
         if not arithmetic then sprintf "\"%s\"" v else v
-    | File_in_variable s ->
+    | Tmp_file_in_variable s ->
         let v = sprintf "$(cat ${%s})" s in
         if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
@@ -106,7 +106,7 @@ In that case, we compare the octal representations.
     | Literal_value s -> string_to_octal s
     | File f ->
         sprintf "$(cat %s | od -t o1 -An -v | tr -d ' \\n')" (Filename.quote f)
-    | File_in_variable f ->
+    | Tmp_file_in_variable f ->
         sprintf "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
 
   let commands s = s.commands
@@ -116,7 +116,7 @@ In that case, we compare the octal representations.
     | Raw_inline s -> s
     | Literal_value s -> Filename.quote s
     | File f -> Filename.quote f
-    | File_in_variable f -> sprintf "\"${%s}\"" f
+    | Tmp_file_in_variable f -> sprintf "\"${%s}\"" f
 
   (*md
 
@@ -163,7 +163,7 @@ In that case, we compare the octal representations.
       | Unit -> fprintf fmt "Unit"
       | Literal_value s -> fprintf fmt "Literal: %S" s
       | File s -> fprintf fmt "File: %S" s
-      | File_in_variable s -> fprintf fmt "File: ${%s}" s
+      | Tmp_file_in_variable s -> fprintf fmt "File: ${%s}" s
       | Raw_inline s -> fprintf fmt "Raw: %S" s
     in
     fprintf fmt "%a\n# Result: %a\n" pp_command_list script.commands pp_result
@@ -208,7 +208,7 @@ In that case, we compare the octal representations.
         [ cmtf "Making file %s" v
         ; Make_directory dir
         ; rawf "%s=%s/tmp-%s" v dir v ]
-        (File_in_variable v)
+        (Tmp_file_in_variable v)
 
   let with_tmp ~tmpdir ?expression ?script tag f =
     let tmp = mktmp ~tmpdir ?expression ?script tag in
@@ -244,7 +244,7 @@ In that case, we compare the octal representations.
                   { condition= to_argument p
                   ; block_then= bool_to_file false tmp.result
                   ; block_else= bool_to_file true tmp.result } ] )
-      | File_in_variable _ as p ->
+      | Tmp_file_in_variable _ as p ->
           ( tmp.result
           , tmp.commands
             @ [ If_then_else
@@ -283,7 +283,7 @@ In that case, we compare the octal representations.
   let sub_shell ~pre l = unit @@ pre @ [Sub_shell l]
 end
 
-type Language.raw_command_annotation += Cat_variable of string
+type Language.raw_command_annotation += Cat_tmp_file_in_variable of string
 
 (*md
 
@@ -323,7 +323,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
     | Literal_value v ->
         mk (rawf "printf -- '%%s' %s > %s" (Filename.quote v) tmparg, tmp)
     | File p -> mk (rawf ":", make [] (File p))
-    | File_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
+    | Tmp_file_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
     | Raw_inline s -> mk (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
   in
   match e with
@@ -336,8 +336,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
       let commands = List.concat_map ~f:Script.commands irs in
       Script.unit (commands @ [Raw cmd])
   | Raw_cmd (Some Magic_unit, s) -> Script.unit [Script.rawf "%s" s]
-  | Raw_cmd (Some (Cat_variable filepathvar), _) ->
-      Script.make [] (File_in_variable filepathvar)
+  | Raw_cmd (Some (Cat_tmp_file_in_variable filepathvar), _) ->
+      Script.make [] (Tmp_file_in_variable filepathvar)
   | Raw_cmd (_, s) -> Script.make [] (Raw_inline s)
   | Byte_array_to_c_string ba ->
       let open Script in
@@ -357,7 +357,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
                     ksprintf fail_commands
                       "Byte array in %s cannot be converted to a C-String" f
                 ; block_else= [rawf ":"] } ]
-        | File_in_variable v ->
+        | Tmp_file_in_variable v ->
             [ If_then_else
                 { condition=
                     sprintf
@@ -605,7 +605,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdir:_ -> a t -> Script.t =
         continue
           (f (fun () ->
                Raw_cmd
-                 ( Some (Cat_variable file_var)
+                 ( Some (Cat_tmp_file_in_variable file_var)
                  , sprintf "\"$(cat ${%s})\"" file_var ) ))
       in
       let loop =
