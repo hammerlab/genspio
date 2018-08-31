@@ -59,7 +59,7 @@ module Tmp_db = struct
     sprintf "%s () {\n: At least one command\n%s\n}" delete_fname
     @@ String.concat ~sep:"\n"
          (List.map (List.dedup t.tmp_file_db) ~f:(fun (tvariable, _) ->
-              sprintf "  echo \"%s -> ${%s:-WUT}\" && rm -f \"${%s}\" || :"
+              sprintf "  : \"%s -> ${%s:-WUT}\" ; rm -f \"${%s}\" || :"
                 tvariable tvariable tvariable ))
 
   let tmp_vars t =
