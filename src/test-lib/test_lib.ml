@@ -161,6 +161,8 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
         in
         sprintf
           "mkdir -p _success _failure %s\n\
+           export TMPDIR=$PWD/_tmp/%s\n\
+           mkdir -p ${TMPDIR}\n\
            %s > %s 2> %s\n\
            export RRR=$?\n\
            if [ $RRR -eq %d ] ; then\n\
@@ -170,6 +172,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
            %s\n\
            fi\n"
           (stdout_path test |> Filename.dirname)
+          (unique_name test)
           ( t.shell.Shell.command (script_path test) args
           |> List.map ~f:Filename.quote |> String.concat ~sep:" " )
           (stdout_path test) (stderr_path test) returns
@@ -233,7 +236,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
   let makefile t testlist =
     sprintf ".PHONY: all clean report check\nall: %s\n\n"
       (List.map testlist ~f:success_path |> String.concat ~sep:" ")
-    :: sprintf "clean:\n\trm -fr _success _failure _log *.md\n\n"
+    :: sprintf "clean:\n\trm -fr _success _failure _log _tmp *.md\n\n"
     :: sprintf
          "failures.md:\n\t@{ cat _failure/* ; echo '' ; } > failures.md\n\n"
     :: sprintf
