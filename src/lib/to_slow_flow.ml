@@ -159,7 +159,7 @@ In that case, we compare the octal representations.
   let to_path_argument = function
     | Unit -> assert false
     | Raw_inline s -> s
-    | Literal_value s -> Filename.quote s
+    | Literal_value s -> assert false
     | File f -> Filename.quote f
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
