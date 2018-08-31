@@ -25,10 +25,11 @@ let string_to_octal ?(prefix = "") s =
           Char.code c |> sprintf "%03o" |> str ) )
   |> fst
 
-let expand_octal_command s =
+let expand_octal_command ~remove_l s =
   sprintf
-    {sh| printf -- "$(printf -- '%%s\n' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
+    {sh| printf -- "$(printf -- '%%s\n' %s %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
     s
+    (if remove_l then "| tr -d L" else "")
 
 let m = ref 0
 
@@ -97,6 +98,7 @@ module Script = struct
     | File of string
     | Tmp_file_in_variable of string  (** File-path contained in variable. *)
     | Raw_inline of string
+    | Octal_value_in_variable of string
 
   type t = {commands: command list; result: compiled_value}
 
@@ -115,7 +117,7 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
     | Unit -> "\"$(exit 42)\""
     | Literal_value s when String.exists s ~f:(( = ) '\x00') ->
         let oct = string_to_octal s in
-        let v = sprintf "$(%s)" (expand_octal_command oct) in
+        let v = sprintf "$(%s)" (expand_octal_command ~remove_l:false oct) in
         if not arithmetic then sprintf "\"%s\"" v else v
     | Literal_value s ->
         let v = Filename.quote s in
@@ -129,6 +131,9 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
         if not arithmetic then sprintf "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
     | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
+    | Octal_value_in_variable var ->
+        (if arithmetic then sprintf "$(%s)" else sprintf "\"$(%s)\"")
+          (expand_octal_command ~remove_l:true (sprintf "${%s}" var))
 
   (*md
   
@@ -147,6 +152,7 @@ In that case, we compare the octal representations.
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
         sprintf "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
+    | Octal_value_in_variable var -> sprintf "${%s}" var
 
   let commands s = s.commands
 
@@ -158,6 +164,7 @@ In that case, we compare the octal representations.
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
         sprintf "\"${%s}\"" f
+    | Octal_value_in_variable var -> assert false
 
   (*md
 
@@ -206,6 +213,7 @@ In that case, we compare the octal representations.
       | File s -> fprintf fmt "File: %S" s
       | Tmp_file_in_variable s -> fprintf fmt "File: ${%s}" s
       | Raw_inline s -> fprintf fmt "Raw: %S" s
+      | Octal_value_in_variable var -> fprintf fmt "Octal in $%s" var
     in
     fprintf fmt "%a\n# Result: %a\n" pp_command_list script.commands pp_result
       script.result
@@ -259,14 +267,7 @@ In that case, we compare the octal representations.
       | Literal_value s ->
           (Literal_value s, []) (* This should just be an error later *)
       | Raw_inline s -> (Raw_inline (sprintf "! %s" s), [])
-      | File _ as p ->
-          ( tmp.result
-          , tmp.commands
-            @ [ If_then_else
-                  { condition= to_argument p
-                  ; block_then= bool_to_file false tmp.result
-                  ; block_else= bool_to_file true tmp.result } ] )
-      | Tmp_file_in_variable _ as p ->
+      | (Tmp_file_in_variable _ | File _ | Octal_value_in_variable _) as p ->
           ( tmp.result
           , tmp.commands
             @ [ If_then_else
@@ -305,7 +306,7 @@ In that case, we compare the octal representations.
   let sub_shell ~pre l = unit @@ pre @ [Sub_shell l]
 end
 
-type Language.raw_command_annotation += Cat_tmp_file_in_variable of string
+type Language.raw_command_annotation += Octal_in_variable of string
 
 (*md
 
@@ -325,9 +326,11 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     let loop =
       [ rawf
           ": concat_string_list ; rm -f %s ; touch %s ; for %s in $(cat %s) ; \
-           do cat ${%s} >> %s\n\
+           do %s >> %s\n\
            done"
-          tmppatharg tmppatharg file_var list_file file_var tmppatharg ]
+          tmppatharg tmppatharg file_var list_file
+          (expand_octal_command ~remove_l:true (sprintf "${%s}" file_var))
+          tmppatharg ]
     in
     make (tmp.commands @ sl_script.commands @ loop) tmp.result
   in
@@ -347,6 +350,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     | File p -> mk (rawf ":", make [] (File p))
     | Tmp_file_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
     | Raw_inline s -> mk (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
+    | Octal_value_in_variable _ as v ->
+        mk (rawf "printf -- '%%s' %s > %s" (to_argument v) tmparg, tmp)
   in
   match e with
   | Exec l ->
@@ -358,8 +363,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let commands = List.concat_map ~f:Script.commands irs in
       Script.unit (commands @ [Raw cmd])
   | Raw_cmd (Some Magic_unit, s) -> Script.unit [Script.rawf "%s" s]
-  | Raw_cmd (Some (Cat_tmp_file_in_variable filepathvar), _) ->
-      Script.make [] (Tmp_file_in_variable filepathvar)
+  | Raw_cmd (Some (Octal_in_variable filepathvar), _) ->
+      Script.make [] (Octal_value_in_variable filepathvar)
   | Raw_cmd (_, s) -> Script.make [] (Raw_inline s)
   | Byte_array_to_c_string ba ->
       let open Script in
@@ -389,6 +394,14 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                       "Byte array in $%s cannot be converted to a C-String" v
                 ; block_else= [rawf ":"] } ]
         | Raw_inline ri -> []
+        | Octal_value_in_variable v ->
+            [ If_then_else
+                { condition=
+                    sprintf "echo ${%s} | grep ' 000' > /dev/null 2>&1 " v
+                ; block_then=
+                    ksprintf fail_commands
+                      "Byte array in $%s cannot be converted to a C-String" v
+                ; block_else= [rawf ":"] } ]
       in
       make (script.commands @ extra_check) script.result
   | C_string_to_byte_array c -> continue c
@@ -564,38 +577,20 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 List.concat_map scripts ~f:(fun s ->
                     let as_file = result_to_file s in
                     let as_arg = to_path_argument as_file.result in
-                    as_file.commands @ [rawf "echo %s >> %s" as_arg tmparg] )
-            )
+                    (*
+                       Stuff is put in a file and then “octaled”
+                       We also prefix with `L` to make sure we “count”
+                       empty strings.
+                    *)
+                    as_file.commands
+                    @ [ rawf
+                          "printf 'L%%s\\n' \"$(cat %s  | od -t o1 -An -v | \
+                           tr -d ' \\n')\" >> %s"
+                          as_arg tmparg ] ) )
           in
           List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
   | List_to_string (l, f) -> continue l
-  | String_to_list (s, f) ->
-      let str_script = continue s in
-      let open Script in
-      let flistarg = to_path_argument str_script.result in
-      with_tmp ~tmpdb ~expression:e "list-copy" (fun tmp ->
-          let copy =
-            let posixish_hash path =
-              sprintf
-                "$({ cat %s | cksum ; head %s | cksum ; } | tr -d '\\n ')" path
-                path
-              (* { cat README.md | cksum ; head README.md | cksum ; } | tr -d '\n ' *)
-            in
-            let file_var = var_name ~expression:e "list_copy" in
-            let tmparg = to_path_argument tmp.result in
-            rawf
-              "rm -f %s ; touch %s ; for %s in $(cat %s) ; do\n\
-               {\n  \
-               tag=%s\n               \
-               cp ${%s} ${%s}-$tag \n\
-               echo ${%s}-$tag >> %s \n\
-               }\n\
-               done"
-              tmparg tmparg file_var flistarg
-              (posixish_hash @@ sprintf "${%s}" file_var)
-              file_var file_var file_var tmparg
-          in
-          str_script.commands @ [copy] )
+  | String_to_list (s, f) -> continue s
   | C_string_concat sl ->
       let sl_script = continue sl in
       concat_string_list sl_script
@@ -626,12 +621,12 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
         continue
           (f (fun () ->
                Raw_cmd
-                 ( Some (Cat_tmp_file_in_variable file_var)
-                 , sprintf "\"$(cat ${%s})\"" file_var ) ))
+                 ( Some (Octal_in_variable file_var)
+                 , "=== This should never be used ===" ) ))
       in
       let loop =
-        [ Script.rawf "for %s in $(cat %s) ; do\n{\n%s\n}\ndone" file_var
-            list_file
+        [ Script.rawf ": list_iter ; for %s in $(cat %s) ; do\n{\n%s\n}\ndone"
+            file_var list_file
             (Format.asprintf "%a" Script.pp convert_script) ]
       in
       unit (l_script.commands @ loop)
