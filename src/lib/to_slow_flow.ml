@@ -41,15 +41,18 @@ let var_name ?expression ?script tag =
     |> Digest.string |> Digest.to_hex )
 
 module Tmp_db = struct
-  type t = {default_tmpdir: string; mutable tmp_file_db: (string * string) list}
+  type t =
+    { default_tmpdir: string
+    ; deletion_grouping: int
+    ; mutable tmp_file_db: (string * string) list }
 
-  let make how =
+  let make ?(deletion_grouping = 20) how =
     let default_tmpdir =
       match how with
       | `Fresh -> Filename.concat "/tmp" (var_name "tmpdir")
       | `Use p -> p
     in
-    {default_tmpdir; tmp_file_db= []}
+    {default_tmpdir; tmp_file_db= []; deletion_grouping}
 
   let register_file t ~variable ~directory =
     t.tmp_file_db <- (variable, directory) :: t.tmp_file_db
@@ -57,11 +60,17 @@ module Tmp_db = struct
   let default_tmpdir t = t.default_tmpdir
 
   let delete_function t delete_fname =
-    sprintf "%s () {\n: At least one command\n%s\n}" delete_fname
-    @@ String.concat ~sep:"\n"
-         (List.map (List.dedup t.tmp_file_db) ~f:(fun (tvariable, _) ->
-              sprintf "  : \"%s -> ${%s:-WUT}\" ; rm -f \"${%s}\" || :"
-                tvariable tvariable tvariable ))
+    let rec unroll = function
+      | [] -> []
+      | l ->
+          let tk, nxt = List.split_n l t.deletion_grouping in
+          sprintf "rm -f %s"
+            ( List.map tk ~f:(fun (v, _) -> sprintf "\"${%s}\"" v)
+            |> String.concat ~sep:" " )
+          :: unroll nxt
+    in
+    sprintf "%s () {\n: Deleting all the temporary files:\n%s\n}" delete_fname
+    @@ String.concat ~sep:"\n" (unroll (List.dedup t.tmp_file_db))
 
   let tmp_vars t =
     List.map (List.dedup t.tmp_file_db) ~f:(fun (v, dir) ->
