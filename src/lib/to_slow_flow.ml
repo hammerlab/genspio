@@ -324,10 +324,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     let tmppatharg = to_path_argument tmp.result in
     let file_var = var_name ~expression:e "list_item" in
     let loop =
-      [ rawf
-          ": concat_string_list ; rm -f %s ; touch %s ; for %s in $(cat %s) ; \
-           do %s >> %s\n\
-           done"
+      [ rawf "rm -f %s ; touch %s ; for %s in $(cat %s) ; do %s >> %s\ndone"
           tmppatharg tmppatharg file_var list_file
           (expand_octal_command ~remove_l:true (sprintf "${%s}" file_var))
           tmppatharg ]
