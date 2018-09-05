@@ -519,7 +519,6 @@ end
 
 module Dispatcher_script = struct
   let make ?(aliases = []) ~name ~description () =
-    let tmp = ksprintf tmp_file "%s-call" name in
     let eq_or ~eq s1 l =
       match l with
       | [] -> bool true
@@ -537,25 +536,12 @@ module Dispatcher_script = struct
                name description)
             []
         ; (let findgrep =
-             call
-               [ string "find"
-               ; call
-                   [ string "dirname"
-                   ; exec ["which"; name]
-                     ||> exec ["tr"; "-d"; " \\n"]
-                     |> get_stdout ]
-                 ||> exec ["tr"; "-d"; " \\n"]
-                 |> get_stdout
-               ; string "-type"
-               ; string "f"
-               ; string "-exec"
-               ; string "basename"
-               ; string "{}"
-               ; string ";" ]
-             ||> exec ["grep"; "-E"; sprintf "%s-[^\\-]*$" name]
+             ksprintf Magic.unit
+               "find $(echo $PATH  | tr ':' ' ') -name '%s-*' -exec basename \
+                {} \\;   2>/dev/null | sort -u"
+               name
            in
            findgrep
-           ||> exec ["sort"]
            ||> on_stdin_lines (fun line ->
                    printf (string "* %s: %s\\n")
                      [ line
@@ -568,6 +554,7 @@ module Dispatcher_script = struct
                  printf (str "* %s -> %s\\n") [a; v] )) ]
     in
     let dollar_one_empty = Str.(getenv (string "1") =$= string "") in
+    let tmp = ksprintf tmp_file "%s-call" name in
     seq
       [ if_seq
           ( dollar_one_empty
@@ -580,23 +567,22 @@ module Dispatcher_script = struct
                 Str.(getenv (string "1") =$= string "--describe")
                 ~t:[printf (ksprintf string "%s\\n" description) []]
                 ~e:
-                  [ tmp#set (ksprintf string "%s-" name)
-                  ; switch
-                      ( List.map aliases ~f:(fun (a, v) ->
-                            case Str.(a =$= getenv (string "1")) [tmp#append v]
-                        )
-                      @ [default [tmp#append (getenv (string "1"))]] )
-                  ; tmp#append (str " ")
-                  ; exec ["shift"]
-                  ; loop_seq_while (not dollar_one_empty)
-                      [ (*  printf (string "arg: %s\\n") [getenv (string "1")] ;  *)
-                        tmp#append (str " '")
-                      ; tmp#append
-                          ( getenv (string "1")
-                          >> exec ["sed"; "s/'/'\\\\''/g"]
-                          |> get_stdout )
-                      ; tmp#append (str "'")
-                      ; exec ["shift"] ]
-                    (* ; eprintf (string "calling: %s\\n") [tmp#get] *)
-                  ; call [string "sh"; string "-c"; tmp#get] ] ] ]
+                  [ write_stdout ~path:tmp#path
+                      (seq
+                         [ printf (str "%s-") [str name]
+                         ; switch
+                             ( List.map aliases ~f:(fun (a, v) ->
+                                   case
+                                     Str.(a =$= getenv (string "1"))
+                                     [printf (str "%s") [v]] )
+                             @ [default [printf (str "%s") [getenv (str "1")]]]
+                             )
+                         ; exec ["shift"]
+                         ; loop_seq_while (not dollar_one_empty)
+                             [ printf (str " '") []
+                             ; getenv (string "1")
+                               >> exec ["sed"; "s/'/'\\\\''/g"]
+                             ; printf (str "'") []
+                             ; exec ["shift"] ] ])
+                  ; call [string "sh"; tmp#path] ] ] ]
 end
