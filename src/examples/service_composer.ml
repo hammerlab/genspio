@@ -691,7 +691,7 @@ module Kill_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "kill"
 
-    let description = "Kill the Screen being managed."
+    let description = "Kill Jobs or the whole Screen session (-a)."
   end)
 
   let make ~env () =
@@ -700,11 +700,41 @@ module Kill_script = struct
         let open Command_line in
         let opts =
           let open Arg in
-          describe_option_and_usage ()
+          flag ["--all"; "-a"] ~doc:"Kill everything, incl. the Screen session"
+          & describe_option_and_usage ()
         in
-        parse opts (fun ~anon describe ->
-            deal_with_describe describe [Screen.call env [str "-X"; str "quit"]]
-        ) )
+        let kills = tmp_file "kill-list" in
+        parse opts (fun ~anon kill_em_all describe ->
+            deal_with_describe describe
+              [ if_seq kill_em_all
+                  ~t:[Screen.call env [str "-X"; str "quit"]]
+                  ~e:
+                    [ kills#set (str "")
+                    ; Elist.iter anon ~f:(fun item ->
+                          seq
+                            [ say "## Processing %s" [item ()]
+                            ; if_seq
+                                ( Screen.call env
+                                    [ str "-Q"
+                                    ; str "-p"
+                                    ; Screen.window_name (item ())
+                                    ; str "-X"
+                                    ; str "info" ]
+                                |> succeeds_silently )
+                                ~t:
+                                  [ say "-> Window found, killing now." []
+                                  ; Screen.call env
+                                      [ str "-p"
+                                      ; Screen.window_name (item ())
+                                      ; str "-X"
+                                      ; str "kill" ]
+                                  ; kills#set (str "yes") ]
+                                ~e:
+                                  [ say "-> Window for job '%s' not found!"
+                                      [item ()] ] ] )
+                    ; if_seq
+                        Str.(kills#get =$= str "")
+                        ~t:[say "Nothing was killed …" []] ] ] ) )
 end
 
 module Logs_script = struct
