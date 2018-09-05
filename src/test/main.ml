@@ -969,6 +969,8 @@ let () =
                          (tmp#get |> of_byte_array) + v () |> to_byte_array) ]
              )
         ; printf (string "TMP: %s, TMP2: %s\\n") [tmp#path; tmp2#path]
+        ; call [string "cat"; tmp#path]
+        ; printf (string "::\\n") []
         ; assert_or_fail name
             C_string.(
               tmp#get_c
