@@ -229,6 +229,119 @@ let () =
 let () =
   add_tests
   @@
+  let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
+  let make ?(anon3 = "BBBBBBB") ret minus_g single count =
+    let anon1 = "annonlkjde" in
+    let anon2 = "annon 02e930 99e3\n d \t eij" in
+    (* let anon3 = "annon deid \t dlsij" in *)
+    (* let anon3 = "======== \t =====" in *)
+    exits ret
+      ~name:(sprintf "legacy-parse-cli-%d" count)
+      ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3]
+      (let open Genspio.EDSL in
+      let open Command_line in
+      let spec =
+        let open Arg in
+        string ~doc:"String one" ["-f"]
+        & string ~doc:"String two" ["-g"]
+        & flag ~doc:"Bool one" ["-v"]
+        & usage "Usage string\nwith bunch of lines to\nexplain stuff"
+      in
+      parse spec (fun ~anon one two bone ->
+          seq
+            [ printf
+                (string
+                   "######## Begin action ########\\n=== one: '%s' two: \
+                    '%s'\\n=== dollar-sharp '%s'\\n")
+                [one; two; getenv (string "#")]
+            ; switch
+                [ case
+                    C_string.(string single =$= string "-v")
+                    [ assert_or_fail "bone-is-true"
+                        ( bone
+                        &&& C_string.(
+                              concat_elist anon
+                              =$= string
+                                    (String.concat ~sep:"" [anon1; anon2; anon3]))
+                        ) ]
+                ; case
+                    C_string.(string single =$= string "--")
+                    (let concated_in_ocaml =
+                       String.concat ~sep:""
+                         [anon1; "-g"; minus_g; anon2; anon3]
+                     in
+                     [ printf
+                         (ksprintf string
+                            "######### In dash-dash case: #########\\n=== \
+                             length-of-all: %d\\nbone: '%%s'\\n=== anon3: \
+                             '%%s'\\n=== concat_elist anon: '%%s'\\n=== \
+                             string.concat: '%%s'\\n"
+                            (String.length concated_in_ocaml))
+                         [ Bool.to_string bone
+                         ; string anon3
+                         ; C_string.concat_elist anon
+                         ; string concated_in_ocaml ]
+                     ; Elist.iter anon ~f:(fun v ->
+                           printf (string "=== anonth: %s\\n") [v ()] )
+                     ; assert_or_fail "dash-dash"
+                         ( (not bone)
+                         &&& C_string.(
+                               concat_elist anon
+                               =$= string
+                                     (String.concat ~sep:""
+                                        [anon1; "-g"; minus_g; anon2; anon3]))
+                         ) ])
+                ; default
+                    [ assert_or_fail "single-is-anon"
+                        ( (not bone)
+                        &&& C_string.(
+                              concat_elist anon
+                              =$= string
+                                    (String.concat ~sep:""
+                                       [single; anon1; anon2; anon3])) ) ] ]
+            ; if_then_else
+                (C_string.(one =$= two) ||| bone)
+                (return 11)
+                (if_then_else
+                   C_string.(one =$= string minus_f)
+                   (* Should be always true *)
+                   (return 12)
+                   (* i.e. we're testing that weird characters have good escaping *)
+                   (return 44)) ] ))
+  in
+  List.mapi
+    ~f:(fun i f -> f i)
+    [ make 11 minus_f ""
+    ; make 12 "not-one" ""
+    ; make 12 "not-one" "" ~anon3:(String.make 20 'S')
+    ; make 11 "not-one" "-v"
+    ; make 12 minus_f "--"
+    ; (* the `--` should prevent the `-g one` from being parsed *)
+      make 12 minus_f "--" ~anon3:(String.make 6 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 7 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 8 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 9 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 10 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 11 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 12 'S')
+    ; make 12 minus_f "--" ~anon3:(String.make 20 'S')
+    ; make 12 "not-one" "-x"
+    ; (* option does not exist (untreated for now) *)
+      make 12 "not-one" "--v"
+    ; make 12 "not-one" "-v j"
+    ; make 11 "not \\ di $bouh one" "-v"
+    ; make 12 "not \\ di $bouh one" " -- -v"
+    ; make 12 "one \nwith spaces and \ttabs -dashes -- " ""
+    ; make 12 "one \nwith  spaces and \ttabs -dashes -- " ""
+    ; make 12 "one with \\ spaces and \ttabs -dashes -- " ""
+    ; make 0 "not-one" "--help"
+    ; make 0 "not-one" "-help"
+    ; make 0 "not-one" "-h" ]
+  |> List.concat
+
+let () =
+  add_tests
+  @@
   let open Genspio.EDSL_ng in
   let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
   let check_anon anon anons_expected =
