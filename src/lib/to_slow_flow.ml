@@ -590,7 +590,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     *)
                     as_file.commands
                     @ [ rawf
-                          "printf 'L%%s\\n' \"$(cat %s  | od -t o1 -An -v | \
+                          "printf ' L%%s\\n' \"$(cat %s  | od -t o1 -An -v | \
                            tr -d ' \\n')\" >> %s"
                           as_arg tmparg ] ) )
           in
