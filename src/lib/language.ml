@@ -421,4 +421,3 @@ module Construct = struct
     let of_string _ = `Do_not_use
   end
 end
-

@@ -120,7 +120,7 @@ let pp_error fmt {code; comment_backtrace; error} =
 
 let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
  fun comments params e ->
-   let open Language in
+  let open Language in
   let continue_match ?add_comment e =
     let cmts =
       match add_comment with Some c -> c :: comments | None -> comments

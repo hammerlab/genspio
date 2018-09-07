@@ -345,8 +345,7 @@ let () =
   let open Genspio.EDSL_ng in
   let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
   let check_anon anon anons_expected =
-    Str.(
-      concat_elist anon =$= string (String.concat ~sep:"" anons_expected))
+    Str.(concat_elist anon =$= string (String.concat ~sep:"" anons_expected))
     &&& Str.(
           (* let tmp = tmp_file "single-is-anon" in *)
           get_stdout
@@ -422,48 +421,45 @@ let () =
                     (return 44)) ] ))
   in
   let only_anon args name =
-  exits ~name:(sprintf "parse-cli-only-anon-%s" name)
-    ~args
-    0
-    (Command_line.parse spec (fun ~anon one two bone ->
-         assert_or_fail 
-           (sprintf "anon-is-anon-%s" name)
-           (check_anon anon args)
-    
-       ))
+    exits
+      ~name:(sprintf "parse-cli-only-anon-%s" name)
+      ~args 0
+      (Command_line.parse spec (fun ~anon one two bone ->
+           assert_or_fail
+             (sprintf "anon-is-anon-%s" name)
+             (check_anon anon args) ))
   in
-  [only_anon [] "nothing";
-   only_anon ["one"] "one";
-   only_anon (List.init 4 ~f:(sprintf "a%d")) "fouras"]
-  @
-  List.mapi
-    ~f:(fun i f -> f i)
-    [ make 11 minus_f ""
-    ; make 12 "not-one" ""
-    ; make 12 "not-one" "" ~anon3:(String.make 20 'S')
-    ; make 11 "not-one" "-v"
-    ; make 12 minus_f "--"
-    ; (* the `--` should prevent the `-g one` from being parsed *)
-      make 12 minus_f "--" ~anon3:(String.make 6 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 7 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 8 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 9 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 10 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 11 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 12 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 20 'S')
-    ; make 12 "not-one" "-x"
-    ; (* option does not exist (untreated for now) *)
-      make 12 "not-one" "--v"
-    ; make 12 "not-one" "-v j"
-    ; make 11 "not \\ di $bouh one" "-v"
-    ; make 12 "not \\ di $bouh one" " -- -v"
-    ; make 12 "one \nwith spaces and \ttabs -dashes -- " ""
-    ; make 12 "one \nwith  spaces and \ttabs -dashes -- " ""
-    ; make 12 "one with \\ spaces and \ttabs -dashes -- " ""
-    ; make 0 "not-one" "--help"
-    ; make 0 "not-one" "-help"
-    ; make 0 "not-one" "-h" ]
+  [ only_anon [] "nothing"
+  ; only_anon ["one"] "one"
+  ; only_anon (List.init 4 ~f:(sprintf "a%d")) "fouras" ]
+  @ List.mapi
+      ~f:(fun i f -> f i)
+      [ make 11 minus_f ""
+      ; make 12 "not-one" ""
+      ; make 12 "not-one" "" ~anon3:(String.make 20 'S')
+      ; make 11 "not-one" "-v"
+      ; make 12 minus_f "--"
+      ; (* the `--` should prevent the `-g one` from being parsed *)
+        make 12 minus_f "--" ~anon3:(String.make 6 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 7 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 8 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 9 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 10 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 11 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 12 'S')
+      ; make 12 minus_f "--" ~anon3:(String.make 20 'S')
+      ; make 12 "not-one" "-x"
+      ; (* option does not exist (untreated for now) *)
+        make 12 "not-one" "--v"
+      ; make 12 "not-one" "-v j"
+      ; make 11 "not \\ di $bouh one" "-v"
+      ; make 12 "not \\ di $bouh one" " -- -v"
+      ; make 12 "one \nwith spaces and \ttabs -dashes -- " ""
+      ; make 12 "one \nwith  spaces and \ttabs -dashes -- " ""
+      ; make 12 "one with \\ spaces and \ttabs -dashes -- " ""
+      ; make 0 "not-one" "--help"
+      ; make 0 "not-one" "-help"
+      ; make 0 "not-one" "-h" ]
   |> List.concat
 
 let () =
