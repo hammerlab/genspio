@@ -552,38 +552,45 @@ module Start_script = struct
     Script.make [name] ~description (fun ~root ->
         let open Gedsl in
         let open Command_line in
-        let default_none = str "--no-job-name--" in
         let opts =
           let open Arg in
-          string ["--job"] ~default:default_none ~doc:"Job name"
-          & describe_option_and_usage ()
+          flag ["--all"] ~doc:"Start all jobs" & describe_option_and_usage ()
         in
-        parse opts (fun ~anon name describe ->
-            let dot_job name =
-              Environment.configuration_path env /// (name ^$^ str ".job")
-            in
+        let start_one name =
+          if_then_else (Job.is_running env name)
+            (say "* Job '%s' is already running!" [name])
+            (let mk, runpath = Job.run_script env name in
+             seq
+               [ mk
+               ; if_seq
+                   (file_exists (Job.job_path env name))
+                   ~t:
+                     [ say "* Starting '%s' in Screen window: '%s'"
+                         [name; Screen.window_name name]
+                     ; Screen.call env
+                         [ str "-X"
+                         ; str "screen"
+                         ; str "-t"
+                         ; Screen.window_name name
+                         ; str "sh"
+                         ; runpath ] ]
+                   ~e:[say "* Job '%s' is not configured!" [name]] ])
+        in
+        parse opts (fun ~anon all describe ->
             deal_with_describe describe
-              [ if_seq
-                  Str.(name =$= default_none)
+              [ Screen.ensure_running env
+              ; if_seq all
                   ~t:
                     [ say "Starting all jobs from %s"
                         [Environment.configuration_path env]
-                    ; Screen.ensure_running env
                     ; Environment.on_jobs env (fun path ->
                           let name = Job.name path in
-                          if_then_else (Job.is_running env name)
-                            (say "Job '%s' is already running!" [name])
-                            (let mk, mkpath = Job.run_script env name in
-                             seq
-                               [ mk
-                               ; Screen.call env
-                                   [ str "-X"
-                                   ; str "screen"
-                                   ; str "-t"
-                                   ; Screen.window_name @@ Job.name path
-                                   ; str "sh"
-                                   ; mkpath ] ]) ) ]
-                  ~e:[say "Starting job '%s' from %s" [dot_job name]]
+                          start_one name ) ]
+                  ~e:
+                    [ Elist.iter anon ~f:(fun item ->
+                          let name = item () in
+                          seq [say "Starting job '%s':" [name]; start_one name]
+                      ) ]
               ; say "Done." [] ] ) )
 end
 
