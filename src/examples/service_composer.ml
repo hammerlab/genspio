@@ -327,6 +327,18 @@ module Manual = struct
                generation parameters and tries to ensure that the session is \
                unique on the host."
               root )
+    @ section "Docker Image For the Generator"
+    @ from (fun ~root env ->
+          let image = "smondet/genspio-doc-dockerfiles:apps406" in
+          ksprintf par
+            "If you have [`opam`](https://opam.ocaml.org), setting up the \
+             genspio repository is easy (only simple, pure OCaml \
+             dependencies), if not, or if you just like Docker setup, the \
+             generator is available in the `%s` image, see:"
+            image
+          @ code_block
+              [ sprintf "docker run -it %s genspio-service-composer --help"
+                  image ] )
 
   let output ~root ~env =
     let open Gedsl in
