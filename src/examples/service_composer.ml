@@ -931,7 +931,7 @@ module Example_script = struct
       ; call {sh|config addjob --name Top --no-log -c top|sh}
       ; call
           "config addjob --name Dummy --interpreter 'bash -c' \\\n\
-           \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
+          \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
       ; cmt "Show the updated configuration:"
       ; call "config show"
       ; cmt "Show the current status:"
@@ -1037,8 +1037,10 @@ The `make` function drives the generation of the list of scripts.
 
  *)
 
-let make ?default_configuration_path ~name ~output_path () =
-  let env = Environment.make ?default_configuration_path name in
+let make ?default_configuration_path ?default_screen_name ~name ~output_path () =
+  let env =
+    Environment.make ?default_screen_name ?default_configuration_path name
+  in
   let scripts =
     [ Base_script.make ()
     ; Configuration_script.make ()
@@ -1068,6 +1070,7 @@ let () =
   let name = ref None in
   let output_path = ref None in
   let config_path = ref None in
+  let screen_name = ref None in
   let args =
     Arg.align
       [ ( "--name"
@@ -1076,6 +1079,9 @@ let () =
       ; ( "--configuration-path"
         , Arg.String (fun s -> config_path := Some s)
         , sprintf "<path> Path to the default configuration root." )
+      ; ( "--screen-name"
+        , Arg.String (fun s -> screen_name := Some s)
+        , sprintf "<name> Force the default screen-session name." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
         , sprintf "<script-name> Where to write the scripts." ) ]
@@ -1090,5 +1096,6 @@ let () =
         die ()
   in
   make ~name:(need "--name" !name) ?default_configuration_path:!config_path
+    ?default_screen_name:!screen_name
     ~output_path:(need "--output-path" !output_path)
     ()
