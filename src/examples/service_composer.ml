@@ -230,14 +230,15 @@ module Manual = struct
 
   let section s = raws [s; String.make (String.length s) '-'; ""]
 
-  let wrap ?(columns = 72) s =
+  let wrap ?(indent = 0) ?(columns = 72) s =
     let buf = Buffer.create 42 in
+    let indentation = String.make indent ' ' in
     let rec assemble col = function
       | [] -> ()
       | one :: more ->
           let potential = col + String.length one + 1 in
           if potential > columns then (
-            Buffer.add_string buf ("\n" ^ one) ;
+            Buffer.add_string buf ("\n" ^ indentation ^ one) ;
             assemble (String.length one) more )
           else (
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
@@ -253,6 +254,9 @@ module Manual = struct
   let par s = raws [wrap s; ""]
 
   let code_block s = raws (["```"] @ s @ ["```"; ""])
+
+  let list l =
+    raws (List.map l ~f:(fun p -> sprintf "* %s" (wrap ~indent:2 p)) @ [""])
 
   (* `StringLabels.uppercase` is deprecated but
      `StringLabels.uppercase_ascii` is not available in OCaml 4.03.0
@@ -303,6 +307,26 @@ module Manual = struct
               "Then, see `%s --help` first, or for any sub-command try \
                `%s <command> --help`."
               root root )
+    @ section "Screen Session Isolation"
+    @ from (fun ~root env ->
+          ksprintf par
+            "`%s` isolates Screen sessions by using their session name." root
+          @ ksprintf par
+              "The screen session name can be configured a 2 levels:"
+          @ list
+              [ sprintf
+                  "At script-generation time, one can set the default-value \
+                   (with the option `--screen-name`)."
+              ; sprintf
+                  "At configuration time, one can overwrite the value with \
+                   `-S`, see `%s config init --help`."
+                  root ]
+          @ ksprintf par
+              "If none of those two options is provided, `%s config init` \
+               will generate a name, which is function of the root path and \
+               generation parameters and tries to ensure that the session is \
+               unique on the host."
+              root )
 
   let output ~root ~env =
     let open Gedsl in
@@ -1037,7 +1061,8 @@ The `make` function drives the generation of the list of scripts.
 
  *)
 
-let make ?default_configuration_path ?default_screen_name ~name ~output_path () =
+let make ?default_configuration_path ?default_screen_name ~name ~output_path ()
+    =
   let env =
     Environment.make ?default_screen_name ?default_configuration_path name
   in
