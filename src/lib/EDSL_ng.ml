@@ -537,8 +537,8 @@ module Dispatcher_script = struct
             []
         ; (let findgrep =
              ksprintf Magic.unit
-               "find $(echo $PATH  | tr ':' ' ') -name '%s-*' -exec basename \
-                {} \\;   2>/dev/null | sort -u"
+               "{ ls -1 $(echo $PATH  | tr ':' ' ') | grep -E '%s-[^-]*$' | \
+                sort -u ; } 2> /dev/null"
                name
            in
            findgrep
