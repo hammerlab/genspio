@@ -110,23 +110,28 @@ editable by the scripts (e.g. with `cosc config init`,
 module Environment = struct
   type t =
     { prefix: string
-    ; default_screen_name: string
+    ; default_screen_name: string option
     ; default_configuration_path: string }
 
   let make ?default_screen_name
       ?(default_configuration_path = "/tmp/service_composer_config.d") prefix =
-    let default_screen_name =
-      Option.value default_screen_name
-        ~default:
-          (sprintf "%s-screen-session-%s" prefix
-             Digest.(
-               string default_configuration_path
-               |> to_hex
-               |> String.sub_exn ~index:0 ~length:16))
-    in
     {default_screen_name; default_configuration_path; prefix}
 
   open Gedsl
+
+  (*md
+The function `posixish_hash` creates a script that uses POSIX's
+[cksum](http://pubs.opengroup.org/onlinepubs/009695299/utilities/cksum.html)
+to output a stronger hash.
+*)
+  let posixish_hash path =
+    let cksum = call [str "cksum"] in
+    seq
+      [ call [str "cat"; path] ||> cksum
+      ; call [str "cat"; path]
+        ||> exec ["tr"; "0123456789a-z"; "98765A-Z43210"]
+        ||> cksum ]
+    ||> exec ["tr"; "-d"; "\\n "]
 
   let env_or s default_value =
     let g = getenv (str s) in
@@ -141,6 +146,22 @@ module Environment = struct
   let configuration_path t =
     env_or (var_configuration_path t) t.default_configuration_path
 
+  let make_default_screen_name t =
+    match t.default_screen_name with
+    | Some s -> str s
+    | None ->
+        let tmp = tmp_file "make-default-screen-name" in
+        seq
+          [ printf (str "session-") []
+          ; write_stdout ~path:tmp#path
+              (seq
+                 [ printf (str "%s\\n%s\\n%s\\n")
+                     [ str t.prefix
+                     ; str t.default_configuration_path
+                     ; configuration_path t ] ])
+          ; posixish_hash tmp#path ]
+        |> get_stdout_one_line
+
   let screen_name_path t = configuration_path t /// str "screen-session-name"
 
   let init ?screen_name t =
@@ -149,7 +170,7 @@ module Environment = struct
       ; ( "set-screen-name"
         , write_stdout ~path:(screen_name_path t)
             (printf (str "%s\\n")
-               [Option.value screen_name ~default:(str t.default_screen_name)])
+               [Option.value screen_name ~default:(make_default_screen_name t)])
         ) ]
 
   let is_initialized t =
@@ -486,9 +507,10 @@ module Init_script = struct
           string
             ["--screen-session-name"; "-S"]
             ~doc:
-              (sprintf "Set the screen session name (default: %s)"
-                 env.Environment.default_screen_name)
-            ~default:(str env.Environment.default_screen_name)
+              (sprintf
+                 "Set the screen session name (the default is a function of \
+                  the root path and other constants of the script)")
+            ~default:(Environment.make_default_screen_name env)
           & describe_option_and_usage ()
         in
         parse opts (fun ~anon screen_name describe ->
