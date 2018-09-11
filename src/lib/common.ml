@@ -11,8 +11,8 @@ module Unique_name = struct
   let variable = create
 end
 
-let with_buffer ?(size= 42) f =
-  let b = Buffer.create 42 in
+let with_buffer ?(size = 42) f =
+  let b = Buffer.create size in
   let str = Buffer.add_string b in
   let res = f str in
   (Buffer.contents b, res)
