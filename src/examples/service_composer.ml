@@ -330,20 +330,21 @@ module Manual = struct
                generation parameters and tries to ensure that the session is \
                unique on the host."
               root )
-    @ section "Docker Image For the Generator"
-    @ from (fun ~root env ->
-          let image = "smondet/genspio-doc-dockerfiles:apps406" in
-          ksprintf par
-            "If you have [`opam`](https://opam.ocaml.org), setting up the \
-             genspio repository is easy (only simple, pure OCaml \
-             dependencies), if not, or if you just like Docker setup, the \
-             generator is available in the `%s` image, see:"
-            image
-          @ code_block
-              [ sprintf "docker run -it %s genspio-service-composer --help"
-                  image ] )
+    @ extended
+        ( section "Docker Image For the Generator"
+        @ from (fun ~root env ->
+              let image = "smondet/genspio-doc-dockerfiles:apps406" in
+              ksprintf par
+                "If you have [`opam`](https://opam.ocaml.org), setting up the \
+                 genspio repository is easy (only simple, pure OCaml \
+                 dependencies), if not, or if you just like Docker setup, the \
+                 generator is available in the `%s` image, see:"
+                image
+              @ code_block
+                  [ sprintf "docker run -it %s genspio-service-composer --help"
+                      image ] ) )
 
-  let output ~root ~env =
+  let output ~root ~env extended =
     let open Gedsl in
     let rec one = function
       | Raw s -> printf (str "%s\\n") [str s]
@@ -1054,12 +1055,17 @@ module Example_script = struct
                     ] ) ] ) )
 
   let () =
+    let first_sentence =
+      "The distribution comes with runnable examples, try \
+       `cosc example --help`."
+    in
     Manual.(
-      add @@ section "Examples"
-      @ par
-          "The distribution comes with runnable examples, try \
-           `cosc example --help`. Here is the “basic” example:"
-      @ from (fun ~root env -> code_block (basic env root |> snd)))
+      add
+        ( section "Examples"
+        @ extended
+            ( ksprintf par "%s Here is the “basic” example:" first_sentence
+            @ from (fun ~root env -> code_block (basic env root |> snd)) )
+            ~no:(par first_sentence) ))
 end
 
 module Base_script = struct
