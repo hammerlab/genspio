@@ -302,10 +302,29 @@ module Manual = struct
                custom/project-specific scripts that can remain independent \
                from each other without setting an environment variable."
               root env.Environment.default_configuration_path )
+    @ extended
+        ( section "Installation"
+        @ from (fun ~root env ->
+              ksprintf par
+                "Simply copy `%s*` to somewhere in your `$PATH`, the scripts \
+                 depend on a reasonably valid version of `/bin/sh` and GNU \
+                 Screen."
+                root ) )
     @ section "Usage"
     @ from (fun ~root env ->
-          ksprintf par "This manual is obtained from the `%s man` command."
-            root
+          let intro fmt =
+            ksprintf
+              (ksprintf par
+                 "The basic manual is obtained from the `%s man` command.%s"
+                 root)
+              fmt
+          in
+          extended
+            (intro
+               " The, present, “`README.md`” version is the result of \
+                `%s man --extended`."
+               root)
+            ~no:(intro "")
           @ ksprintf par
               "Then, see `%s --help` first, or for any sub-command try \
                `%s <command> --help`."
@@ -337,7 +356,7 @@ module Manual = struct
               ksprintf par
                 "If you have [`opam`](https://opam.ocaml.org), setting up the \
                  genspio repository is easy (only simple, pure OCaml \
-                 dependencies), if not, or if you just like Docker setup, the \
+                 dependencies), if not, or if you just like Docker™, the \
                  generator is available in the `%s` image, see:"
                 image
               @ code_block
