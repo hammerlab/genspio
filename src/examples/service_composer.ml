@@ -1134,6 +1134,7 @@ let () =
   let output_path = ref None in
   let config_path = ref None in
   let screen_name = ref None in
+  let output_readme = ref false in
   let args =
     Arg.align
       [ ( "--name"
@@ -1145,6 +1146,9 @@ let () =
       ; ( "--screen-name"
         , Arg.String (fun s -> screen_name := Some s)
         , sprintf "<name> Force the default screen-session name." )
+      ; ( "--output-readme"
+        , Arg.Set output_readme
+        , sprintf " Output the manual to a `README.md`." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
         , sprintf "<script-name> Where to write the scripts." ) ]
@@ -1158,7 +1162,10 @@ let () =
         msg "Option `%s` is mandatory" opt ;
         die ()
   in
-  make ~name:(need "--name" !name) ?default_configuration_path:!config_path
-    ?default_screen_name:!screen_name
-    ~output_path:(need "--output-path" !output_path)
-    ()
+  let output_path = need "--output-path" !output_path in
+  let name = need "--name" !name in
+  make ~name ?default_configuration_path:!config_path
+    ?default_screen_name:!screen_name ~output_path () ;
+  if !output_readme then (
+    msg "Outputting manual to %s/README.md" output_path ;
+    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path )
