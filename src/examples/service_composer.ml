@@ -215,6 +215,7 @@ module Manual = struct
   type item =
     | Raw of string
     | Root_env of (root:string -> Environment.t -> item list)
+    | Extended of {yes: item list; no: item list}
 
   let _global_ : item list ref = ref []
 
@@ -223,6 +224,8 @@ module Manual = struct
   let raw s = Raw s
 
   let from f = [Root_env f]
+
+  let extended ?(no = []) yes = [Extended {yes; no}]
 
   let raws l = List.map l ~f:raw
 
@@ -345,6 +348,8 @@ module Manual = struct
     let rec one = function
       | Raw s -> printf (str "%s\\n") [str s]
       | Root_env f -> seq @@ List.map ~f:one (f ~root env)
+      | Extended {yes; no} ->
+          if_seq extended ~t:(List.map ~f:one yes) ~e:(List.map ~f:one no)
     in
     seq (List.map !_global_ ~f:one)
 end
@@ -521,10 +526,12 @@ module Manual_script = struct
         let open Command_line in
         let opts =
           let open Arg in
-          describe_option_and_usage ()
+          flag ["--extended"; "-X"] ~doc:"Provide extra information"
+          & describe_option_and_usage ()
         in
-        parse opts (fun ~anon describe ->
-            deal_with_describe describe [Manual.output ~root ~env] ) )
+        parse opts (fun ~anon extended describe ->
+            deal_with_describe describe [Manual.output ~root ~env extended] )
+    )
 end
 
 module Init_script = struct
