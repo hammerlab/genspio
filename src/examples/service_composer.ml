@@ -18,6 +18,7 @@ Quite a few scripts will have been created:
 
     $BINPATH/cosc
     $BINPATH/cosc-manual
+    $BINPATH/cosc-version
     $BINPATH/cosc-attach
     $BINPATH/cosc-example
     $BINPATH/cosc-logs
@@ -52,6 +53,26 @@ let cmdf fmt =
       | 0 -> ()
       | other -> ksprintf failwith "CMD: %S failed with %d" s other )
     fmt
+
+module Version = struct
+  let version =
+    lazy
+      Unix.(
+        gettimeofday () |> gmtime
+        |> fun { tm_sec
+               ; tm_min
+               ; tm_hour
+               ; tm_mday
+               ; tm_mon
+               ; tm_year
+               ; tm_wday
+               ; tm_yday
+               ; tm_isdst } ->
+        sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
+          tm_mday tm_hour tm_min tm_sec)
+
+  let str () = Gedsl.str (Lazy.force version)
+end
 
 (*md A lot of (too much?) attention has been spent making the “root”
 name of the scripts parametrizable (the string `cosc` in the example
@@ -554,6 +575,31 @@ module Manual_script = struct
     )
 end
 
+module Version_script = struct
+  include Gedsl.Script_with_describe (struct
+    let name = "version"
+
+    let description = "Show the version information."
+  end)
+
+  let make ~env () =
+    Script.make [name] ~description (fun ~root ->
+        let open Gedsl in
+        let open Command_line in
+        let opts =
+          let open Arg in
+          flag ["--extended"; "-X"] ~doc:"Provide extra information"
+          & describe_option_and_usage ()
+        in
+        parse opts (fun ~anon extended describe ->
+            deal_with_describe describe
+              [ if_seq extended
+                  ~t:
+                    [ say "%s %s (Genspio %s)"
+                        [str root; Version.str (); str Genspio.Meta.version] ]
+                  ~e:[say "%s" [Version.str ()]] ] ) )
+end
+
 module Init_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "initialize"
@@ -994,7 +1040,7 @@ module Example_script = struct
       ; call {sh|config addjob --name Top --no-log -c top|sh}
       ; call
           "config addjob --name Dummy --interpreter 'bash -c' \\\n\
-          \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
+           \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
       ; cmt "Show the updated configuration:"
       ; call "config show"
       ; cmt "Show the current status:"
@@ -1136,6 +1182,7 @@ let make ?default_configuration_path ?default_screen_name ~name ~output_path ()
     ; Attach_script.make ~env ()
     ; Kill_script.make ~env ()
     ; Manual_script.make ~env ()
+    ; Version_script.make ~env ()
     ; Example_script.make ~env ()
     ; Status_script.make ~env () ]
   in
