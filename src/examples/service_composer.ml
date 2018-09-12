@@ -71,7 +71,9 @@ module Version = struct
         sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
           tm_mday tm_hour tm_min tm_sec)
 
-  let str () = Gedsl.str (Lazy.force version)
+  let get () = Lazy.force version
+
+  let str () = Gedsl.str (get ())
 end
 
 (*md A lot of (too much?) attention has been spent making the “root”
@@ -300,8 +302,10 @@ module Manual = struct
     @ from (fun ~root env ->
           ksprintf par
             "The `%s*` scripts are a family of POSIX shell executables that \
-             manage a set of long running processes in a GNU-Screen session."
+             manage a set of long running processes in a GNU-Screen session. \
+             Current version is `%s`."
             root
+            Version.(get ())
           @ ksprintf par
               "The  configuration is stored in a directory: the root path can \
                be itself configured with the `$%s` environment variable \
@@ -330,7 +334,10 @@ module Manual = struct
                 "Simply copy `%s*` to somewhere in your `$PATH`, the scripts \
                  depend on a reasonably valid version of `/bin/sh` and GNU \
                  Screen."
-                root ) )
+                root
+              @ ksprintf par
+                  "If you are using the code-generator, you can just point \
+                   the `--output-path` option at the right directory." ) )
     @ section "Usage"
     @ from (fun ~root env ->
           let intro fmt =
