@@ -1081,6 +1081,19 @@ module Base_script = struct
           ~name:root ~description () )
 end
 
+let () =
+  Manual.(
+    add
+      (extended
+         ( section "Authors"
+         @ ksprintf par "[Seb Mondet](https://seb.mondet.org)."
+         @ section "License"
+         @ par
+             "The code generator is covered by the Apache 2.0 \
+              [license](http://www.apache.org/licenses/LICENSE-2.0), the \
+              scripts are ISC [licensed](https://opensource.org/licenses/ISC)."
+         )))
+
 (*md
 The `make` function drives the generation of the list of scripts.
 
