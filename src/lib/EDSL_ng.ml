@@ -336,7 +336,7 @@ let loop_until_true ?(attempts = 20) ?(sleep = 2)
   seq
     [ intvar#set (int 1)
     ; loop_while
-        (Integer.(intvar#get <= int attempts) &&& (not cmd))
+        (Integer.(intvar#get <= int attempts) &&& not cmd)
         ~body:
           (seq
              [ on_failed_attempt intvar#get
@@ -537,8 +537,8 @@ module Dispatcher_script = struct
             []
         ; (let findgrep =
              ksprintf Magic.unit
-               "find $(echo $PATH  | tr ':' ' ') -name '%s-*' -exec basename \
-                {} \\;   2>/dev/null | sort -u"
+               "{ ls -1 $(echo $PATH  | tr ':' ' ') | grep -E '%s-[^-]*$' | \
+                sort -u ; } 2> /dev/null"
                name
            in
            findgrep

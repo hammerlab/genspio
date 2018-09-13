@@ -8,12 +8,12 @@ module Shell_script = struct
 
   open Genspio.EDSL_ng
 
-  let make ?(dependencies= []) name content = {name; content; dependencies}
+  let make ?(dependencies = []) name content = {name; content; dependencies}
 
   let sanitize_name n =
     let m =
       String.map n ~f:(function
-        | ('0'..'9' | 'a'..'z' | 'A'..'Z' | '-') as c -> c
+        | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
         | other -> '_' )
     in
     String.sub ~index:0 ~length:40 m |> Option.value ~default:m
@@ -139,14 +139,14 @@ module Run_environment = struct
     ; local_dependencies: [`Command of string] list
     ; vm: vm }
 
-  let make vm ?root_password ?(setup= Genspio.EDSL_ng.nop) ~local_dependencies
+  let make vm ?root_password ?(setup = Genspio.EDSL_ng.nop) ~local_dependencies
       ~ssh_port name =
     {vm; root_password; setup; local_dependencies; name; ssh_port}
 
   let qemu_arm ~kernel ~sd_card ~machine ?initrd ~root_device =
     make (Qemu_arm {kernel; sd_card; machine; initrd; root_device})
 
-  let qemu_amd46 ?(ui= `No_graphic) ~hda = make (Qemu_amd46 {hda; ui})
+  let qemu_amd46 ?(ui = `No_graphic) ~hda = make (Qemu_amd46 {hda; ui})
 
   let http ?act uri = File.Http (uri, act)
 
@@ -208,7 +208,7 @@ module Run_environment = struct
     | {name} ->
         let open Shell_script in
         let open Genspio.EDSL_ng in
-        let pid = get_stdout (exec ["cat"; "qemu.pid"])  in
+        let pid = get_stdout (exec ["cat"; "qemu.pid"]) in
         Shell_script.(make (sprintf "kill-qemu-%s" name))
         @@ check_sequence
              (* ~name:(sprintf "Killing Qemu VM")
@@ -237,20 +237,15 @@ module Run_environment = struct
         let report = tmp_file "configure-report.md" in
         let there_was_a_failure = tmp_file "bool-failure" in
         let cmds =
-          [ report#set
-              (str "Configuration Report\n====================\n\n")
+          [ report#set (str "Configuration Report\n====================\n\n")
           ; there_was_a_failure#set (bool false |> Bool.to_string) ]
           @ List.map local_dependencies ~f:(function `Command name ->
                 if_seq
                   (exec ["which"; name] |> silently |> succeeds)
-                  ~t:
-                    [ report#append
-                        (ksprintf str "* `%s`: found.\n" name) ]
+                  ~t:[report#append (ksprintf str "* `%s`: found.\n" name)]
                   ~e:
-                    [ report#append
-                        (ksprintf str "* `%s`: NOT FOUND!\n" name)
-                    ; there_was_a_failure#set (bool true |> Bool.to_string)
-                    ] )
+                    [ report#append (ksprintf str "* `%s`: NOT FOUND!\n" name)
+                    ; there_was_a_failure#set (bool true |> Bool.to_string) ] )
           @ [ call [string "cat"; report#path]
             ; if_seq
                 (there_was_a_failure#get |> Bool.of_string)
@@ -276,7 +271,7 @@ module Run_environment = struct
     let dependencies = make_dependencies tvm in
     let start_deps = List.map dependencies ~f:(fun (base, _, _) -> base) in
     let help_entries = ref [] in
-    let make_entry ?doc ?(phony= false) ?(deps= []) target action =
+    let make_entry ?doc ?(phony = false) ?(deps = []) target action =
       help_entries := (target, doc) :: !help_entries ;
       (if phony then [sprintf ".PHONY: %s" target] else [])
       @ [ sprintf "# %s: %s" target

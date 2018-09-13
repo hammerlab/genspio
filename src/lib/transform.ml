@@ -27,9 +27,8 @@ module Visitor = struct
         fun (a, op, b) ->
           Bool_operator (self#expression a, op, self#expression b)
 
-      method
-          string_operator :    byte_array t * [`Eq | `Neq] * byte_array t
-                            -> bool t =
+      method string_operator
+          : byte_array t * [`Eq | `Neq] * byte_array t -> bool t =
         fun (a, op, b) ->
           String_operator (self#expression a, op, self#expression b)
 
@@ -55,12 +54,12 @@ module Visitor = struct
       method redirect_output : unit t * fd_redirection list -> unit t =
         fun (u, l) -> Redirect_output (self#expression u, l)
 
-      method
-          write_output :    expr:unit t
-                         -> stdout:c_string t option
-                         -> stderr:c_string t option
-                         -> return_value:c_string t option
-                         -> unit t =
+      method write_output
+          :    expr:unit t
+            -> stdout:c_string t option
+            -> stderr:c_string t option
+            -> return_value:c_string t option
+            -> unit t =
         fun ~expr ~stdout ~stderr ~return_value ->
           let opt f o = Option.map ~f o in
           Write_output
@@ -128,16 +127,12 @@ module Visitor = struct
       method c_string_to_byte_array : c_string t -> byte_array t =
         fun e -> C_string_to_byte_array (self#expression e)
 
-      method
-          int_bin_op :    int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t
-                       -> int t =
+      method int_bin_op
+          : int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t -> int t =
         fun (a, op, b) -> Int_bin_op (self#expression a, op, self#expression b)
 
-      method
-          int_bin_comparison :    int t
-                                  * [`Eq | `Ne | `Gt | `Ge | `Lt | `Le]
-                                  * int t
-                               -> bool t =
+      method int_bin_comparison
+          : int t * [`Eq | `Ne | `Gt | `Ge | `Lt | `Le] * int t -> bool t =
         fun (a, op, b) ->
           Int_bin_comparison (self#expression a, op, self#expression b)
 
@@ -286,7 +281,8 @@ side-effectful).
                       prev
                   | ( Byte_array_to_c_string (Literal (Literal.String pstring))
                       :: more
-                    , Byte_array_to_c_string (Literal (Literal.String sitem)) ) ->
+                    , Byte_array_to_c_string (Literal (Literal.String sitem)) )
+                    ->
                       Byte_array_to_c_string
                         (Literal (Literal.String (pstring ^ sitem)))
                       :: more
@@ -389,8 +385,12 @@ side-effectful).
             (!count, name, Forget e, Forget res, Forget p) :: !failures
     in
     check "no-op" No_op No_op ;
-    check "some bool" Construct.(bool true &&& bool false) Construct.(bool false) ;
-    check "some bool" Construct.(bool false ||| bool true) Construct.(bool true) ;
+    check "some bool"
+      Construct.(bool true &&& bool false)
+      Construct.(bool false) ;
+    check "some bool"
+      Construct.(bool false ||| bool true)
+      Construct.(bool true) ;
     check "some bool and string"
       Construct.(
         if_then_else
@@ -411,7 +411,9 @@ side-effectful).
     check "concat one-two"
       Construct.(C_string.concat_list [string "one"; string "-"; string "two"])
       Construct.(string "one-two") ;
-    let s n = Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
+    let s n =
+      Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c)
+    in
     check "concat one-two"
       Construct.(
         C_string.concat_list
@@ -422,7 +424,8 @@ side-effectful).
           ; string "two"
           ; s 1
           ; string "" ])
-      Construct.(C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
+      Construct.(
+        C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
     check "list-append"
       Construct.(
         Elist.append

@@ -543,23 +543,17 @@ val verbose_call :
   -> Language.c_string Language.t list
   -> unit Language.t
 
-val check_sequence_with_output :
-  unit Language.t list -> unit Language.t
+val check_sequence_with_output : unit Language.t list -> unit Language.t
 
-val is_regular_file :
-  Language.c_string Language.t -> bool Language.t
+val is_regular_file : Language.c_string Language.t -> bool Language.t
 
-val is_directory :
-  Language.c_string Language.t -> bool Language.t
+val is_directory : Language.c_string Language.t -> bool Language.t
 
-val is_executable :
-  Language.c_string Language.t -> bool Language.t
+val is_executable : Language.c_string Language.t -> bool Language.t
 
-val is_readable :
-  Language.c_string Language.t -> bool Language.t
+val is_readable : Language.c_string Language.t -> bool Language.t
 
-val mkdir_p :
-  Language.c_string Language.t -> unit Language.t
+val mkdir_p : Language.c_string Language.t -> unit Language.t
 
 val exit : int -> unit Language.t
 
@@ -575,13 +569,9 @@ val ( /// ) :
   -> Language.c_string Language.t
   -> Language.c_string Language.t
 
-val say :
-     string
-  -> Language.c_string Language.t list
-  -> unit Language.t
+val say : string -> Language.c_string Language.t list -> unit Language.t
 
-val c_strings :
-  string list -> Language.c_string Language.t list
+val c_strings : string list -> Language.c_string Language.t list
 
 val greps_to :
      ?extended_re:bool

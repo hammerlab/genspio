@@ -4,7 +4,7 @@ module String = Sosa.Native_string
 let downloader () =
   let open Genspio.EDSL_ng in
   let say strings =
-    let sayone ?(prompt= false) s =
+    let sayone ?(prompt = false) s =
       let prompt = if prompt then "downloader: " else "" in
       call [string "printf"; string (prompt ^ "%s"); s]
     in
@@ -22,11 +22,14 @@ let downloader () =
   let silent ~name unit =
     object (self)
       method stdout = "/tmp" // sprintf "output-of-%s-%s" name "out" |> string
+
       method stderr = "/tmp" // sprintf "output-of-%s-%s" name "err" |> string
+
       method exec =
         seq
           [ (* say [string "Silent "; string name; self#stdout; self#stderr;]; *)
             write_output (seq unit) ~stdout:self#stdout ~stderr:self#stderr ]
+
       method succeed_or_fail =
         if_seq (self#exec |> succeeds) ~t:[sayf "%s: Success" name]
           ~e:
@@ -44,7 +47,7 @@ let downloader () =
     s#succeed_or_fail
   in
   let download ~url ~output =
-    let try_help ?(opt= "--help") cmd =
+    let try_help ?(opt = "--help") cmd =
       exec [cmd; opt] |> silence ~name:(cmd ^ opt) |> succeeds
     in
     let do_call exec args =
@@ -65,13 +68,9 @@ let downloader () =
   in
   let no_newline_sed ~input expr =
     let with_potential_newline =
-      Str.concat_list [input; string "\n"]
-      >> exec ["sed"; expr]
-      |> get_stdout
+      Str.concat_list [input; string "\n"] >> exec ["sed"; expr] |> get_stdout
     in
-    with_potential_newline
-    >> exec ["tr"; "-d"; "\\n"]
-    |> get_stdout
+    with_potential_newline >> exec ["tr"; "-d"; "\\n"] |> get_stdout
   in
   let module Unwrapper = struct
     type cmd = unit t
@@ -92,8 +91,8 @@ let downloader () =
               ~name:(sprintf "%s-%s" t.verb t.extension)
               (t.commands name_variable)
           ; name_variable#set
-              ( remove_suffix name_variable#get (sprintf "\\.%s" t.extension)
-               ) ]
+              (remove_suffix name_variable#get (sprintf "\\.%s" t.extension))
+          ]
       in
       seq
         [ say [string "Extract loop: "; name_variable#get]
@@ -162,9 +161,7 @@ let downloader () =
         [ call [string "mkdir"; string "-p"; tmp_dir]
         ; if_then all_in_tmp
             (seq [sayf "Going to the tmpdir"; call [string "cd"; tmp_dir]])
-        ; if_then
-            Str.(url =$= no_value)
-            (failf "Argument URL is mandatory")
+        ; if_then Str.(url =$= no_value) (failf "Argument URL is mandatory")
         ; if_then_else
             (string_matches_any url ["^http://"; "^https://"; "^ftp://"])
             (seq

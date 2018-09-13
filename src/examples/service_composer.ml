@@ -18,6 +18,7 @@ Quite a few scripts will have been created:
 
     $BINPATH/cosc
     $BINPATH/cosc-manual
+    $BINPATH/cosc-version
     $BINPATH/cosc-attach
     $BINPATH/cosc-example
     $BINPATH/cosc-logs
@@ -52,6 +53,28 @@ let cmdf fmt =
       | 0 -> ()
       | other -> ksprintf failwith "CMD: %S failed with %d" s other )
     fmt
+
+module Version = struct
+  let version =
+    lazy
+      Unix.(
+        gettimeofday () |> gmtime
+        |> fun { tm_sec
+               ; tm_min
+               ; tm_hour
+               ; tm_mday
+               ; tm_mon
+               ; tm_year
+               ; tm_wday
+               ; tm_yday
+               ; tm_isdst } ->
+        sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
+          tm_mday tm_hour tm_min tm_sec)
+
+  let get () = Lazy.force version
+
+  let str () = Gedsl.str (get ())
+end
 
 (*md A lot of (too much?) attention has been spent making the “root”
 name of the scripts parametrizable (the string `cosc` in the example
@@ -110,23 +133,28 @@ editable by the scripts (e.g. with `cosc config init`,
 module Environment = struct
   type t =
     { prefix: string
-    ; default_screen_name: string
+    ; default_screen_name: string option
     ; default_configuration_path: string }
 
   let make ?default_screen_name
       ?(default_configuration_path = "/tmp/service_composer_config.d") prefix =
-    let default_screen_name =
-      Option.value default_screen_name
-        ~default:
-          (sprintf "%s-screen-session-%s" prefix
-             Digest.(
-               string default_configuration_path
-               |> to_hex
-               |> String.sub_exn ~index:0 ~length:16))
-    in
     {default_screen_name; default_configuration_path; prefix}
 
   open Gedsl
+
+  (*md
+The function `posixish_hash` creates a script that uses POSIX's
+[cksum](http://pubs.opengroup.org/onlinepubs/009695299/utilities/cksum.html)
+to output a stronger hash.
+*)
+  let posixish_hash path =
+    let cksum = call [str "cksum"] in
+    seq
+      [ call [str "cat"; path] ||> cksum
+      ; call [str "cat"; path]
+        ||> exec ["tr"; "0123456789a-z"; "98765A-Z43210"]
+        ||> cksum ]
+    ||> exec ["tr"; "-d"; "\\n "]
 
   let env_or s default_value =
     let g = getenv (str s) in
@@ -141,6 +169,22 @@ module Environment = struct
   let configuration_path t =
     env_or (var_configuration_path t) t.default_configuration_path
 
+  let make_default_screen_name t =
+    match t.default_screen_name with
+    | Some s -> str s
+    | None ->
+        let tmp = tmp_file "make-default-screen-name" in
+        seq
+          [ printf (str "session-") []
+          ; write_stdout ~path:tmp#path
+              (seq
+                 [ printf (str "%s\\n%s\\n%s\\n")
+                     [ str t.prefix
+                     ; str t.default_configuration_path
+                     ; configuration_path t ] ])
+          ; posixish_hash tmp#path ]
+        |> get_stdout_one_line
+
   let screen_name_path t = configuration_path t /// str "screen-session-name"
 
   let init ?screen_name t =
@@ -149,7 +193,7 @@ module Environment = struct
       ; ( "set-screen-name"
         , write_stdout ~path:(screen_name_path t)
             (printf (str "%s\\n")
-               [Option.value screen_name ~default:(str t.default_screen_name)])
+               [Option.value screen_name ~default:(make_default_screen_name t)])
         ) ]
 
   let is_initialized t =
@@ -188,12 +232,13 @@ end
 
 (*md The output of the `cosc manual` command is the processed content of the
 `Manual._global_` variable; a list of Markdown strings, accumulated
-through this file.
+throughout this file.
 *)
 module Manual = struct
   type item =
     | Raw of string
     | Root_env of (root:string -> Environment.t -> item list)
+    | Extended of {yes: item list; no: item list}
 
   let _global_ : item list ref = ref []
 
@@ -203,20 +248,23 @@ module Manual = struct
 
   let from f = [Root_env f]
 
+  let extended ?(no = []) yes = [Extended {yes; no}]
+
   let raws l = List.map l ~f:raw
 
   let title s = raws [s; String.make (String.length s) '='; ""]
 
   let section s = raws [s; String.make (String.length s) '-'; ""]
 
-  let wrap ?(columns = 72) s =
+  let wrap ?(indent = 0) ?(columns = 72) s =
     let buf = Buffer.create 42 in
+    let indentation = String.make indent ' ' in
     let rec assemble col = function
       | [] -> ()
       | one :: more ->
           let potential = col + String.length one + 1 in
           if potential > columns then (
-            Buffer.add_string buf ("\n" ^ one) ;
+            Buffer.add_string buf ("\n" ^ indentation ^ one) ;
             assemble (String.length one) more )
           else (
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
@@ -233,6 +281,13 @@ module Manual = struct
 
   let code_block s = raws (["```"] @ s @ ["```"; ""])
 
+  let list l =
+    raws (List.map l ~f:(fun p -> sprintf "* %s" (wrap ~indent:2 p)) @ [""])
+
+  (* `StringLabels.uppercase` is deprecated but
+     `StringLabels.uppercase_ascii` is not available in OCaml 4.03.0
+     which will still support.
+  *)
   [@@@warning "-3"]
 
   let pre_title root = StringLabels.uppercase root
@@ -244,21 +299,105 @@ module Manual = struct
     @@ from (fun ~root env ->
            ksprintf title "%s: Compose Processes With Screen" (pre_title root)
        )
-    @ par
-        "This is a family of scripts which have been generated by an OCaml \
-         program using the [Genspio](https://smondet.gitlab.io/genspio-doc) \
-         library."
-    @ section "Usage"
     @ from (fun ~root env ->
           ksprintf par
-            "See `%s --help` first, and then any `%s <command> --help`."
-            root root )
+            "The `%s*` scripts are a family of POSIX shell executables that \
+             manage a set of long running processes in a GNU-Screen session. \
+             Current version is `%s`."
+            root
+            Version.(get ())
+          @ ksprintf par
+              "The  configuration is stored in a directory: the root path can \
+               be itself configured with the `$%s` environment variable \
+               (default value: `%s`). One edits the configuration by calling \
+               `%s config {addjob,initialize,destroy,…}`, and displays it \
+               with `%s config show`."
+              (Environment.var_configuration_path env)
+              env.Environment.default_configuration_path root root
+          @ par
+              "The scripts are generated by an OCaml program which uses the \
+               [Genspio](https://smondet.gitlab.io/genspio-doc) EDSL/library. \
+               The code generator serves as one of the usage examples of the \
+               library, see its \
+               [immplementation](https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html)."
+          @ ksprintf par
+              "The code generator can also be used to change a few parameters \
+               like the “name-prefix” (`%s` here), or the default value \
+               of the configuration path (`%s`). This can be useful to build \
+               custom/project-specific scripts that can remain independent \
+               from each other without setting an environment variable."
+              root env.Environment.default_configuration_path )
+    @ extended
+        ( section "Installation"
+        @ from (fun ~root env ->
+              ksprintf par
+                "Simply copy `%s*` to somewhere in your `$PATH`, the scripts \
+                 depend on a reasonably valid version of `/bin/sh` and GNU \
+                 Screen."
+                root
+              @ ksprintf par
+                  "If you are using the code-generator, you can just point \
+                   the `--output-path` option at the right directory." ) )
+    @ section "Usage"
+    @ from (fun ~root env ->
+          let intro fmt =
+            ksprintf
+              (ksprintf par
+                 "The basic manual is obtained from the `%s man` command.%s"
+                 root)
+              fmt
+          in
+          extended
+            (intro
+               " The, present, “`README.md`” version is the result of \
+                `%s man --extended`."
+               root)
+            ~no:(intro "")
+          @ ksprintf par
+              "Then, see `%s --help` first, or for any sub-command try \
+               `%s <command> --help`."
+              root root )
+    @ section "Screen Session Isolation"
+    @ from (fun ~root env ->
+          ksprintf par
+            "`%s` isolates Screen sessions by using their session name." root
+          @ ksprintf par
+              "The screen session name can be configured a 2 levels:"
+          @ list
+              [ sprintf
+                  "At script-generation time, one can set the default-value \
+                   (with the option `--screen-name`)."
+              ; sprintf
+                  "At configuration time, one can overwrite the value with \
+                   `-S`, see `%s config init --help`."
+                  root ]
+          @ ksprintf par
+              "If none of those two options is provided, `%s config init` \
+               will generate a name, which is function of the root path and \
+               generation parameters and tries to ensure that the session is \
+               unique on the host."
+              root )
+    @ extended
+        ( section "Docker Image For the Generator"
+        @ from (fun ~root env ->
+              let image = "smondet/genspio-doc-dockerfiles:apps406" in
+              ksprintf par
+                "If you have [`opam`](https://opam.ocaml.org), setting up the \
+                 genspio repository is easy (only simple, pure OCaml \
+                 dependencies), if not, or if you just like Docker™, the \
+                 generator is available in the `%s` image, see:"
+                image
+              @ code_block
+                  [ sprintf "docker run -it %s genspio-service-composer --help"
+                      image ] ) )
 
-  let output ~root ~env =
+  let output ~root ~env extended =
     let open Gedsl in
     let rec one = function
       | Raw s -> printf (str "%s\\n") [str s]
       | Root_env f -> seq @@ List.map ~f:one (f ~root env)
+      | Extended {yes; no} ->
+          if_seq extended ~t:(List.map ~f:one yes) ~e:(List.map ~f:one no)
     in
     seq (List.map !_global_ ~f:one)
 end
@@ -435,10 +574,37 @@ module Manual_script = struct
         let open Command_line in
         let opts =
           let open Arg in
-          describe_option_and_usage ()
+          flag ["--extended"; "-X"] ~doc:"Provide extra information"
+          & describe_option_and_usage ()
         in
-        parse opts (fun ~anon describe ->
-            deal_with_describe describe [Manual.output ~root ~env] ) )
+        parse opts (fun ~anon extended describe ->
+            deal_with_describe describe [Manual.output ~root ~env extended] )
+    )
+end
+
+module Version_script = struct
+  include Gedsl.Script_with_describe (struct
+    let name = "version"
+
+    let description = "Show the version information."
+  end)
+
+  let make ~env () =
+    Script.make [name] ~description (fun ~root ->
+        let open Gedsl in
+        let open Command_line in
+        let opts =
+          let open Arg in
+          flag ["--extended"; "-X"] ~doc:"Provide extra information"
+          & describe_option_and_usage ()
+        in
+        parse opts (fun ~anon extended describe ->
+            deal_with_describe describe
+              [ if_seq extended
+                  ~t:
+                    [ say "%s %s (Genspio %s)"
+                        [str root; Version.str (); str Genspio.Meta.version] ]
+                  ~e:[say "%s" [Version.str ()]] ] ) )
 end
 
 module Init_script = struct
@@ -457,9 +623,10 @@ module Init_script = struct
           string
             ["--screen-session-name"; "-S"]
             ~doc:
-              (sprintf "Set the screen session name (default: %s)"
-                 env.Environment.default_screen_name)
-            ~default:(str env.Environment.default_screen_name)
+              (sprintf
+                 "Set the screen session name (the default is a function of \
+                  the root path and other constants of the script)")
+            ~default:(Environment.make_default_screen_name env)
           & describe_option_and_usage ()
         in
         parse opts (fun ~anon screen_name describe ->
@@ -545,45 +712,58 @@ module Start_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "start"
 
-    let description = "Start all or one job."
+    let description = "Start all or a given list of jobs."
   end)
 
   let make ~env () =
     Script.make [name] ~description (fun ~root ->
         let open Gedsl in
         let open Command_line in
-        let default_none = str "--no-job-name--" in
         let opts =
           let open Arg in
-          string ["--job"] ~default:default_none ~doc:"Job name"
+          flag ["--all"] ~doc:"Start all jobs"
           & describe_option_and_usage ()
+              ~more_usage:
+                [ "Use"
+                ; sprintf "  %s %s --all" env.Environment.prefix name
+                ; "or"
+                ; sprintf "  %s %s Job1 .. JobN" env.Environment.prefix name ]
         in
-        parse opts (fun ~anon name describe ->
-            let dot_job name =
-              Environment.configuration_path env /// (name ^$^ str ".job")
-            in
+        let start_one name =
+          if_then_else (Job.is_running env name)
+            (say "* Job '%s' is already running!" [name])
+            (let mk, runpath = Job.run_script env name in
+             seq
+               [ mk
+               ; if_seq
+                   (file_exists (Job.job_path env name))
+                   ~t:
+                     [ say "* Starting '%s' in Screen window: '%s'"
+                         [name; Screen.window_name name]
+                     ; Screen.call env
+                         [ str "-X"
+                         ; str "screen"
+                         ; str "-t"
+                         ; Screen.window_name name
+                         ; str "sh"
+                         ; runpath ] ]
+                   ~e:[say "* Job '%s' is not configured!" [name]] ])
+        in
+        parse opts (fun ~anon all describe ->
             deal_with_describe describe
-              [ if_seq
-                  Str.(name =$= default_none)
+              [ Screen.ensure_running env
+              ; if_seq all
                   ~t:
                     [ say "Starting all jobs from %s"
                         [Environment.configuration_path env]
-                    ; Screen.ensure_running env
                     ; Environment.on_jobs env (fun path ->
                           let name = Job.name path in
-                          if_then_else (Job.is_running env name)
-                            (say "Job '%s' is already running!" [name])
-                            (let mk, mkpath = Job.run_script env name in
-                             seq
-                               [ mk
-                               ; Screen.call env
-                                   [ str "-X"
-                                   ; str "screen"
-                                   ; str "-t"
-                                   ; Screen.window_name @@ Job.name path
-                                   ; str "sh"
-                                   ; mkpath ] ]) ) ]
-                  ~e:[say "Starting job '%s' from %s" [dot_job name]]
+                          start_one name ) ]
+                  ~e:
+                    [ Elist.iter anon ~f:(fun item ->
+                          let name = item () in
+                          seq [say "Starting job '%s':" [name]; start_one name]
+                      ) ]
               ; say "Done." [] ] ) )
 end
 
@@ -691,7 +871,7 @@ module Kill_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "kill"
 
-    let description = "Kill the Screen being managed."
+    let description = "Kill Jobs or the whole Screen session (-a)."
   end)
 
   let make ~env () =
@@ -700,11 +880,41 @@ module Kill_script = struct
         let open Command_line in
         let opts =
           let open Arg in
-          describe_option_and_usage ()
+          flag ["--all"; "-a"] ~doc:"Kill everything, incl. the Screen session"
+          & describe_option_and_usage ()
         in
-        parse opts (fun ~anon describe ->
-            deal_with_describe describe [Screen.call env [str "-X"; str "quit"]]
-        ) )
+        let kills = tmp_file "kill-list" in
+        parse opts (fun ~anon kill_em_all describe ->
+            deal_with_describe describe
+              [ if_seq kill_em_all
+                  ~t:[Screen.call env [str "-X"; str "quit"]]
+                  ~e:
+                    [ kills#set (str "")
+                    ; Elist.iter anon ~f:(fun item ->
+                          seq
+                            [ say "## Processing %s" [item ()]
+                            ; if_seq
+                                ( Screen.call env
+                                    [ str "-Q"
+                                    ; str "-p"
+                                    ; Screen.window_name (item ())
+                                    ; str "-X"
+                                    ; str "info" ]
+                                |> succeeds_silently )
+                                ~t:
+                                  [ say "-> Window found, killing now." []
+                                  ; Screen.call env
+                                      [ str "-p"
+                                      ; Screen.window_name (item ())
+                                      ; str "-X"
+                                      ; str "kill" ]
+                                  ; kills#set (str "yes") ]
+                                ~e:
+                                  [ say "-> Window for job '%s' not found!"
+                                      [item ()] ] ] )
+                    ; if_seq
+                        Str.(kills#get =$= str "")
+                        ~t:[say "Nothing was killed …" []] ] ] ) )
 end
 
 module Logs_script = struct
@@ -843,11 +1053,11 @@ module Example_script = struct
       ; cmt "Show the current status:"
       ; call "status"
       ; cmt "Start everything:"
-      ; call "start"
+      ; call "start --all"
       ; cmt "Show the updated status:"
       ; call "status"
       ; cmt "Stop everything:"
-      ; call "kill"
+      ; call "kill --all"
       ; cmt "Show the updated (short) status:"
       ; call "status --short"
       ; cmt "Destroy the configuration:"
@@ -917,12 +1127,17 @@ module Example_script = struct
                     ] ) ] ) )
 
   let () =
+    let first_sentence =
+      "The distribution comes with runnable examples, try \
+       `cosc example --help`."
+    in
     Manual.(
-      add @@ section "Examples"
-      @ par
-          "The distribution comes with runnable examples, try \
-           `cosc example --help`. Here is the “basic” example:"
-      @ from (fun ~root env -> code_block (basic env root |> snd)))
+      add
+        ( section "Examples"
+        @ extended
+            ( ksprintf par "%s Here is the “basic” example:" first_sentence
+            @ from (fun ~root env -> code_block (basic env root |> snd)) )
+            ~no:(par first_sentence) ))
 end
 
 module Base_script = struct
@@ -938,13 +1153,29 @@ module Base_script = struct
           ~name:root ~description () )
 end
 
+let () =
+  Manual.(
+    add
+      (extended
+         ( section "Authors"
+         @ ksprintf par "[Seb Mondet](https://seb.mondet.org)."
+         @ section "License"
+         @ par
+             "The code generator is covered by the Apache 2.0 \
+              [license](http://www.apache.org/licenses/LICENSE-2.0), the \
+              scripts are ISC [licensed](https://opensource.org/licenses/ISC)."
+         )))
+
 (*md
 The `make` function drives the generation of the list of scripts.
 
  *)
 
-let make ?default_configuration_path ~name ~output_path () =
-  let env = Environment.make ?default_configuration_path name in
+let make ?default_configuration_path ?default_screen_name ~name ~output_path ()
+    =
+  let env =
+    Environment.make ?default_screen_name ?default_configuration_path name
+  in
   let scripts =
     [ Base_script.make ()
     ; Configuration_script.make ()
@@ -958,6 +1189,7 @@ let make ?default_configuration_path ~name ~output_path () =
     ; Attach_script.make ~env ()
     ; Kill_script.make ~env ()
     ; Manual_script.make ~env ()
+    ; Version_script.make ~env ()
     ; Example_script.make ~env ()
     ; Status_script.make ~env () ]
   in
@@ -974,6 +1206,8 @@ let () =
   let name = ref None in
   let output_path = ref None in
   let config_path = ref None in
+  let screen_name = ref None in
+  let output_readme = ref false in
   let args =
     Arg.align
       [ ( "--name"
@@ -982,6 +1216,12 @@ let () =
       ; ( "--configuration-path"
         , Arg.String (fun s -> config_path := Some s)
         , sprintf "<path> Path to the default configuration root." )
+      ; ( "--screen-name"
+        , Arg.String (fun s -> screen_name := Some s)
+        , sprintf "<name> Force the default screen-session name." )
+      ; ( "--output-readme"
+        , Arg.Set output_readme
+        , sprintf " Output the manual to a `README.md`." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
         , sprintf "<script-name> Where to write the scripts." ) ]
@@ -995,6 +1235,10 @@ let () =
         msg "Option `%s` is mandatory" opt ;
         die ()
   in
-  make ~name:(need "--name" !name) ?default_configuration_path:!config_path
-    ~output_path:(need "--output-path" !output_path)
-    ()
+  let output_path = need "--output-path" !output_path in
+  let name = need "--name" !name in
+  make ~name ?default_configuration_path:!config_path
+    ?default_screen_name:!screen_name ~output_path () ;
+  if !output_readme then (
+    msg "Outputting manual to %s/README.md" output_path ;
+    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path )
