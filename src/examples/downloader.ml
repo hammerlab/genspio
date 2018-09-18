@@ -2,7 +2,7 @@ open Nonstd
 module String = Sosa.Native_string
 
 let downloader () =
-  let open Genspio.EDSL_ng in
+  let open Genspio.EDSL in
   let say strings =
     let sayone ?(prompt = false) s =
       let prompt = if prompt then "downloader: " else "" in

@@ -21,7 +21,7 @@ let intro_blob =
 let () =
   example "Exec" "Simple call to the `exec` construct."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   exec ["ls"; "-la"]
 )
 |ocaml}
@@ -31,7 +31,7 @@ let () =
     "Adding comments with the `%%%` operator, we can see them in the compiled \
      output."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   "This is a very simple command" %%%
   exec ["ls"; "-la"]
 )
@@ -42,7 +42,7 @@ let () =
     "When an expression is wrapped with *“comments”* they also appear in \
      error messages (compilation *and* run-time) as “the comment stack.”"
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   "This is a very simple comment" %%% seq [
     exec ["ls"; "-la"];
     "This comment provides a more precise pseudo-location" %%% seq [
@@ -60,7 +60,7 @@ let () =
      compatibilty, hence the calls to `byte-array-to-c-string` in the \
      pretty-printed output."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   call [
     string "echo";
     C_string.concat_list [string "foo"; string "bar"]; (* A concatenation at run-time. *)
@@ -73,7 +73,7 @@ let () =
     "When a string literal cannot be converted to a “C-String” the \
      compiler tries to catch the error at compile-time."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   "A sequence that will fail" %%% seq [
     call [string "ls"; string "foo\x00bar"]; (* A string containing `NUL` *)
   ]
@@ -97,10 +97,10 @@ Indeed, commands can output arbitrary byte-arrays but Unix commands
 only accept `NUL`-terminated strings.
 
 We then “pipe” the output to another `exec` call with `||>` (which is
-a 2-argument shortcut for `EDSL.pipe`).
+a 2-argument shortcut for `EDSL_v0.pipe`).
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
   call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
 )
@@ -112,7 +112,7 @@ let () =
     "The operator `>>` puts any byte-array into the `stdin` of any `unit t` \
      expression."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   (* Let's see wether `wc -l` is fine with a NUL in the middle of a “line:” *)
   byte_array "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
 )
@@ -122,10 +122,10 @@ let () =
   example "Comparing byte-arrays, using conditionals"
     ~show:"[`Pretty_printed; `Stdout]"
     "We show that `byte-array >> cat` is not changing anything and we try \
-     `if_seq`; a version of `EDSL.if_then_else` more practical for \
+     `if_seq`; a version of `EDSL_v0.if_then_else` more practical for \
      sequences/imperative code."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
     (* With a 🐱: *)
   let original = byte_array "one\ntwo\nth\000ree\n" in
   let full_cycle = original >> exec ["cat"] |> get_stdout in
@@ -146,7 +146,7 @@ let () =
      also a simple API to manage temporary files and use them as \
      pseudo-global-variables."
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   let tmp = tmp_file "genspio-example" in
   let body =
     seq [
@@ -166,7 +166,7 @@ Genspio.EDSL.(
 
 let () =
   example "Arbitrary Redirections" ~show:"[`Pretty_printed; `Stdout]"
-    {md|The function `EDSL.with_redirections` follows POSIX's `exec`
+    {md|The function `EDSL_v0.with_redirections` follows POSIX's `exec`
 [semantics](http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#exec).
 
 The `printf` call will output to the file `/tmp/genspio-two` because
@@ -180,7 +180,7 @@ redirections are set in that order:
 - then, `printf` outputs to `1`.
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   seq [
     with_redirections (exec ["printf"; "%s"; "hello"]) [
       to_file (int 3) (string "/tmp/genspio-one");
@@ -201,7 +201,7 @@ let () =
 
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   let l = Elist.make [
     c_string "One";
     c_string "Two";
@@ -231,7 +231,7 @@ most terminals) erases the previous display (with `\r`).
 
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   let the_condition who =
     exec ["cat"; "/etc/passwd"] ||> exec ["grep"; "^" ^ who]
     |> returns ~value:0
@@ -263,7 +263,7 @@ We customize its output with the `~verbosity` (by adding a nice prompt) and
 `~on_success` arguments.
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
    check_sequence
      ~verbosity:(`Announce "♦ Check-seq-example → ") (* Try also `Output_all or `Silent *)
      ~on_success:begin fun ~step:(name, expr) ~stdout ~stderr ->
@@ -294,7 +294,7 @@ be proper “text,” in the example below the `'\000'` character is just
 silently forgotten, not counted.
 |md}
     {ocaml|
-Genspio.EDSL.(
+Genspio.EDSL_v0.(
   printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
   ||> on_stdin_lines begin fun line ->
     printf (c_string "→ %s bytes\\n")

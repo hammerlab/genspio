@@ -2,7 +2,7 @@ open Nonstd
 module String = Sosa.Native_string
 open Tests.Test_lib
 module Compile = Genspio.Language
-module Construct = Genspio.EDSL
+module Construct = Genspio.EDSL_v0
 
 let exits = Test.exits
 
@@ -238,7 +238,7 @@ let () =
     exits ret
       ~name:(sprintf "legacy-parse-cli-%d" count)
       ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3]
-      (let open Genspio.EDSL in
+      (let open Genspio.EDSL_v0 in
       let open Command_line in
       let spec =
         let open Arg in
@@ -342,7 +342,7 @@ let () =
 let () =
   add_tests
   @@
-  let open Genspio.EDSL_ng in
+  let open Genspio.EDSL in
   let minus_f = "one \nwith \\ spaces and \ttabs -dashes -- " in
   let check_anon anon anons_expected =
     Str.(concat_elist anon =$= string (String.concat ~sep:"" anons_expected))
@@ -739,7 +739,7 @@ let () =
 let () =
   add_tests
   @@ exits 20 ~name:"setenv-getenv"
-       (let open Genspio.EDSL in
+       (let open Genspio.EDSL_v0 in
        let var = string "VVVVVVV" in
        let assert_or_return ret cond =
          if_then_else cond nop
@@ -788,11 +788,11 @@ let () =
   add_tests
   @@ List.concat
        [ exits ~name:"tmp#basic" 23
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let tmp = tmp_file "test" in
            seq [tmp#set (byte_array ""); return 23])
        ; exits ~name:"tmp#delete" 23
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let tmp = tmp_file "test" in
            let s1 = byte_array "hello\000you" in
            seq
@@ -832,7 +832,7 @@ let () =
   add_tests
   @@ List.concat
        [ exits 2 ~name:"redirect-stuff"
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let tmp1 = tmp_file "stdout" in
            let tmp2 = tmp_file "stderr" in
            let empty = string "" in
@@ -860,7 +860,7 @@ let () =
                  |> succeeds )
              ; return 2 ])
        ; exits 3 ~name:"redirect-many"
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let tmp1 = tmp_file "fd3" in
            let tmp2 = tmp_file "fd3-other" in
            let recognizable = "heelllloooooo" in
@@ -884,7 +884,7 @@ let () =
                  |> succeeds )
              ; return 3 ])
        ; exits 2 ~name:"redirect-fails"
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let tmp1 = tmp_file "fd3" in
            let tmp2 = tmp_file "return" in
            let recognizable = "heelllloooooo" in
@@ -920,7 +920,7 @@ let () =
   add_tests
   @@ List.concat
        [ exits 2 ~name:"bool-string-conversions"
-           Genspio.EDSL.(
+           Genspio.EDSL_v0.(
              seq
                [ assert_or_fail "test1"
                    C_string.(Bool.to_string (bool true) =$= string "true")
@@ -947,7 +947,7 @@ let () =
 let () =
   add_tests
   @@ exits 5 ~name:"list-string-stuff"
-       Genspio.EDSL.(
+       Genspio.EDSL_v0.(
          seq
            [ assert_or_fail "test1"
                C_string.(
@@ -984,7 +984,7 @@ let () =
 let () =
   add_tests
   @@ exits 5 ~name:"list-append"
-       (let open Genspio.EDSL in
+       (let open Genspio.EDSL_v0 in
        let make_string_concat_test name la lb =
          let slist l = List.map l ~f:string |> Elist.make in
          assert_or_fail name
@@ -1014,7 +1014,7 @@ let () =
   let make_list_iter_strings_test i l =
     let name = sprintf "list-iter-strings-%d-%d-strings" i (List.length l) in
     exits 5 ~name
-      (let open Genspio.EDSL in
+      (let open Genspio.EDSL_v0 in
       let slist = List.map l ~f:byte_array |> Elist.make in
       let tmp = ksprintf tmp_file "listitertest%d" i in
       let tmp2 = ksprintf tmp_file "listserializationtest%d" i in
@@ -1068,7 +1068,7 @@ let () =
         (List.map l ~f:Int.to_string |> String.concat ~sep:"-")
     in
     exits 5 ~name
-      (let open Genspio.EDSL in
+      (let open Genspio.EDSL_v0 in
       let ilist = List.map l ~f:int |> Elist.make in
       let tmp = tmp_file ("tmp-" ^ name) in
       let tmp2 = tmp_file ("tmp2" ^ name) in
@@ -1107,7 +1107,7 @@ let () =
   add_tests
   @@ List.concat
        [ exits 13 ~name:"pipe-basic"
-           (let open Genspio.EDSL in
+           (let open Genspio.EDSL_v0 in
            let bag =
              pipe
                [ exec ["printf"; "hello-world\\n"]
@@ -1136,7 +1136,7 @@ let () =
                          C_string.(fed =$= string "BelloWorld")
                  ; return 13 ])
        ; exits 42 ~name:"pipe-xargs"
-           Genspio.EDSL.(
+           Genspio.EDSL_v0.(
              seq
                [ assert_or_fail "pipe-xargs-1"
                    C_string.(
@@ -1149,7 +1149,7 @@ let () =
 let () =
   let tests =
     [ exits 12 ~name:"edsl-ng-on-stdin-lines"
-        Genspio.EDSL_ng.(
+        Genspio.EDSL.(
           let tmp1 = tmp_file "edsl-ng-on-stdin-lines-tmp1" in
           let tmp2 = tmp_file "edsl-ng-on-stdin-lines-tmp2" in
           let cmd = exec ["ls"; "/"] in
@@ -1163,14 +1163,14 @@ let () =
             ; assert_or_fail "tmp1 = tmp2" Str.(tmp1#get =$= tmp2#get)
             ; return 12 ])
     ; exits 12 ~name:"edsl-ng-cmd-avail"
-        Genspio.EDSL_ng.(
+        Genspio.EDSL.(
           seq
             [ assert_or_fail "ls is there" (command_available (str "ls"))
             ; assert_or_fail "lslslsls is not there"
                 (not (command_available (str "lslslsls")))
             ; return 12 ])
     ; exits 12 ~name:"edsl-ng-getout-1line"
-        Genspio.EDSL_ng.(
+        Genspio.EDSL.(
           let make_test f input output =
             assert_or_fail (sprintf "%S" output)
               Str.(f (printf (str input) []) =$= str output)
@@ -1206,7 +1206,7 @@ let () =
                 "     " ""
             ; return 12 ])
     ; exits 12 ~name:"edsl-ng-is-stuff"
-        Genspio.EDSL_ng.(
+        Genspio.EDSL.(
           let tmp = tmp_file "bouh" in
           seq
             [ tmp#set (str "")
@@ -1222,7 +1222,7 @@ let () =
                 (is_readable (str "/etc/shadow") |> not)
             ; return 12 ])
     ; exits 12 ~name:"edsl-ng-greps-to"
-        Genspio.EDSL_ng.(
+        Genspio.EDSL.(
           let tst extended_re re pre does =
             assert_or_fail
               (sprintf "%s does %smatch %s (E: %b)" re

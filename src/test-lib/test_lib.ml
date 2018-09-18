@@ -200,7 +200,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
   let make_report_path t = "script" // "make_report.sh"
 
   let make_report_content t testlist =
-    (let open Genspio.EDSL in
+    (let open Genspio.EDSL_v0 in
     let count_files dir =
       if_then_else
         (exec ["test"; "-d"; dir] |> succeeds)

@@ -1,4 +1,4 @@
-(*md This example creates a family of scripts using the `EDSL_ng` API,
+(*md This example creates a family of scripts using the `EDSL` API,
 and in particular the `Dispatcher_script` and `Script_with_describe`
 modules.
 
@@ -44,7 +44,7 @@ let ( // ) = Filename.concat
 
 let msg fmt = ksprintf (eprintf "%s\n%!") fmt
 
-module Gedsl = Genspio.EDSL_ng
+module Gedsl = Genspio.EDSL
 
 let cmdf fmt =
   ksprintf
