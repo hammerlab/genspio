@@ -529,56 +529,6 @@ val on_stdin_lines : (c_string t -> unit t) -> unit t
     Note that this is for text-like input, ['\000']
     characters in the input lead to undefined behavior. *)
 
-val which_finds : string -> bool Language.t
-
-val get_stdout_one_line :
-     ?first_line:bool
-  -> ?remove_spaces:bool
-  -> unit Language.t
-  -> Language.c_string Language.t
-
-val verbose_call :
-     ?prefix:string
-  -> ?verbose:bool Language.t
-  -> Language.c_string Language.t list
-  -> unit Language.t
-
-val check_sequence_with_output : unit Language.t list -> unit Language.t
-
-val is_regular_file : Language.c_string Language.t -> bool Language.t
-
-val is_directory : Language.c_string Language.t -> bool Language.t
-
-val is_executable : Language.c_string Language.t -> bool Language.t
-
-val is_readable : Language.c_string Language.t -> bool Language.t
-
-val mkdir_p : Language.c_string Language.t -> unit Language.t
-
-val exit : int -> unit Language.t
-
-val home_path : unit -> Language.c_string Language.t
-
-val ( ^$^ ) :
-     Language.c_string Language.t
-  -> Language.c_string Language.t
-  -> Language.c_string Language.t
-
-val ( /// ) :
-     Language.c_string Language.t
-  -> Language.c_string Language.t
-  -> Language.c_string Language.t
-
-val say : string -> Language.c_string Language.t list -> unit Language.t
-
-val c_strings : string list -> Language.c_string Language.t list
-
-val greps_to :
-     ?extended_re:bool
-  -> Language.c_string Language.t
-  -> unit Language.t
-  -> bool Language.t
-
 (** {3 Very Unsafe Operations} *)
 
 (** The {!Magic} module is like OCaml's {!Obj.magic} function for the
