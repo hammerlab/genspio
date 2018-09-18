@@ -1,4 +1,11 @@
-(** The Embedded Domain Specific Lanaguage to create “shell-expressions.” *)
+(** The “legacy” Embedded Domain Specific Lanaguage.”
+
+This is the 0.1.0 version of the EDSL. It is lower-level than {!EDSL}
+as it explicitly separates the types {!byte_array} and {!c_string}
+while the functions in the {!EDSL} module {i “hide”} the conversions
+{!byte_array} → {!c_string} in the API.
+
+*)
 
 (** The type of a Genspio expression. *)
 type 'a t = 'a Language.t

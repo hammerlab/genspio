@@ -51,24 +51,22 @@ utop> open Genspio.EDSL;;
 
 utop> 
 let c =
-  let username_one_way : c_string t =
+  let username_one_way : str t =
     (* We lift the string "USER" to EDSL-land and use function `getenv`: *)
-    getenv (string "USER") in
-  let username_the_other_way : c_string t =
-    (* The usual pipe operator is `||>` *)
+    getenv (str "USER") in
+  let username_the_other_way : str t =
+    (* The shell-pipe operator is `||>` *)
     (exec ["whoami"] ||> exec ["tr"; "-d"; "\\n"])
     (* `get_stdout` takes `stdout` from a `unit t` as a `byte_array t` *)
     |> get_stdout
-    (* `to_c_string` checks that a `byte_array t` can be casted to a `c_string` *)
-    |> to_c_string 
   in
-  let my_printf : string -> c_string t list -> unit t = fun fmt args ->
-    (* The function `call` is like `exec` but operates on `c_string t` values
+  let my_printf : string -> str t list -> unit t = fun fmt args ->
+    (* The function `call` is like `exec` but operates on `str t` values
        instead of just OCaml strings: *)
-    call (string "printf" :: string fmt :: args) in
-  (* The operator `=$=` is `string t` equality, it returns a `bool t` that
+    call (str "printf" :: str fmt :: args) in
+  (* The operator `=$=` is `str t` equality, it returns a `bool t` that
      we can use with `if_seq`: *)
-  if_seq (username_one_way =$= username_the_other_way)
+  if_seq Str.(username_one_way =$= username_the_other_way)
      ~t:[
         my_printf "Username matches: `%s`\\n" [username_one_way];
      ]
@@ -138,6 +136,10 @@ From here, one can explore:
 - Some implementation [notes](./doc/exec-return-issue.md).
 - More [information](./doc/extra-testing.md) on testing, e.g. on more exotic
   operating systems.
+- The module `Genspio.EDSL_v0` is an older version of the API, which can still
+  be useful as it is lower-level: it gives full access to the two “string-like”
+  types, byte-arrays and C-strings while of course becoming more cumbersome to
+  use.
 <!--TOSLOWFLOW-->
 <!--TRANSFORM-->
 <!--SERCOEX-->
