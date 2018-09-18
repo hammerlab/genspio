@@ -572,7 +572,28 @@ Failures happen thanks to the !{fail} call.
 val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
 (** Test a string or regular expression again the output of an expression. *)
 
-(** Make scripts that provide a ["--describe"] option/command. *)
+(** Make scripts that provide a ["--describe"] option/command.
+
+The two functions provided can be used like this:
+
+{[
+let open Command_line in
+let opts =
+  let open Arg in
+  flag ["--all"; "-a"] ~doc:"Kill everything, incl. the Screen session"
+  & describe_option_and_usage ()
+in
+let kills = tmp_file "kill-list" in
+parse opts (fun ~anon kill_em_all describe ->
+    deal_with_describe describe
+      [ if_seq kill_em_all
+]}
+
+See also the
+{{:https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html}Service
+Composer Example} which is where the above snippet comes from.
+
+ *)
 module Script_with_describe (P : sig
   val name : string
 
@@ -586,19 +607,64 @@ end) : sig
        ?more_usage:string list
     -> unit
     -> (bool t -> 'a, 'a) Command_line.cli_options
+  (** Provide the ["--describe"] command line option. *)
 
   val deal_with_describe : bool t -> unit t list -> unit t
+  (** Deal with the parsed result of the ["--describe"] option. *)
 end
 
 (** Create a script that mostly behaves like ["git"], it concatenates
     its name with its first argument to call ["${0}-${1}"]. *)
 module Dispatcher_script : sig
+
   val make :
        ?aliases:(str t * str t) list
     -> name:string
     -> description:string
     -> unit
     -> unit Genspio__Language.t
+  (** 
+     Make a “toplevel” script that behaves a bit like ["git"] by
+     calling [name ^ "-${1}"]. The search for the argument can be
+     “hijacked” with the list of [~aliases]; with [~name:"hello"] and
+     [~aliases:[str "W", str "wolrd"]], when ["hello W"] is called,
+     the generated script with lool for ["hello-world"] in the
+     ["$PATH"].
+     
+     Just like scripts made with {!Script_with_describe}, the
+     [~description] argument is used to answer the ["--describe"]
+     command line option.
+     
+     When called without arguments, with ["-h"], ["-help"], or with
+     ["--help"], the script lists all the commands it can find and the
+     aliases. E.g.:
+
+{v
+usage: cosc <cmd> [OPTIONS/ARGS]
+
+Script that is a bit like Docker-compose but with GNU-Screen.
+
+Sub-commands:
+* cosc-attach: Attach to the Screen being managed.
+* cosc-configuration: Manage the configuration.
+* cosc-example: Show or run a full example.
+* cosc-kill: Kill Jobs or the whole Screen session (-a).
+* cosc-logs: Show logs for one or more jobs.
+* cosc-manual: Show the manual.
+* cosc-start: Start all or a given list of jobs.
+* cosc-status: Get the status(es) of the processes.
+* cosc-version: Show the version information.
+Aliases:
+* config -> configuration
+* man -> manual
+v}
+
+     See also the
+     {{:https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html}Service
+     Composer Example} (a.k.a. ["cosc"]) for many uses of this
+     function.
+
+*)
 end
 
 (** {3 Very Unsafe Operations} *)
