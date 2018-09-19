@@ -6,7 +6,7 @@ Genspio is a typed EDSL to generate shell scripts and commands from OCaml.
 The idea is to build values of type `'a EDSL.t` with the
 combinators in the `Genspio.EDSL` module, and compile them to POSIX
 shell scripts (or one-liners) with functions from `Genspio.Compile`.
-See the file 
+See the file
 [`src/examples/small.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/small.ml)
 which generates a useful list of usage examples, or the
 section [“Getting Started”](#getting-started) below.
@@ -40,7 +40,7 @@ You need OCaml ≥ 4.03.0 together with
 
     ocaml please.mlt configure
     jbuilder build @install
-    
+
 Getting Started
 ---------------
 
@@ -49,7 +49,7 @@ Here is a quick example:
 ```ocaml
 utop> open Genspio.EDSL;;
 
-utop> 
+utop>
 let c =
   let username_one_way : str t =
     (* We lift the string "USER" to EDSL-land and use function `getenv`: *)
@@ -82,22 +82,63 @@ Username matches: `smondet`
 - : int = 0
 ```
 
-**More examples:**
+### Important Modules
+
+- `Genspio.EDSL` provides the Embedded Domain Specific Language API to build
+  shell script expressions (there is also a lower-level, *not recommended*,
+  `Genspio.EDSL_v0` API).
+- `Genspio.Compile` has the 3 “compilers” provided by the library:
+    - The pretty printer outputs `'a EDSL.t` values as expressions of a
+      lisp-like pseudo-language.
+    - The default “`To_posix`” compiler generates POSIX-compliant shell
+      scripts (with the option of avoiding new-lines).<br/>
+      ⤷ Note that MacOSX's default `bash` version is buggy and has been
+      witnessed to choke on generated POSIX-valid scripts.
+    - The newer “`To_slow_flow`” compiler generates POSIX shell scripts which
+      are much simpler, hence more portable across shell implementations, but
+      use (*a lot of*) temporary files and are generally slower.
+- `Genspio.Transform` implements code transformations:
+    - The module `Visitor` provides an extensible AST visitor.
+    - The module `Constant_propagation` does some basic constant propagation
+      (using the visitor).
+
+
+### More Examples
 
 - There are many examples in
   [`src/examples/small.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/small.ml)
   which are used to generate the usage examples documentation webpage.
-- The file 
+- The file
+  [`src/examples/service_composer.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/service_composer.ml)
+  is the code generator for the “COSC” project (Github:
+  [`smondet/cosc`](https://github.com/smondet/cosc)), a family of scripts which
+  manage long-running processes in a GNU-Screen session.
+- The file
   [`src/examples/downloader.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/downloader.ml)
-  contains a (much) bigger example.
-- The file 
+  contains another big example: a script that downloads and unpacks archives
+  from URLs.
+- The file
   [`src/examples/vm_tester.ml`](https://github.com/hammerlab/genspio/blob/master/src/examples/vm_tester.ml)
   is a *“Makefile + scripts”* generator to setup Qemu virtual machines, they can
   be for instance used to run the tests on more exotic platforms.
-- The project 
+- The project
   [`hammerlab/secotrec`](https://github.com/hammerlab/secotrec) is a real-world,
-  larger-scale use of Genspio (for now using version 0.0.0).
+  larger-scale use of Genspio (uses Genspio version 0.0.0).
 
+### Additional Documentation
+
+From here, one can explore:
+
+- Some implementation [notes](./doc/exec-return-issue.md).
+- More [information](./doc/extra-testing.md) on testing, e.g. on more exotic
+  operating systems.
+- The module `Genspio.EDSL_v0` is an older version of the API, which can still
+  be useful as it is lower-level: it gives full access to the two “string-like”
+  types, byte-arrays and C-strings while of course becoming more cumbersome to
+  use.
+<!--TOSLOWFLOW-->
+<!--TRANSFORM-->
+<!--SERCOEX-->
 
 Testing
 -------
@@ -108,7 +149,7 @@ the `uri` library, see:
     genspio_test=_build/default/src/test/main.exe
     jbuilder build $genspio_test
     $genspio_test --help
-    
+
 
 Try this:
 
@@ -128,21 +169,6 @@ You can check failures in the `<shell-test>/failures.md` files, see for instance
 compilation to multi-line scripts” (similarly there are
 `<shell-test>/successes.md` files).
 
-Additional Documentation
-------------------------
-
-From here, one can explore:
-
-- Some implementation [notes](./doc/exec-return-issue.md).
-- More [information](./doc/extra-testing.md) on testing, e.g. on more exotic
-  operating systems.
-- The module `Genspio.EDSL_v0` is an older version of the API, which can still
-  be useful as it is lower-level: it gives full access to the two “string-like”
-  types, byte-arrays and C-strings while of course becoming more cumbersome to
-  use.
-<!--TOSLOWFLOW-->
-<!--TRANSFORM-->
-<!--SERCOEX-->
 
 Building The Documentation
 --------------------------
@@ -151,7 +177,7 @@ To build the documentation one needs `pandoc` and `caml2html`:
 
     sh tools/build-doc.sh
 
-The build of the whole website, including the 
+The build of the whole website, including the
 [web-based demo](https://smondet.gitlab.io/genspio-doc/demo/master/index.html),
 happens in a different repository:
 <https://gitlab.com/smondet/genspio-doc>.
