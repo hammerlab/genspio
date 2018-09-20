@@ -177,16 +177,16 @@ In that case, we compare the octal representations.
 
   (*md
 
- The last stage is `pp`, it compiles the IR to a POSIX shell script:
+ The last stage is `pp_posix`, it compiles the IR to a POSIX shell script:
 
  ```ocaml
    let compiled = (* ... *) in
-   fprintf fmt "%a" Script.pp compiled
+   fprintf fmt "%a" Script.pp_posix compiled
    (* profit ! *)
 ```
 
  *)
-  let pp fmt script =
+  let pp_posix fmt script =
     let open Format in
     let mkdir_done = ref [] in
     let rec pp_command fmt = function
@@ -633,7 +633,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let loop =
         [ Script.rawf ": list_iter ; for %s in $(cat %s) ; do\n{\n%s\n}\ndone"
             file_var list_file
-            (Format.asprintf "%a" Script.pp convert_script) ]
+            (Format.asprintf "%a" Script.pp_posix convert_script) ]
       in
       unit (l_script.commands @ loop)
   | Int_bin_op (ia, op, ib) ->
@@ -888,10 +888,10 @@ let test () =
   in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in
-      fprintf std_formatter "==== TEST %d ====\n%a\n%!" idx Script.pp ir ;
+      fprintf std_formatter "==== TEST %d ====\n%a\n%!" idx Script.pp_posix ir ;
       let script_file = sprintf "/tmp/script-%d.sh" idx in
       let o = open_out script_file in
-      fprintf (formatter_of_out_channel o) "\n%a\n%!" Script.pp ir ;
+      fprintf (formatter_of_out_channel o) "\n%a\n%!" Script.pp_posix ir ;
       flush o ;
       close_out o ;
       let res = ksprintf Sys.command "sh %s" script_file in

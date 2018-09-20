@@ -168,8 +168,8 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
            if [ $RRR -eq %d ] ; then\n\
            %s\n\
            else\n\
-           %s\n               \
            %s\n\
+          \               %s\n\
            fi\n"
           (stdout_path test |> Filename.dirname)
           (unique_name test)
@@ -195,7 +195,8 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
         | `Slow_stack ->
             Genspio.Compile.To_slow_flow.compile script
               ~trap:(if no_trap then `None else `Exit_with 77)
-            |> Format.asprintf "%a\n" Genspio.Compile.To_slow_flow.Script.pp )
+            |> Format.asprintf "%a\n"
+                 Genspio.Compile.To_slow_flow.Script.pp_posix )
 
   let make_report_path t = "script" // "make_report.sh"
 
@@ -290,11 +291,11 @@ module Test_directory = struct
        Type `make` to see this help.\n\n\
        Other targets include:\n\n\
        * `make run-<shell-test>` where `shell-name` can be one of:\n\
-       \  %s.\n\
+      \  %s.\n\
        * `make run-all` to attempt to run all the tests on all the shells.\n\
        * `make report` generate the `report.md` file.\n\
        * `make check`: check the success of the test for all the important \n\
-       \  shells (%s).\n"
+      \  shells (%s).\n"
       (code_list shell_names)
       (code_list t.important_shells)
 

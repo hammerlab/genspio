@@ -127,7 +127,7 @@ module To_slow_flow : sig
   module Script : sig
     type t
 
-    val pp : Format.formatter -> t -> unit
+    val pp_posix : Format.formatter -> t -> unit
     (** Print the value as a POSIX shell script. *)
   end
 

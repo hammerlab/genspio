@@ -114,7 +114,7 @@ The function `write` is the only real I/O of this whole OCaml program.
         Format.(
           fprintf
             (formatter_of_out_channel o)
-            "#!/bin/sh\n\n%a\n" Genspio.Compile.To_slow_flow.Script.pp
+            "#!/bin/sh\n\n%a\n" Genspio.Compile.To_slow_flow.Script.pp_posix
             (Genspio.Compile.To_slow_flow.compile
                (t.make ~root |> Genspio.Transform.Constant_propagation.process)))
     | `Standard ->
@@ -1047,7 +1047,7 @@ module Example_script = struct
       ; call {sh|config addjob --name Top --no-log -c top|sh}
       ; call
           "config addjob --name Dummy --interpreter 'bash -c' \\\n\
-           \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
+          \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
       ; cmt "Show the updated configuration:"
       ; call "config show"
       ; cmt "Show the current status:"
