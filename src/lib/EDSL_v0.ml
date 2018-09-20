@@ -8,71 +8,9 @@ type fd_redirection = Language.fd_redirection
 
 let ( // ) = Filename.concat
 
-open Language.Construct
+include Language.Construct
 open Nonstd
 module String = Sosa.Native_string
-include Base
-module Magic = Magic
-
-type str = Language.byte_array
-
-let str = byte_array
-
-let string = str
-
-module Str = struct
-  include Byte_array
-
-  let equals = ( =$= )
-
-  let concat_elist e = byte_array_concat_list e
-
-  let concat_list l = concat_elist (Elist.make l)
-end
-
-let call l = call @@ List.map ~f:to_c_string l
-
-let strs l = List.map ~f:str l
-
-let exec l = call (strs l)
-
-let getenv str = getenv (to_c_string str) |> to_byte_array
-
-let setenv ~var v = setenv ~var:(to_c_string var) (to_c_string v)
-
-let file_exists s = file_exists (to_c_string s)
-
-let write_output ?stdout ?stderr ?return_value u =
-  let stdout = Option.map stdout ~f:to_c_string in
-  let stderr = Option.map stderr ~f:to_c_string in
-  let return_value = Option.map return_value ~f:to_c_string in
-  write_output ?stdout ?stderr ?return_value u
-
-let to_file take file = to_file take (to_c_string file)
-
-let write_stdout ~path expr = write_output expr ~stdout:path
-
-module Elist = struct
-  include Elist
-
-  let serialize_str_list sl = serialize_byte_array_list sl
-
-  let deserialize_to_str_list sl = deserialize_to_byte_array_list sl
-end
-
-module Bool = struct
-  let of_string s = Bool.of_string (to_c_string s)
-
-  let to_string b = Bool.to_string b |> to_byte_array
-end
-
-module Integer = struct
-  include Integer
-
-  let to_str = to_byte_array
-
-  let of_str = of_byte_array
-end
 
 let case condition body = `Case (condition, seq body)
 
@@ -100,23 +38,27 @@ let string_list_of_string s =
  *)
 
 type file =
-  < get: str t
-  ; set: str t -> unit t
-  ; append: str t -> unit t
+  < get: byte_array t
+  ; get_c: c_string t
+  ; set: byte_array t -> unit t
+  ; set_c: c_string t -> unit t
+  ; append: byte_array t -> unit t
   ; delete: unit t
-  ; path: str t >
+  ; path: c_string t >
 
 let tmp_file ?tmp_dir name : file =
   let default_tmp_dir = "/tmp" in
   let get_tmp_dir =
     Option.value tmp_dir
       ~default:
-        (get_stdout
-           ((* https://en.wikipedia.org/wiki/TMPDIR *)
-            if_then_else
-              Str.(getenv (str "TMPDIR") <$> str "")
-              (call [str "printf"; str "%s"; getenv (str "TMPDIR")])
-              (exec ["printf"; "%s"; default_tmp_dir])))
+        ( get_stdout
+            ((* https://en.wikipedia.org/wiki/TMPDIR *)
+             if_then_else
+               C_string.(getenv (c_string "TMPDIR") <$> c_string "")
+               (call
+                  [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
+               (exec ["printf"; "%s"; default_tmp_dir]))
+        |> to_c_string )
   in
   let path =
     let clean =
@@ -124,16 +66,18 @@ let tmp_file ?tmp_dir name : file =
         | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-') as c -> c
         | other -> '_' )
     in
-    Str.concat_list
+    C_string.concat_list
       [ get_tmp_dir
-      ; str "/"
-      ; str
+      ; c_string "/"
+      ; c_string
           (sprintf "genspio-tmp-file-%s-%s" clean
              Digest.(string name |> to_hex)) ]
   in
-  let tmp = Str.concat_list [path; string "-tmp"] in
+  let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = get_stdout (call [string "cat"; path])
+
+    method get_c = self#get |> to_c_string
 
     method path = path
 
@@ -145,7 +89,8 @@ let tmp_file ?tmp_dir name : file =
           v >> exec ["cat"] |> write_output ~stdout:tmp
         ; call [string "mv"; string "-f"; tmp; path] ]
 
-    (* method set_c c = self#set (to_byte_array c) *)
+    method set_c c = self#set (to_byte_array c)
+
     method append v =
       seq
         [ seq [call [string "cat"; path]; v >> exec ["cat"]]
@@ -169,7 +114,7 @@ module Command_line = struct
 
   type _ option_spec =
     | Opt_flag : bool t cli_option -> bool t option_spec
-    | Opt_string : str t cli_option -> str t option_spec
+    | Opt_string : c_string t cli_option -> c_string t option_spec
 
   and (_, _) cli_options =
     | Opt_end : string -> ('a, 'a) cli_options
@@ -190,7 +135,7 @@ module Command_line = struct
   end
 
   let parse (options : ('a, unit t) cli_options)
-      (action : anon:str list t -> 'a) : unit t =
+      (action : anon:c_string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
     let variable {switches; doc} =
       sprintf "%s_%s" prefix
@@ -205,8 +150,11 @@ module Command_line = struct
     let to_help s = help := s :: !help in
     let string_of_var var = getenv (string var) in
     let bool_of_var var = getenv (string var) |> Bool.of_string in
-    let anon_var = ksprintf str "%s_anon" prefix in
-    let anon = anon_var |> getenv |> Elist.deserialize_to_str_list in
+    let anon_tmp =
+      ksprintf tmp_file "parse-cli-%s"
+        (Marshal.to_string options [] |> Digest.string |> Digest.to_hex)
+    in
+    let anon = anon_tmp#get |> Elist.deserialize_to_c_string_list in
     let applied_action =
       (* 
         The [loop] function below is building 3 pieces of Genspio code at once:
@@ -237,9 +185,9 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| Str.(str s =$= getenv (str "1")) ))
+                      p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
                  [ if_seq
-                     Str.(getenv (string "2") =$= string "")
+                     C_string.(getenv (string "2") =$= string "")
                      ~t:
                        [ eprintf
                            (string "ERROR option '%s' requires an argument\\n")
@@ -258,7 +206,7 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| Str.equals (string s) (getenv (string "1")) ))
+                      p ||| C_string.equals (string s) (getenv (string "1")) ))
                  [ setenv (string var) (Bool.to_string (bool true))
                  ; exec ["shift"] ]) ;
             ksprintf to_help "* `%s`: %s"
@@ -276,31 +224,34 @@ module Command_line = struct
     let while_loop =
       let body =
         let append_anon_arg_to_list =
-          setenv anon_var
-            ( Elist.append anon (Elist.make [getenv (string "1")])
-            |> Elist.serialize_str_list )
+          seq
+            [ anon_tmp#set
+                ( Elist.append
+                    (anon_tmp#get |> Elist.deserialize_to_byte_array_list)
+                    (Elist.make [getenv (string "1") |> C_string.to_byte_array])
+                |> Elist.serialize_byte_array_list ) ]
         in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
-                 p ||| Str.(str s =$= getenv (str "1")) ))
+                 p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
             [ setenv help_flag_var (Bool.to_string (bool true))
             ; byte_array help_msg >> exec ["cat"]
             ; exec ["break"] ]
         in
         let dash_dash_case =
           case
-            Str.(getenv (str "1") =$= str "--")
+            C_string.(getenv (c_string "1") =$= c_string "--")
             [ exec ["shift"]
             ; loop_while
-                Str.(getenv (str "#") <$> str "0")
+                C_string.(getenv (c_string "#") <$> c_string "0")
                 ~body:(seq [append_anon_arg_to_list; exec ["shift"]])
             ; exec ["break"] ]
         in
         let anon_case =
           case
-            Str.(getenv (str "#") <$> str "0")
+            C_string.(getenv (c_string "#") <$> c_string "0")
             [append_anon_arg_to_list; exec ["shift"]]
         in
         let default_case = default [exec ["break"]] in
@@ -314,7 +265,7 @@ module Command_line = struct
     in
     seq
       [ setenv help_flag_var (Bool.to_string (bool false))
-      ; setenv anon_var (Elist.serialize_byte_array_list (Elist.make []))
+      ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
       ; seq (List.rev !inits)
       ; while_loop
       ; if_then_else
@@ -324,13 +275,13 @@ end
 
 let loop_until_true ?(attempts = 20) ?(sleep = 2)
     ?(on_failed_attempt =
-      fun nth -> printf (string "%d.") [Integer.to_str nth]) cmd =
+      fun nth -> printf (string "%d.") [Integer.to_string nth]) cmd =
   let intvar =
     let varname = string "C_ATTEMPTS" in
     object
-      method set v = setenv ~var:varname (Integer.to_str v)
+      method set v = setenv ~var:varname (Integer.to_string v)
 
-      method get = getenv varname |> Integer.of_str
+      method get = getenv varname |> Integer.of_string
     end
   in
   seq
@@ -384,7 +335,7 @@ let sanitize_name n =
 
 let default_on_failure ~step:(i, u) ~stdout ~stderr =
   seq
-    [ printf (ksprintf str "Step '%s' FAILED:\\n" i) []
+    [ printf (ksprintf c_string "Step '%s' FAILED:\\n" i) []
     ; cat_markdown "stdout" stdout
     ; cat_markdown "stderr" stderr
     ; exec ["false"] ]
@@ -394,7 +345,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
     ?(on_success = fun ~step ~stdout ~stderr -> nop) ?(tmpdir = "/tmp") cmds =
   let tmp_prefix = fresh_name "-cmd" in
   let tmpout which id =
-    str
+    c_string
       ( tmpdir
       // sprintf "genspio-check-sequence-%s-%s-%s" tmp_prefix which
            (sanitize_name id) )
@@ -406,7 +357,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
     | `Silent -> write_output ~stdout:(stdout id) ~stderr:(stderr id) u
     | `Announce prompt ->
         seq
-          [ printf (ksprintf str "%s %s\\n" prompt id) []
+          [ printf (ksprintf c_string "%s %s\\n" prompt id) []
           ; write_output ~stdout:(stdout id) ~stderr:(stderr id) u ]
     | `Output_all -> u
   in
@@ -429,160 +380,3 @@ let on_stdin_lines body =
   loop_while
     (exec ["read"; "-r"; fresh] |> succeeds)
     ~body:(seq [exec ["export"; fresh]; body (getenv (string fresh))])
-
-let command_available executable =
-  succeeds_silently (call [str "command"; str "-v"; executable])
-
-let get_stdout_one_line ?(first_line = false) ?(remove_spaces = false) u =
-  get_stdout
-    ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
-    ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
-
-let verbose_call ?(prefix = "CALL: ") ?(verbose = bool true) l =
-  if_seq verbose
-    ~t:
-      [ eprintf (ksprintf str "%s[" prefix) []
-      ; seq @@ List.map l ~f:(fun ex -> eprintf (string "%s ") [ex])
-      ; eprintf (string "]\\n") []
-      ; call l ]
-    ~e:[call l]
-
-let check_sequence_with_output l =
-  check_sequence ~verbosity:`Output_all
-    (List.mapi l ~f:(fun i c -> (sprintf "Step-%d" i, c)))
-
-let is_regular_file path =
-  call [string "test"; string "-f"; path] |> succeeds_silently
-
-let is_directory path =
-  call [string "test"; string "-d"; path] |> succeeds_silently
-
-let is_executable path = succeeds_silently @@ call [str "test"; str "-x"; path]
-
-let is_readable path = succeeds_silently @@ call [str "test"; str "-r"; path]
-
-let mkdir_p path = call [str "mkdir"; str "-p"; path]
-
-let exit n = exec ["exit"; string_of_int n]
-
-let home_path () = getenv (str "HOME")
-
-let ( ^$^ ) a b = Str.concat_list [a; b]
-
-let ( /// ) a b = Str.concat_list [a; str "/"; b]
-
-let say fmt l = eprintf (ksprintf string "%s\\n" fmt) l
-
-let ensure what ~condition ~how =
-  if_seq condition
-    ~t:[ksprintf say "%s -> already done" what []]
-    ~e:
-      [ check_sequence
-          ~verbosity:(`Announce (sprintf "-> %s: in-progress" what))
-          ~on_failure:(fun ~step ~stdout ~stderr ->
-            seq
-              [ say "FAILURE: %s" [str (fst step)]
-              ; cat_markdown "stdout" stdout
-              ; cat_markdown "stderr" stderr
-              ; fail "FATAL ERROR" ] )
-          how
-      ; if_then_else condition nop
-          (seq
-             [ say "FAILURE: %s did not ensure condition!" [str what]
-             ; fail "FATAL ERROR" ]) ]
-
-let greps_to ?(extended_re = false) re u =
-  let c =
-    [string "grep"] @ (if extended_re then [string "-E"] else []) @ [re]
-  in
-  succeeds_silently (u ||> call c)
-
-module Script_with_describe (P : sig
-  val name : string
-
-  val description : string
-end) =
-struct
-  include P
-
-  let describe_option_and_usage ?(more_usage = []) () =
-    let open Command_line.Arg in
-    flag ["--describe"] ~doc:P.description
-    & ksprintf usage "usage: %s <args>\n%s.%s" P.name P.description
-        (List.map more_usage ~f:(sprintf "\n%s") |> String.concat ~sep:"")
-
-  let deal_with_describe describe more =
-    if_seq describe
-      ~t:[printf (ksprintf string "%s\\n" P.description) []]
-      ~e:more
-end
-
-module Dispatcher_script = struct
-  let make ?(aliases = []) ~name ~description () =
-    let eq_or ~eq s1 l =
-      match l with
-      | [] -> bool true
-      | h :: t ->
-          List.fold
-            ~init:(eq s1 (string h))
-            t
-            ~f:(fun p v -> p ||| eq s1 (string v))
-    in
-    let pr_usage =
-      seq
-        [ printf
-            (ksprintf string
-               "usage: %s <cmd> [OPTIONS/ARGS]\\n\\n%s.\\n\\nSub-commands:\\n"
-               name description)
-            []
-        ; (let findgrep =
-             ksprintf Magic.unit
-               "{ ls -1 $(echo $PATH  | tr ':' ' ') | grep -E '%s-[^-]*$' | \
-                sort -u ; } 2> /dev/null"
-               name
-           in
-           findgrep
-           ||> on_stdin_lines (fun line ->
-                   printf (string "* %s: %s\\n")
-                     [ line
-                     ; get_stdout
-                         ( call [line; string "--describe"]
-                         ||> exec ["tr"; "-d"; "\\n"] ) ] ))
-        ; printf (str "Aliases:\\n") []
-        ; seq
-            (List.map aliases ~f:(fun (a, v) ->
-                 printf (str "* %s -> %s\\n") [a; v] )) ]
-    in
-    let dollar_one_empty = Str.(getenv (string "1") =$= string "") in
-    let tmp = ksprintf tmp_file "%s-call" name in
-    seq
-      [ if_seq
-          ( dollar_one_empty
-          ||| eq_or ~eq:Str.( =$= )
-                (getenv (string "1"))
-                ["-h"; "--help"; "help"] )
-          ~t:[pr_usage]
-          ~e:
-            [ if_seq
-                Str.(getenv (string "1") =$= string "--describe")
-                ~t:[printf (ksprintf string "%s\\n" description) []]
-                ~e:
-                  [ write_stdout ~path:tmp#path
-                      (seq
-                         [ printf (str "%s-") [str name]
-                         ; switch
-                             ( List.map aliases ~f:(fun (a, v) ->
-                                   case
-                                     Str.(a =$= getenv (string "1"))
-                                     [printf (str "%s") [v]] )
-                             @ [default [printf (str "%s") [getenv (str "1")]]]
-                             )
-                         ; exec ["shift"]
-                         ; loop_seq_while (not dollar_one_empty)
-                             [ printf (str " '") []
-                             ; getenv (string "1")
-                               >> exec ["sed"; "s/'/'\\\\''/g"]
-                             ; printf (str "'") []
-                             ; exec ["shift"] ] ])
-                  ; call [string "sh"; tmp#path] ] ] ]
-end

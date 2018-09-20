@@ -14,6 +14,49 @@ rm -fr $output_path
 mkdir -p $output_path
 cp -r _build/default/_doc/_html/* $output_path/
 
+css_file=ssc.css
+css_path=$output_path/$css_file
+
+cat $output_path/odoc.css > $css_path
+more_css () {
+    cat >> $1 <<EOF
+body {
+  max-width: 72em; /* A bit larger than odoc's output */
+}
+h1 {
+  border: none;
+  padding: 1em;
+  margin: 0px;
+  font-size: 220%;
+  text-align: center;
+  background-color: #eee;
+  border: solid 2px #400;
+  padding-left: 4%;
+  padding-right: 4%;
+  padding-top: 2%;
+  padding-bottom: 2%;
+  width: 104%;
+  margin-left: -2%;
+  font-weight: bold;
+}
+h1 code {
+  font-size: 100%;
+  font-weight: bold;
+  font-family: sans;
+  background-color: #0000;
+}
+header {
+}
+#TOC {
+  padding-left: 1em;
+  border-left: solid 2px #400;
+}
+pre {
+  padding-left: 1em;
+}
+EOF
+}
+more_css $css_path
 
 call_caml2html () {
     local input_file="$1"
@@ -87,15 +130,16 @@ code span.vs { color: #4070a0; } /* VerbatimString */
 code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
 .insert {background-color: $insert_bg_color ;
          padding-left: 6px; padding-top: 1em; padding-bottom: 1em }
-body { margin-left: 5% ; width: 90% }
-h1 code { font-size: 200% ; font-family: serif; color: #300 }
 .insert pre { background-color: $insert_bg_color ;
       margin-left: 3em ;
       margin-right: 3em;
       border-left: 1px solid #aaaaaa; }
 .insert code { background-color: $insert_bg_color }
 EOF
-    cat /tmp/c2h.css /tmp/morecode.css > $output_path/caml2html.css
+    cat $css_path > $output_path/caml2html.css
+    cat /tmp/c2h.css >> $output_path/caml2html.css
+    cat /tmp/morecode.css >> $output_path/caml2html.css
+    more_css $output_path/caml2html.css
     caml2html $input_file -charset UTF-8 \
               -t -cssurl caml2html.css \
               -ext md:'cat | { printf "<div class=insert>" ; pandoc -w html ; printf "</div>" ; } ' \
@@ -103,6 +147,7 @@ EOF
     sed -i "s:${input_file}:${title}:" $output_file
     sed -i 's@<em>This document was generated using@<em>Back to <a href="index.html">home</a>.</em>@' $output_file
     sed -i 's@<a href="http://martin.jambon.free.fr/caml2html.html">caml2html</a></em>@@' $output_file
+    echo "Made $output_file"
 }
 
 call_caml2html src/lib/to_slow_flow.ml $output_path/to-slow-flow.html \
@@ -110,7 +155,8 @@ call_caml2html src/lib/to_slow_flow.ml $output_path/to-slow-flow.html \
 call_caml2html src/lib/transform.ml $output_path/transform-module.html \
                "The AST Transformations"
 call_caml2html src/examples/service_composer.ml $output_path/service-composer-example.html \
-               "The Service Compose Example"
+               "The Service Composer Example"
+
 
 pandocify () {
     local title="$(head -n 1 $1)"
@@ -123,7 +169,7 @@ pandocify () {
         | sed 's:<!--TOSLOWFLOW-->:- Code [documentation](./to-slow-flow.html) for the `To_slow_flow` *compiler.*:' \
         | sed 's:<!--TRANSFORM-->:- Code [documentation](./transform-module.html) for the `Transform` module (AST *optimizations*).:' \
         | sed 's:<!--SERCOEX-->:- Code [documentation](./service-composer-example.html) for the *“Service-composer Example”*.:' \
-        | pandoc -c odoc.css -s \
+        | pandoc -c $css_file -s \
                  --variable title="$title" --variable pagetitle="$title" \
                  --toc -o $output_path/$2.html
 }

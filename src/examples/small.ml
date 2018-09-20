@@ -40,7 +40,8 @@ Genspio.EDSL.(
 let () =
   example ~show:"[`Stderr]" "Failure with Comment"
     "When an expression is wrapped with *“comments”* they also appear in \
-     error messages (compilation *and* run-time) as “the comment stack.”"
+     some error messages (compilation *and* run-time when using the default \
+     compiler) as “the comment stack.”"
     {ocaml|
 Genspio.EDSL.(
   "This is a very simple comment" %%% seq [
@@ -54,7 +55,7 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Call a command with C-Strings" ~show:"[`Stdout; `Pretty_printed]"
+  example "Call a command with Shell-Strings" ~show:"[`Stdout; `Pretty_printed]"
     "The `call` construct is a more general version of `exec` that can take \
      any EDSL string. As with `exec` the string will be checked for C-String \
      compatibilty, hence the calls to `byte-array-to-c-string` in the \
@@ -62,8 +63,8 @@ let () =
     {ocaml|
 Genspio.EDSL.(
   call [
-    string "echo";
-    C_string.concat_list [string "foo"; string "bar"]; (* A concatenation at run-time. *)
+    str "echo";
+    Str.concat_list [str "foo"; str "bar"]; (* A concatenation at run-time. *)
   ]
 )
 |ocaml}
@@ -71,11 +72,11 @@ Genspio.EDSL.(
 let () =
   example "C-String Compilation Failure" ~show:"[]"
     "When a string literal cannot be converted to a “C-String” the \
-     compiler tries to catch the error at compile-time."
+     default compiler tries to catch the error at compile-time."
     {ocaml|
 Genspio.EDSL.(
   "A sequence that will fail" %%% seq [
-    call [string "ls"; string "foo\x00bar"]; (* A string containing `NUL` *)
+    call [str "ls"; str "foo\x00bar"]; (* A string containing `NUL` *)
   ]
 )
 |ocaml}
@@ -86,23 +87,19 @@ let () =
     {md|Here we use the constructs:
 
 ```ocaml
-val get_stdout : unit t -> byte_array t
-val Byte_array.to_c: byte_array t -> c_string t
+val get_stdout : unit t -> str t
 val (||>) : unit t -> unit t -> unit t
 ```
 
-We use `let (s : …) = …` to show the types; we see then that we need to “cast”
-the output to a C-String with `Byte_array.to_c` in order to pass it to `call`.
-Indeed, commands can output arbitrary byte-arrays but Unix commands
-only accept `NUL`-terminated strings.
+We use `let (s : …) = …` to show the types.
 
 We then “pipe” the output to another `exec` call with `||>` (which is
 a 2-argument shortcut for `EDSL.pipe`).
 |md}
     {ocaml|
 Genspio.EDSL.(
-  let (s : byte_array t) = get_stdout (exec ["cat"; "README.md"]) in
-  call [string "printf"; string "%s"; Byte_array.to_c s] ||> exec ["wc"; "-l"];
+  let (s : str t) = get_stdout (exec ["cat"; "README.md"]) in
+  call [str "printf"; str "%s"; s] ||> exec ["wc"; "-l"];
 )
 |ocaml}
 
@@ -114,23 +111,23 @@ let () =
     {ocaml|
 Genspio.EDSL.(
   (* Let's see wether `wc -l` is fine with a NUL in the middle of a “line:” *)
-  byte_array "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
+  str "one\ntwo\nth\000ree\n" >> exec ["wc"; "-l"];
 )
 |ocaml}
 
 let () =
   example "Comparing byte-arrays, using conditionals"
     ~show:"[`Pretty_printed; `Stdout]"
-    "We show that `byte-array >> cat` is not changing anything and we try \
+    "We show that `str .. >> cat` is not changing anything and we try \
      `if_seq`; a version of `EDSL.if_then_else` more practical for \
      sequences/imperative code."
     {ocaml|
 Genspio.EDSL.(
     (* With a 🐱: *)
-  let original = byte_array "one\ntwo\nth\000ree\n" in
+  let original = str "one\ntwo\nth\000ree\n" in
   let full_cycle = original >> exec ["cat"] |> get_stdout in
   if_seq
-    Byte_array.(full_cycle =$= original)
+    Str.(full_cycle =$= original)
     ~t:[
       exec ["echo"; "They are the same"];
     ]
@@ -150,16 +147,16 @@ Genspio.EDSL.(
   let tmp = tmp_file "genspio-example" in
   let body =
     seq [
-      if_then_else C_string.(tmp#get_c =$= c_string "")
-         (tmp#set_c (c_string "magic-"))
-         (if_then_else C_string.(tmp#get_c =$= string "magic-")
-            (tmp#append (c_string "string" |> C_string.to_bytes))
+      if_then_else Str.(tmp#get =$= str "")
+         (tmp#set (str "magic-"))
+         (if_then_else Str.(tmp#get =$= str "magic-")
+            (tmp#append (str "string"))
             nop);
-      call [string "printf"; string "Currently '%s'\\n"; tmp#get_c];
+      call [str "printf"; str "Currently '%s'\\n"; tmp#get];
     ] in
   seq [
-    tmp#set (byte_array "");
-    loop_while C_string.(tmp#get_c <$> c_string "magic-string") ~body
+    tmp#set (str "");
+    loop_while Str.(tmp#get <$> str "magic-string") ~body
   ]
 )
 |ocaml}
@@ -183,14 +180,14 @@ redirections are set in that order:
 Genspio.EDSL.(
   seq [
     with_redirections (exec ["printf"; "%s"; "hello"]) [
-      to_file (int 3) (string "/tmp/genspio-one");
-      to_file (int 3) (string "/tmp/genspio-two");
+      to_file (int 3) (str "/tmp/genspio-one");
+      to_file (int 3) (str "/tmp/genspio-two");
       to_fd (int 2) (int 3);
       to_fd (int 1) (int 2);
     ];
-    call [string "printf"; string "One: '%s'\\nTwo: '%s'\\n";
-          exec ["cat"; "/tmp/genspio-one"] |> get_stdout |> Byte_array.to_c;
-          exec ["cat"; "/tmp/genspio-two"] |> get_stdout |> Byte_array.to_c];
+    call [str "printf"; str "One: '%s'\\nTwo: '%s'\\n";
+          exec ["cat"; "/tmp/genspio-one"] |> get_stdout;
+          exec ["cat"; "/tmp/genspio-two"] |> get_stdout];
   ]
 )
 |ocaml}
@@ -203,11 +200,11 @@ let () =
     {ocaml|
 Genspio.EDSL.(
   let l = Elist.make [
-    c_string "One";
-    c_string "Two";
+    str "One";
+    str "Two";
   ] in
   Elist.iter l ~f:begin fun current ->
-    printf (c_string "Current: %s\\n") [current ()];
+    printf (str "Current: %s\\n") [current ()];
   end
 )
 |ocaml}
@@ -241,15 +238,15 @@ Genspio.EDSL.(
       ~attempts:4
       ~sleep:1
       ~on_failed_attempt:(fun nth ->
-        printf (string "\rWaiting for '%s: %s-th attempt.")
-         [c_string who; Integer.to_string nth])
+        printf (str "\rWaiting for '%s: %s-th attempt.")
+         [str who; Integer.to_str nth])
       (the_condition who)
   in
   if_seq (the_wait "godot") ~t:[
-      printf (c_string "It was worth waiting\\n") [];
+      printf (str "It was worth waiting\\n") [];
     ]
      ~e:[
-      printf (c_string "It was NOT worth waiting\\n") [];
+      printf (str "It was NOT worth waiting\\n") [];
     ]
   )
 |ocaml}
@@ -268,11 +265,11 @@ Genspio.EDSL.(
      ~verbosity:(`Announce "♦ Check-seq-example → ") (* Try also `Output_all or `Silent *)
      ~on_success:begin fun ~step:(name, expr) ~stdout ~stderr ->
        let code = Genspio.Compile.to_one_line_hum expr in
-       printf (c_string "  ↳ Extra “On Success” for command `%s`\\n\
-                        \    code: `%s`\\n\
-                        \    stdout: `%s`\\n\
-                        \    stderr: `%s`\\n")
-          [c_string name; c_string code; stdout; stderr]
+       printf (str "  ↳ Extra “On Success” for command `%s`\\n\
+                   \    code: `%s`\\n\
+                   \    stdout: `%s`\\n\
+                   \    stderr: `%s`\\n")
+          [str name; str code; stdout; stderr]
      end
      [
         "This will succeed", exec ["ls"; "/tmp"];
@@ -295,12 +292,12 @@ silently forgotten, not counted.
 |md}
     {ocaml|
 Genspio.EDSL.(
-  printf (c_string "123\\n12345\\n1234\\00056\\n12\\n") []
+  printf (str "123\\n12345\\n1234\\00056\\n12\\n") []
   ||> on_stdin_lines begin fun line ->
-    printf (c_string "→ %s bytes\\n")
-      [C_string.to_byte_array line
+    printf (str "→ %s bytes\\n")
+      [line
        >> exec ["wc"; "-c"] ||> exec ["tr"; "-d"; "\\n"]
-       |> get_stdout |> Byte_array.to_c]
+       |> get_stdout]
   end
 )
 |ocaml}

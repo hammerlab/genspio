@@ -4,26 +4,24 @@
 type 'a t = 'a Language.t
 
 (** Type to encode arbitrary byte-arrays in the EDSL as
-    [byte_array t] values, OCaml literal strings or the outputs (as in
-    [stdout]) of processes are byte-arrays. *)
-type byte_array = Language.byte_array
+    [str t] values, OCaml literal strings or the outputs (as in
+    [stdout]) of processes are byte-arrays.
 
-(** Type to encode NUL-terminated strings in the EDSL as
-    [c_string t] values. C-strings cannot contain the ['\x00'] character.
+    NUL-terminated “C-like” strings are encoded at a lower level than this EDSL (as
+    [c_string t] values). C-strings cannot contain the ['\x00'] character.
     The command line arguments of commands as well as the contents of
-    environment variables must be C-strings. *)
-type c_string = Language.c_string
+    environment variables must be C-strings. Genspio treats them
+    properly by failing when a wrong byte-array needs to be converted
+    to a C-string. *)
+type str = Language.byte_array
 
 (** {3 Literals } *)
 
-val c_string : string -> c_string t
+val str : string -> str t
 (** Create a {!type:c_string} literal. *)
 
-val string : string -> c_string t
-(** [string] is an alias for {!function:c_string}. *)
-
-val byte_array : string -> byte_array t
-(** Create a {!type:byte_array} literal. *)
+val string : string -> str t
+(** [string] is an alias for {!function:str}. *)
 
 val int : int -> int t
 
@@ -40,7 +38,7 @@ val ( %%% ) : string -> 'a t -> 'a t
 
 (** {3 Basic system Commands} *)
 
-val call : c_string t list -> unit t
+val call : str t list -> unit t
 (** Call a command from its list of “arguments” (including the first
     argument being the actual command). *)
 
@@ -49,14 +47,14 @@ val exec : string list -> unit t
     actually [call [string "a"; string "b"]] which is the usual shell command
     ["a b"] (with proper escaping). *)
 
-val getenv : c_string t -> c_string t
+val getenv : str t -> str t
 (** Get the value of an environment variable as a string;
     it returns the empty string when the variable is not defined.
     If the argument is not a valid variable name, behavior is
     undefined.
  *)
 
-val setenv : var:c_string t -> c_string t -> unit t
+val setenv : var:str t -> str t -> unit t
 (** Set the value of an environment variable as a string;
     it returns the empty string is the variable is not defined.
 
@@ -86,28 +84,24 @@ val returns : 'a t -> value:int -> bool t
 val succeeds : 'a t -> bool t
 (** [succeeds expr] is equivalent to [returns expr ~value:0]. *)
 
-val file_exists : c_string t -> bool t
+val file_exists : str t -> bool t
 (** Check whether a file exists, i.e. a shortcut for
-    [call [c_string "test"; c_string "-f"; path] |> succeeds]. *)
+    [call [str "test"; str "-f"; path] |> succeeds]. *)
 
 (** Conversions of the [bool t] type. *)
 module Bool : sig
-  val to_string : bool t -> c_string t
+  val to_string : bool t -> str t
 
-  val of_string : c_string t -> bool t
+  val of_string : str t -> bool t
 end
 
 (** {3 Integer Arithmetic} *)
 
 (** Functions on [int t] values (arithmetic, comparisons, conversions, etc.). *)
 module Integer : sig
-  val to_string : int t -> c_string t
+  val to_str : int t -> str t
 
-  val to_byte_array : int t -> byte_array t
-
-  val of_string : c_string t -> int t
-
-  val of_byte_array : byte_array t -> int t
+  val of_str : str t -> int t
 
   val bin_op :
     int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
@@ -173,47 +167,33 @@ module Elist : sig
   (** Iterate over a list, the body of the loop [~f] takes as argument
       function that returns the current eletment at the EDSL level. *)
 
-  val serialize_byte_array_list : byte_array list t -> byte_array t
+  val serialize_byte_array_list : str list t -> str t
 
-  val deserialize_to_byte_array_list : byte_array t -> byte_array list t
+  val deserialize_to_byte_array_list : str t -> str list t
 
-  val serialize_c_string_list : c_string list t -> byte_array t
+  val serialize_str_list : str list t -> str t
 
-  val deserialize_to_c_string_list : byte_array t -> c_string list t
+  val deserialize_to_str_list : str t -> str list t
 
-  val serialize_int_list : int list t -> byte_array t
+  val serialize_int_list : int list t -> str t
 
-  val deserialize_to_int_list : byte_array t -> int list t
+  val deserialize_to_int_list : str t -> int list t
 end
 
 (** {3 String Manipulation} *)
 
-module Byte_array : sig
-  val ( =$= ) : byte_array t -> byte_array t -> bool t
+module Str : sig
+  val equals : str t -> str t -> bool t
 
-  val ( <$> ) : byte_array t -> byte_array t -> bool t
+  val ( =$= ) : str t -> str t -> bool t
 
-  val to_c_string : byte_array t -> c_string t
+  val ( <$> ) : str t -> str t -> bool t
 
-  val to_c : byte_array t -> c_string t
-end
+  val concat_list : str t list -> str t
+  (** Concatenate an (OCaml) list of [str t] values. *)
 
-module C_string : sig
-  val equals : c_string t -> c_string t -> bool t
-
-  val ( =$= ) : c_string t -> c_string t -> bool t
-
-  val ( <$> ) : c_string t -> c_string t -> bool t
-
-  val to_byte_array : c_string t -> byte_array t
-
-  val to_bytes : c_string t -> byte_array t
-
-  val concat_list : c_string t list -> c_string t
-  (** Concatenate an (OCaml) list of [c_string t] values. *)
-
-  val concat_elist : c_string list t -> c_string t
-  (** Concatenate a Genspio list of strings [c_string list t]. *)
+  val concat_elist : str list t -> str t
+  (** Concatenate a Genspio list of strings [str list t]. *)
 end
 
 (** {3 Control Flow} *)
@@ -270,7 +250,7 @@ type fd_redirection
 val to_fd : int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
 
-val to_file : int t -> c_string t -> fd_redirection
+val to_file : int t -> str t -> fd_redirection
 (** Create a file-descriptor to file redirection. *)
 
 val with_redirections : unit t -> fd_redirection list -> unit t
@@ -292,15 +272,11 @@ val with_redirections : unit t -> fd_redirection list -> unit t
 *)
 
 val write_output :
-     ?stdout:c_string t
-  -> ?stderr:c_string t
-  -> ?return_value:c_string t
-  -> unit t
-  -> unit t
+  ?stdout:str t -> ?stderr:str t -> ?return_value:str t -> unit t -> unit t
 (** Redirect selected streams or the return value to files ([stdout],
     [stderr], [return_value] are paths). *)
 
-val write_stdout : path:c_string t -> unit t -> unit t
+val write_stdout : path:str t -> unit t -> unit t
 (** [write_stdout ~path expr] is [write_output expr ~stdout:path]. *)
 
 val pipe : unit t list -> unit t
@@ -310,21 +286,21 @@ val pipe : unit t list -> unit t
 val ( ||> ) : unit t -> unit t -> unit t
 (** [a ||> b] is a shortcut for [pipe [a; b]]. *)
 
-val get_stdout : unit t -> byte_array t
+val get_stdout : unit t -> str t
 (** Get the contents of [stdout] into a byte array (in previous
     versions this function was called [output_as_string]).  *)
 
-val feed : string:byte_array t -> unit t -> unit t
+val feed : string:str t -> unit t -> unit t
 (** Feed some content ([~string]) into the ["stdin"] filedescriptor of
     a [unit t] expression. *)
 
-val ( >> ) : byte_array t -> unit t -> unit t
+val ( >> ) : str t -> unit t -> unit t
 (** [str >> cmd] is [feed ~string:str cmd]. *)
 
-val printf : c_string t -> c_string t list -> unit t
+val printf : str t -> str t list -> unit t
 (**  [printf fmt l] is [call (string "printf" :: string "--" :: fmt :: l)]. *)
 
-val eprintf : c_string t -> c_string t list -> unit t
+val eprintf : str t -> str t list -> unit t
 (** Like {!printf} but redirected to ["stderr"]. *)
 
 (** {3 Escaping The Execution Flow } *)
@@ -338,15 +314,13 @@ val fail : string -> unit t
 
 (** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
-  < get: byte_array t  (** Get the current contents of the file *)
-  ; get_c: c_string t
-  ; set: byte_array t -> unit t
-  ; set_c: c_string t -> unit t
-  ; append: byte_array t -> unit t
+  < get: str t  (** Get the current contents of the file *)
+  ; set: str t -> unit t
+  ; append: str t -> unit t
   ; delete: unit t
-  ; path: c_string t >
+  ; path: str t >
 
-val tmp_file : ?tmp_dir:c_string t -> string -> file
+val tmp_file : ?tmp_dir:str t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values).
     
@@ -419,7 +393,7 @@ module Command_line : sig
 
   type _ option_spec =
     | Opt_flag : bool t cli_option -> bool t option_spec
-    | Opt_string : c_string t cli_option -> c_string t option_spec
+    | Opt_string : str t cli_option -> str t option_spec
 
   and (_, _) cli_options =
     | Opt_end : string -> ('a, 'a) cli_options
@@ -429,10 +403,7 @@ module Command_line : sig
 
   module Arg : sig
     val string :
-         ?default:c_string t
-      -> doc:string
-      -> string list
-      -> c_string t option_spec
+      ?default:str t -> doc:string -> string list -> str t option_spec
 
     val flag :
       ?default:bool t -> doc:string -> string list -> bool t option_spec
@@ -443,8 +414,7 @@ module Command_line : sig
     val usage : string -> ('a, 'a) cli_options
   end
 
-  val parse :
-    ('a, unit t) cli_options -> (anon:c_string list t -> 'a) -> unit t
+  val parse : ('a, unit t) cli_options -> (anon:str list t -> 'a) -> unit t
 end
 
 (** {3 Additional Higher-Level Utilities} *)
@@ -478,19 +448,19 @@ val output_markdown_code : string -> unit t -> unit t
 (** [output_markdown_code "ocaml" (exec ["echo"; "let x = 42"])]
     runs its second argument within markdown-like code fences. *)
 
-val cat_markdown : string -> c_string t -> unit t
+val cat_markdown : string -> str t -> unit t
 (** [cat_markdown tag path] outputs the contents of the file at
     [path] (with ["cat"]) within a markdown code bloc. *)
 
 val check_sequence :
      ?verbosity:[`Announce of string | `Output_all | `Silent]
   -> ?on_failure:(   step:string * unit t
-                  -> stdout:c_string t
-                  -> stderr:c_string t
+                  -> stdout:str t
+                  -> stderr:str t
                   -> unit t)
   -> ?on_success:(   step:string * unit t
-                  -> stdout:c_string t
-                  -> stderr:c_string t
+                  -> stdout:str t
+                  -> stderr:str t
                   -> unit t)
   -> ?tmpdir:string
   -> (string * unit t) list
@@ -523,61 +493,179 @@ val check_sequence :
 
 *)
 
-val on_stdin_lines : (c_string t -> unit t) -> unit t
+val on_stdin_lines : (str t -> unit t) -> unit t
 (** [on_stdin_lines body] builds a loop that iterates over the lines of the [stdin]
     file descriptor. The argument of `body` is the current line.
     Note that this is for text-like input, ['\000']
     characters in the input lead to undefined behavior. *)
 
-val which_finds : string -> bool Language.t
+val strs : string list -> str t list
+(** [strs] is simply just [List.map ~f:str]. *)
+
+val command_available : str t -> bool t
+(** Call ["command -v"] to know if an executable is in ["$PATH"] (note that
+    ["which"] is not POSIX, we use ["command -v ..."] which is
+    {{:http://pubs.opengroup.org/onlinepubs/009696899/utilities/command.html}expected}
+    to return a failure if the command is not found). *)
 
 val get_stdout_one_line :
-     ?first_line:bool
-  -> ?remove_spaces:bool
-  -> unit Language.t
-  -> Language.c_string Language.t
+  ?first_line:bool -> ?remove_spaces:bool -> unit t -> str t
+(** Get the output of a command as a string without new lines,
+potentially cutting at the first line:
+{[
+  get_stdout
+    ( (if first_line then u ||> exec ["head"; "-n"; "1"] else u)
+    ||> exec ["tr"; "-d"; (if remove_spaces then " \\n" else "\\n")] )
+]}
+*)
 
-val verbose_call :
-     ?prefix:string
-  -> ?verbose:bool Language.t
-  -> Language.c_string Language.t list
-  -> unit Language.t
+val verbose_call : ?prefix:string -> ?verbose:bool t -> str t list -> unit t
+(** Like {!call} but print on [stderr] the command being run. *)
 
-val check_sequence_with_output : unit Language.t list -> unit Language.t
+val check_sequence_with_output : unit t list -> unit t
+(** A shortcut for [check_sequence] with [~verbosity:`Output_all]
+    hence ignoring the “names” of the commands. *)
 
-val is_regular_file : Language.c_string Language.t -> bool Language.t
+val is_regular_file : str t -> bool t
+(** Call ["test -f ..."]. *)
 
-val is_directory : Language.c_string Language.t -> bool Language.t
+val is_directory : str t -> bool t
+(** Call ["test -d ..."]. *)
 
-val is_executable : Language.c_string Language.t -> bool Language.t
+val is_executable : str t -> bool t
+(** Call ["test -x ..."]. *)
 
-val is_readable : Language.c_string Language.t -> bool Language.t
+val is_readable : str t -> bool t
+(** Call ["test -r ..."]. *)
 
-val mkdir_p : Language.c_string Language.t -> unit Language.t
+val mkdir_p : str t -> unit t
+(** Call ["mkdir -p ..."]. *)
 
-val exit : int -> unit Language.t
+val exit : int -> unit t
+(** Call ["exit ..."], warning: depending on the compiler, the call
+    maybe nested in various sub-shells, to really exit a script use
+    {!fail}. *)
 
-val home_path : unit -> Language.c_string Language.t
+val home_path : unit -> str t
+(** The value of ["$HOME"]. *)
 
-val ( ^$^ ) :
-     Language.c_string Language.t
-  -> Language.c_string Language.t
-  -> Language.c_string Language.t
+val ( ^$^ ) : str t -> str t -> str t
+(** Concatenate two EDSL strings. *)
 
-val ( /// ) :
-     Language.c_string Language.t
-  -> Language.c_string Language.t
-  -> Language.c_string Language.t
+val ( /// ) : str t -> str t -> str t
+(** [a /// b] is [a ^$^ str "/" ^$^ b]. *)
 
-val say : string -> Language.c_string Language.t list -> unit Language.t
+val say : string -> str t list -> unit t
+(** [say fmt l] is a shortcut to call [eprintf (str fmt) l]. *)
 
-val c_strings : string list -> Language.c_string Language.t list
+val ensure : string -> condition:bool t -> how:(string * unit t) list -> unit t
+(** Ensure a [condition]:
 
-val greps_to :
-     ?extended_re:bool
-  -> Language.c_string Language.t
-  -> unit Language.t
-  -> bool Language.t
+- Test the condition.
+- If [true] do nothing, succeed
+- If [false], run [~how] with {!check_sequence}.
+- Test the condition again, if [true] succeed, if [false] fail.
+    
+Failures happen thanks to the !{fail} call.
+ *)
+
+val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
+(** Test a string or regular expression again the output of an expression. *)
+
+(** Make scripts that provide a ["--describe"] option/command.
+
+The two functions provided can be used like this:
+
+{[
+let open Command_line in
+let opts =
+  let open Arg in
+  flag ["--all"; "-a"] ~doc:"Kill everything, incl. the Screen session"
+  & describe_option_and_usage ()
+in
+let kills = tmp_file "kill-list" in
+parse opts (fun ~anon kill_em_all describe ->
+    deal_with_describe describe
+      [ if_seq kill_em_all
+]}
+
+See also the
+{{:https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html}Service
+Composer Example} which is where the above snippet comes from.
+
+ *)
+module Script_with_describe (P : sig
+  val name : string
+
+  val description : string
+end) : sig
+  val name : string
+
+  val description : string
+
+  val describe_option_and_usage :
+       ?more_usage:string list
+    -> unit
+    -> (bool t -> 'a, 'a) Command_line.cli_options
+  (** Provide the ["--describe"] command line option. *)
+
+  val deal_with_describe : bool t -> unit t list -> unit t
+  (** Deal with the parsed result of the ["--describe"] option. *)
+end
+
+(** Create a script that mostly behaves like ["git"], it concatenates
+    its name with its first argument to call ["${0}-${1}"]. *)
+module Dispatcher_script : sig
+
+  val make :
+       ?aliases:(str t * str t) list
+    -> name:string
+    -> description:string
+    -> unit
+    -> unit Genspio__Language.t
+  (** 
+     Make a “toplevel” script that behaves a bit like ["git"] by
+     calling [name ^ "-${1}"]. The search for the argument can be
+     “hijacked” with the list of [~aliases]; with [~name:"hello"] and
+     [~aliases:[str "W", str "wolrd"]], when ["hello W"] is called,
+     the generated script with lool for ["hello-world"] in the
+     ["$PATH"].
+     
+     Just like scripts made with {!Script_with_describe}, the
+     [~description] argument is used to answer the ["--describe"]
+     command line option.
+     
+     When called without arguments, with ["-h"], ["-help"], or with
+     ["--help"], the script lists all the commands it can find and the
+     aliases. E.g.:
+
+{v
+usage: cosc <cmd> [OPTIONS/ARGS]
+
+Script that is a bit like Docker-compose but with GNU-Screen.
+
+Sub-commands:
+* cosc-attach: Attach to the Screen being managed.
+* cosc-configuration: Manage the configuration.
+* cosc-example: Show or run a full example.
+* cosc-kill: Kill Jobs or the whole Screen session (-a).
+* cosc-logs: Show logs for one or more jobs.
+* cosc-manual: Show the manual.
+* cosc-start: Start all or a given list of jobs.
+* cosc-status: Get the status(es) of the processes.
+* cosc-version: Show the version information.
+Aliases:
+* config -> configuration
+* man -> manual
+v}
+
+     See also the
+     {{:https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html}Service
+     Composer Example} (a.k.a. ["cosc"]) for many uses of this
+     function.
+
+*)
+end
 
 (** {3 Very Unsafe Operations} *)
 

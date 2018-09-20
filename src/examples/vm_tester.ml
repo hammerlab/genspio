@@ -4,9 +4,9 @@ module String = Sosa.Native_string
 let ( // ) = Filename.concat
 
 module Shell_script = struct
-  type t = {name: string; content: unit Genspio.EDSL_ng.t; dependencies: t list}
+  type t = {name: string; content: unit Genspio.EDSL.t; dependencies: t list}
 
-  open Genspio.EDSL_ng
+  open Genspio.EDSL
 
   let make ?(dependencies = []) name content = {name; content; dependencies}
 
@@ -25,10 +25,10 @@ module Shell_script = struct
     let tag = String.sub_exn ~index:0 hash ~length:8 in
     "_scripts" // sprintf "%s_%s.sh" (sanitize_name name) tag
 
-  let call f = Genspio.EDSL_ng.exec ["sh"; path f]
+  let call f = exec ["sh"; path f]
 
   type compiled =
-    {files: (string * string list) list; call: unit Genspio.EDSL_ng.t}
+    {files: (string * string list) list; call: unit Genspio.EDSL.t}
 
   let rec compile ({name; content; dependencies} as s) =
     let filename = path s in
@@ -66,7 +66,7 @@ module Run_environment = struct
           let base = local_file_name t in
           let wget =
             let open Shell_script in
-            let open Genspio.EDSL_ng in
+            let open Genspio.EDSL in
             check_sequence
               [ ("mkdir", exec ["mkdir"; "-p"; "_cache"])
               ; ( "wget"
@@ -103,7 +103,7 @@ module Run_environment = struct
 
     let script_over_ssh ?root_password ~ssh_port ~name script =
       let open Shell_script in
-      let open Genspio.EDSL_ng in
+      let open Genspio.EDSL in
       let script_path = path script in
       let tmp = "/tmp" // Filename.basename script_path in
       make ~dependencies:[script] (sprintf "SSH exec %s" name)
@@ -134,12 +134,12 @@ module Run_environment = struct
   type t =
     { name: string
     ; root_password: string option
-    ; setup: unit Genspio.EDSL_ng.t
+    ; setup: unit Genspio.EDSL.t
     ; ssh_port: int
     ; local_dependencies: [`Command of string] list
     ; vm: vm }
 
-  let make vm ?root_password ?(setup = Genspio.EDSL_ng.nop) ~local_dependencies
+  let make vm ?root_password ?(setup = Genspio.EDSL.nop) ~local_dependencies
       ~ssh_port name =
     {vm; root_password; setup; local_dependencies; name; ssh_port}
 
@@ -154,7 +154,7 @@ module Run_environment = struct
     | { ssh_port
       ; vm= Qemu_arm {kernel; machine; sd_card; root_device; initrd; _} } ->
         let open Shell_script in
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         make "Start-qemu-arm"
           (exec
              ( [ "qemu-system-arm"
@@ -185,7 +185,7 @@ module Run_environment = struct
           -netdev user,id=mynet0,hostfwd=tcp:127.0.0.1:7722-:22 \
           -device e1000,netdev=mynet0 *)
         let open Shell_script in
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         make "Start-qemu"
           (exec
              ( [ "qemu-system-x86_64" (* ; "-M"
@@ -207,7 +207,7 @@ module Run_environment = struct
   let kill_qemu_vm : t -> Shell_script.t = function
     | {name} ->
         let open Shell_script in
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         let pid = get_stdout (exec ["cat"; "qemu.pid"]) in
         Shell_script.(make (sprintf "kill-qemu-%s" name))
         @@ check_sequence
@@ -233,7 +233,7 @@ module Run_environment = struct
   let configure : t -> Shell_script.t = function
     | {name; local_dependencies} ->
         let open Shell_script in
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         let report = tmp_file "configure-report.md" in
         let there_was_a_failure = tmp_file "bool-failure" in
         let cmds =
@@ -307,7 +307,7 @@ module Run_environment = struct
             "Run the “setup” recipe on the Qemu VM (requires the VM\n  \
              started in another terminal)."
       @ make_entry ~phony:true "ssh" ~doc:"Display an SSH command"
-          Genspio.EDSL_ng.(
+          Genspio.EDSL.(
             printf
               (ksprintf string "ssh -p %d %s root@localhost" ssh_port
                  (String.concat ~sep:" " Ssh.ssh_options))
@@ -317,7 +317,7 @@ module Run_environment = struct
       make_script_entry ~phony:true "help"
         Shell_script.(
           make "Display help message"
-            Genspio.EDSL_ng.(
+            Genspio.EDSL.(
               exec
                 [ "printf"
                 ; "\\nHelp\\n====\\n\\nThis a generated Makefile (by \
@@ -343,7 +343,7 @@ module Run_environment = struct
   module Example = struct
     let qemu_arm_openwrt ~ssh_port more_setup =
       let setup =
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         check_sequence
           [ ("opkg-update", exec ["opkg"; "update"])
           ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
@@ -367,7 +367,7 @@ module Run_environment = struct
         http ("https://people.debian.org/~aurel32/qemu/armhf" // file)
       in
       let setup =
-        let open Genspio.EDSL_ng in
+        let open Genspio.EDSL in
         check_sequence
           [ ("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])
           ; ("additional-setup", more_setup) ]
@@ -436,7 +436,7 @@ let () =
   let args = Array.to_list Sys.argv |> List.tl_exn in
   if List.length args < 2 then fail "Need more args..." else () ;
   let re =
-    let more_setup = Genspio.EDSL_ng.(nop) in
+    let more_setup = Genspio.EDSL.(nop) in
     match List.nth_exn args 0 with
     | "arm-owrt" ->
         Run_environment.Example.qemu_arm_openwrt ~ssh_port:20022 more_setup
