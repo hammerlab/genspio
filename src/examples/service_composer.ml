@@ -319,7 +319,7 @@ module Manual = struct
                [Genspio](https://smondet.gitlab.io/genspio-doc) EDSL/library. \
                The code generator serves as one of the usage examples of the \
                library, see its \
-               [immplementation](https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html)."
+               [implementation](https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html)."
           @ ksprintf par
               "The code generator can also be used to change a few parameters \
                like the “name-prefix” (`%s` here), or the default value \
