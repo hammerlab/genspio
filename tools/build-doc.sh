@@ -17,12 +17,14 @@ cp -r _build/default/_doc/_html/* $output_path/
 css_file=ssc.css
 css_path=$output_path/$css_file
 
-cat $output_path/odoc.css > $css_path
-more_css () {
-    cat >> $1 <<EOF
+cat >> $output_path/odoc.css <<EOF
 body {
   max-width: 72em; /* A bit larger than odoc's output */
 }
+EOF
+cat $output_path/odoc.css > $css_path
+more_css () {
+    cat >> $1 <<EOF
 h1 {
   border: none;
   padding: 1em;
