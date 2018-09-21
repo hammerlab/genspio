@@ -127,10 +127,10 @@ end
 (** A basic implementation of constant propagation. *)
 module Constant_propagation : sig
   val process : ?trace:Format.formatter -> 'a Language.t -> 'a Language.t
-  (** Simplify an ['a EDSL.t] expression by propagate some of the
+  (** Simplify an ['a EDSL.t] expression by propagating some of the
       constant values. *)
 
   val test : unit -> unit
-  (** Some specific tests, see option
+  (** Some tests specific to the module, see option
       ["--run-constant-propagation-tests"] of the main tests. *)
 end
