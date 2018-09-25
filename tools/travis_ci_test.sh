@@ -49,8 +49,8 @@ esac
 
 # configure and view settings
 export OPAMYES=1
-echo "ocaml -version"
-ocaml -version
+#echo "ocaml -version"
+#ocaml -version
 echo "opam --version"
 opam --version
 echo "git --version"
