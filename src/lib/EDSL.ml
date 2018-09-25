@@ -497,6 +497,22 @@ let greps_to ?(extended_re = false) re u =
   in
   succeeds_silently (u ||> call c)
 
+let pager ?(file_descriptor = str "1") ?disable
+    ?(default_command = exec ["more"]) () =
+  let with_disable =
+    Option.value_map disable ~default:[] ~f:(fun cond ->
+        [case cond [exec ["cat"]]] )
+  in
+  switch
+    ( with_disable
+    @ [ case
+          (call [str "test"; str "-t"; file_descriptor] |> succeeds_silently)
+          [exec ["cat"]]
+      ; case
+          Str.(getenv (str "PAGER") <$> str "")
+          [call [str "sh"; str "-c"; getenv (str "PAGER")]]
+      ; default [default_command] ] )
+
 module Script_with_describe (P : sig
   val name : string
 
