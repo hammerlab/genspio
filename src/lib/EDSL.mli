@@ -572,6 +572,25 @@ Failures happen thanks to the !{fail} call.
 val greps_to : ?extended_re:bool -> str t -> unit t -> bool t
 (** Test a string or regular expression again the output of an expression. *)
 
+val pager :
+     ?file_descriptor:str t
+  -> ?disable:bool t
+  -> ?default_command:unit t
+  -> unit
+  -> unit t
+(** “Smart pager” command to pipe long outputs through, conditions are
+    tested in this order:
+
+    - If [~disable] is provided it can be used to make the pager
+      behave like ["cat"].
+    - If the [~file_descriptor] (default [str "1"]) is not a terminal,
+      the command will be ["cat"] too.
+    - If the environment variable ["PAGER"] it will be used as a shell
+      command (["sh -c .."]).
+    - The last resort default is [~default_command] (which by default
+      value is [exec ["more"]]).
+ *)
+
 (** Make scripts that provide a ["--describe"] option/command.
 
 The two functions provided can be used like this:
@@ -616,7 +635,6 @@ end
 (** Create a script that mostly behaves like ["git"], it concatenates
     its name with its first argument to call ["${0}-${1}"]. *)
 module Dispatcher_script : sig
-
   val make :
        ?aliases:(str t * str t) list
     -> name:string
