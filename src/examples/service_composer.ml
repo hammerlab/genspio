@@ -574,12 +574,14 @@ module Manual_script = struct
         let open Command_line in
         let opts =
           let open Arg in
-          flag ["--extended"; "-X"] ~doc:"Provide extra information"
+          flag ["--extended"; "-X"] ~doc:"Provide extra information."
+          & flag ["--no-pager"] ~doc:"Do not use a pager."
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon extended describe ->
-            deal_with_describe describe [Manual.output ~root ~env extended] )
-    )
+        parse opts (fun ~anon extended no_pager describe ->
+            deal_with_describe describe
+              [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()]
+        ) )
 end
 
 module Version_script = struct
