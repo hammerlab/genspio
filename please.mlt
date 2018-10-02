@@ -13,6 +13,17 @@ let meta_content =
     ; ""
     ; sprintf "let version = %S" version ]
 
+let synopsis = "Typed EDSL to generate POSIX Shell scripts"
+
+let description =
+  "Genspio is a typed EDSL to generate shell scripts and commands from OCaml.\n\n\
+   The idea is to build values of type `Genspio.EDSL.t` with the\n\
+   combinators in the `Genspio.EDSL` module, and compile them to POSIX\n\
+   shell scripts (or one-liners) with functions from `Genspio.Compile`.\n\n\
+   Genspio's documentation root is at <https://smondet.gitlab.io/genspio-doc/>."
+
+let describe _ = print_endline description
+
 let files =
   let open File in
   let open Jbuilder in
@@ -42,24 +53,15 @@ let files =
              ~libraries:("genspio" :: "tests" :: main_libs) ]
   ; repo_file "genspio.opam"
       Opam.(
-        make "genspio" ~opam_version:"1.2"
-          ~maintainer:"Seb Mondet <seb@mondet.org>"
+        v2 "genspio" ~maintainer:"Seb Mondet <seb@mondet.org>"
           ~homepage:"https://github.com/hammerlab/genspio"
           ~license:"Apache 2.0" ~version ~ocaml_min_version:"4.03.0"
+          ~description ~synopsis
           ~deps:
             ( Opam.dep
                 ~qualify:(`Version (`GT, "1.0+beta20"))
                 ~build:true "jbuilder"
             :: List.map main_libs ~f:dep )) ]
-
-let describe _ =
-  print_endline
-    "Genspio is a typed EDSL to generate shell scripts and commands from OCaml.\n\n\
-     The idea is to build values of type `Genspio.EDSL.t` with the\n\
-     combinators in the `Genspio.EDSL` module, and compile them to POSIX\n\
-     shell scripts (or one-liners) with functions from `Genspio.Compile`.\n\n\
-     Genspio's documentation root is at \
-     <https://smondet.gitlab.io/genspio-doc/>.\n"
 
 let () =
   Main.make ~files ~describe ~version:(fun _ -> print_endline version) ()
