@@ -142,6 +142,39 @@ module Opam = struct
           configure_script name
       ; sprintf "depends: [\n%s\n]"
           (List.map ~f:(sprintf "  %s") deps |> String.concat ~sep:"\n") ]
+
+  let v2 ~maintainer ?authors ?(deps = obvious_deps) ~homepage ?bug_reports
+      ?dev_repo ?(license = "ISC") ?version ?(ocaml_min_version = "4.03.0")
+      ?(configure_script = "please.mlt") ?synopsis ?description name =
+    let string k v = sprintf "%s: %S" k v in
+    let opt_default o d = match o with None -> d | Some s -> s in
+    let opt_f f k v = match v with None -> [] | Some s -> [f k s] in
+    (let opt_string k v = opt_f string k v in
+     [ sprintf "# This Opam file was auto-generated, see the `%s` script."
+         configure_script
+     ; string "opam-version" "2.0"
+     ; string "maintainer" maintainer
+     ; (match authors with None -> [maintainer] | Some l -> l)
+       |> List.map ~f:(sprintf "%S")
+       |> String.concat ~sep:"\n  "
+       |> sprintf "authors: [\n  %s\n]"
+     ; string "homepage" homepage
+     ; string "bug-reports" (opt_default bug_reports (homepage // "issues"))
+     ; string "dev-repo" (opt_default dev_repo ("git+" ^ homepage ^ ".git"))
+     ; string "license" license ]
+     @ opt_string "version" version)
+    @ [ sprintf
+          "build: [\n\
+          \  [\"ocaml\" %S \"configure\"]\n\
+          \  [\"jbuilder\" \"build\" \"-p\" %S \"-j\" jobs ]\n\
+           ]"
+          configure_script name
+      ; sprintf "depends: [\n%s\n]"
+          ( sprintf "  \"ocaml\" { >= %S }" ocaml_min_version
+            :: List.map ~f:(sprintf "  %s") deps
+          |> String.concat ~sep:"\n" ) ]
+    @ opt_f (sprintf "%s: %S") "synopsis" synopsis
+    @ opt_f (sprintf "%s: \"\"\"\n%s\n\"\"\"") "description" description
 end
 
 module File = struct
