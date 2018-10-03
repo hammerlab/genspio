@@ -1,7 +1,7 @@
 ;;
 #use "tools/please_lib.ml"
 
-let version = "0.0.2-dev"
+let version = "0.0.2"
 
 let main_libs = ["nonstd"; "sosa"]
 
