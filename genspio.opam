@@ -4,7 +4,7 @@ maintainer: "Seb Mondet <seb@mondet.org>"
 authors: [
   "Seb Mondet <seb@mondet.org>"
 ]
-homepage: "https://github.com/hammerlab/genspio"
+homepage: "https://smondet.gitlab.io/genspio-doc/"
 bug-reports: "https://github.com/hammerlab/genspio/issues"
 dev-repo: "git+https://github.com/hammerlab/genspio.git"
 license: "Apache 2.0"
@@ -21,12 +21,11 @@ depends: [
 ]
 synopsis: "Typed EDSL to generate POSIX Shell scripts"
 description: """
-Genspio is a typed EDSL to generate shell scripts and commands from OCaml.
+Genspio is a typed EDSL used to generate shell scripts and commands from OCaml.
 
-The idea is to build values of type `Genspio.EDSL.t` with the
+The idea is to build values of type `'a Genspio.EDSL.t` with the
 combinators in the `Genspio.EDSL` module, and compile them to POSIX
 shell scripts (or one-liners) with functions from `Genspio.Compile`.
 
 Genspio's documentation root is at <https://smondet.gitlab.io/genspio-doc/>.
-
 """

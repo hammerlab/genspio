@@ -16,8 +16,9 @@ let meta_content =
 let synopsis = "Typed EDSL to generate POSIX Shell scripts"
 
 let description =
-  "Genspio is a typed EDSL to generate shell scripts and commands from OCaml.\n\n\
-   The idea is to build values of type `Genspio.EDSL.t` with the\n\
+  "Genspio is a typed EDSL used to generate shell scripts and commands from \
+   OCaml.\n\n\
+   The idea is to build values of type `'a Genspio.EDSL.t` with the\n\
    combinators in the `Genspio.EDSL` module, and compile them to POSIX\n\
    shell scripts (or one-liners) with functions from `Genspio.Compile`.\n\n\
    Genspio's documentation root is at <https://smondet.gitlab.io/genspio-doc/>."
@@ -54,7 +55,9 @@ let files =
   ; repo_file "genspio.opam"
       Opam.(
         v2 "genspio" ~maintainer:"Seb Mondet <seb@mondet.org>"
-          ~homepage:"https://github.com/hammerlab/genspio"
+          ~dev_repo:"git+https://github.com/hammerlab/genspio.git"
+          ~bug_reports:"https://github.com/hammerlab/genspio/issues"
+          ~homepage:"https://smondet.gitlab.io/genspio-doc/"
           ~license:"Apache 2.0" ~version ~ocaml_min_version:"4.03.0"
           ~description ~synopsis
           ~deps:
