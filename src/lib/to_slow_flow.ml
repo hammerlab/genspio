@@ -199,6 +199,8 @@ In that case, we compare the octal representations.
       | Redirect {block; stdout} ->
           fprintf fmt ": redirect ; %a  > %s" pp_block block
             (to_path_argument stdout)
+      | If_then_else {condition; block_then; block_else= []} ->
+          fprintf fmt "if %s ; then\n%a\nfi" condition pp_block block_then
       | If_then_else {condition; block_then; block_else} ->
           fprintf fmt "if %s ; then\n%a\nelse\n%a\nfi" condition pp_block
             block_then pp_block block_else
@@ -389,7 +391,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 ; block_then=
                     ksprintf fail_commands
                       "Byte array in %s cannot be converted to a C-String" f
-                ; block_else= [rawf ":"] } ]
+                ; block_else= [] } ]
         | Tmp_file_in_variable v ->
             [ If_then_else
                 { condition=
@@ -398,7 +400,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 ; block_then=
                     ksprintf fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
-                ; block_else= [rawf ":"] } ]
+                ; block_else= [] } ]
         | Raw_inline ri -> []
         | Octal_value_in_variable v ->
             [ If_then_else
@@ -407,7 +409,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 ; block_then=
                     ksprintf fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
-                ; block_else= [rawf ":"] } ]
+                ; block_else= [] } ]
       in
       make (script.commands @ extra_check) script.result
   | C_string_to_byte_array c -> continue c
