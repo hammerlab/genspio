@@ -267,6 +267,15 @@ In that case, we compare the octal representations.
     in
     make commands Unit
 
+  let if_then cond t =
+    assert_unit t ;
+    let condition = to_argument cond.result in
+    let commands =
+      cond.commands
+      @ [If_then_else {condition; block_then= t.commands; block_else= []}]
+    in
+    make commands Unit
+
   let bool_to_file b tmp = [rawf "printf %b > %s" b (to_path_argument tmp)]
 
   let bool_not ~tmp {commands; result} =
@@ -440,6 +449,10 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let tmp = mktmp ~tmpdb ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
   | No_op -> Script.unit [Raw ":"]
+  | If (c, t, No_op) ->
+      let sbool = continue c in
+      let sthen = continue t in
+      Script.if_then sbool sthen
   | If (c, t, e) ->
       let sbool = continue c in
       let sthen = continue t in
