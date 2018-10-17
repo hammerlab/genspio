@@ -304,8 +304,8 @@ module Run_environment = struct
           (Ssh.script_over_ssh ?root_password ~ssh_port ~name:"setup"
              (Shell_script.make (sprintf "setup-%s" name) setup))
           ~doc:
-            "Run the “setup” recipe on the Qemu VM (requires the VM\n  \
-             started in another terminal)."
+            "Run the “setup” recipe on the Qemu VM (requires the VM\n\
+            \  started in another terminal)."
       @ make_entry ~phony:true "ssh" ~doc:"Display an SSH command"
           Genspio.EDSL.(
             printf
@@ -433,23 +433,57 @@ let () =
         exit 2 )
       fmt
   in
-  let args = Array.to_list Sys.argv |> List.tl_exn in
-  if List.length args < 2 then fail "Need more args..." else () ;
-  let re =
-    let more_setup = Genspio.EDSL.(nop) in
-    match List.nth_exn args 0 with
-    | "arm-owrt" ->
-        Run_environment.Example.qemu_arm_openwrt ~ssh_port:20022 more_setup
-    | "arm-dw" ->
-        Run_environment.Example.qemu_arm_wheezy ~ssh_port:20023 more_setup
-    | "amd64-fb" ->
-        Run_environment.Example.qemu_amd64_freebsd ~ssh_port:20024 more_setup
-    | "amd64-dw" ->
-        Run_environment.Example.qemu_amd64_darwin ~ssh_port:20025 more_setup
-    | other -> fail "Don't know VM %S" other
+  let example = ref None in
+  let path = ref None in
+  let ssh_port = ref 20202 in
+  let examples =
+    [ ("arm-owrt", Run_environment.Example.qemu_arm_openwrt)
+    ; ("arm-dw", Run_environment.Example.qemu_arm_wheezy)
+    ; ("amd64-fb", Run_environment.Example.qemu_amd64_freebsd)
+    ; ("amd64-dw", Run_environment.Example.qemu_amd64_darwin) ]
   in
-  let path = List.nth_exn args 1 in
+  let set_example arg =
+    match !example with
+    | Some s -> fail "Too many arguments (%S)!" arg
+    | None ->
+        example :=
+          Some
+            ( match
+                List.find_map examples ~f:(fun (e, v) ->
+                    if e = arg then Some v else None )
+              with
+            | Some s -> s
+            | None -> fail "Don't know VM %S" arg )
+  in
+  let args =
+    Arg.align
+      [ ( "--ssh-port"
+        , Arg.Int (fun s -> ssh_port := s)
+        , sprintf "<int> Set the SSH-port (default: %d)." !ssh_port )
+      ; ( "--vm"
+        , Arg.String set_example
+        , sprintf "<name> The Name of the VM (one of {%s})."
+            (String.concat ~sep:", " (List.map ~f:fst examples)) ) ]
+  in
+  let usage = sprintf "vm-tester --vm <vm-name> <path>" in
+  let anon arg =
+    match !path with
+    | Some s -> fail "Too many arguments (%S)!" arg
+    | None -> path := Some arg
+  in
+  Arg.parse args anon usage ;
+  let more_setup = Genspio.EDSL.(nop) in
+  let re =
+    match !example with
+    | Some e -> e ~ssh_port:!ssh_port more_setup
+    | None -> fail "Missing VM name\nUsage: %s" usage
+  in
   let content = Run_environment.setup_dir_content re in
+  let path =
+    match !path with
+    | Some p -> p
+    | None -> fail "Missing path!\nUsage: %s" usage
+  in
   List.iter content ~f:(fun (filepath, content) ->
       let full = path // filepath in
       cmdf "mkdir -p %s" (Filename.dirname full) ;
