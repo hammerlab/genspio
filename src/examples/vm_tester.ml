@@ -131,16 +131,21 @@ module Run_environment = struct
         ; root_device: string }
     | Qemu_amd46 of {hda: File.t; ui: [`No_graphic | `Curses]}
 
+  module Setup = struct
+    type t = Ssh_to_vm of unit Genspio.EDSL.t
+
+    let ssh_to_vm u = [Ssh_to_vm u]
+  end
+
   type t =
     { name: string
     ; root_password: string option
-    ; setup: unit Genspio.EDSL.t
+    ; setup: Setup.t list
     ; ssh_port: int
     ; local_dependencies: [`Command of string] list
     ; vm: vm }
 
-  let make vm ?root_password ?(setup = Genspio.EDSL.nop) ~local_dependencies
-      ~ssh_port name =
+  let make vm ?root_password ?(setup = []) ~local_dependencies ~ssh_port name =
     {vm; root_password; setup; local_dependencies; name; ssh_port}
 
   let qemu_arm ~kernel ~sd_card ~machine ?initrd ~root_device =
@@ -288,6 +293,18 @@ module Run_environment = struct
       other_files := !other_files @ files ;
       make_entry ?doc ?phony ?deps target call
     in
+    let setup_entries =
+      List.mapi setup ~f:(fun idx -> function
+        | Ssh_to_vm cmds ->
+            let name = sprintf "setup-%d" idx in
+            ( name
+            , make_script_entry ~phony:true name
+                (Ssh.script_over_ssh ?root_password ~ssh_port ~name
+                   (Shell_script.make (sprintf "setup-%s" name) cmds)) ) )
+    in
+    (* Genspio.EDSL.(
+         *   seq [
+         *     exec ["echo"; "test"]])  *)
     let makefile =
       ["# Makefile genrated by Genspio's VM-Tester"]
       @ List.concat_map dependencies ~f:(fun (base, deps, cmd) ->
@@ -300,9 +317,10 @@ module Run_environment = struct
           (start_qemu_vm tvm)
       @ make_script_entry ~phony:true "kill" (kill_qemu_vm tvm)
           ~doc:"Kill the Qemu VM."
-      @ make_script_entry ~phony:true "setup"
-          (Ssh.script_over_ssh ?root_password ~ssh_port ~name:"setup"
-             (Shell_script.make (sprintf "setup-%s" name) setup))
+      @ List.concat_map setup_entries ~f:snd
+      @ make_entry ~phony:true "setup"
+          ~deps:(List.map setup_entries ~f:fst)
+          Genspio.EDSL.(seq [exec ["echo"; "Setup done"]])
           ~doc:
             "Run the “setup” recipe on the Qemu VM (requires the VM\n\
             \  started in another terminal)."
@@ -344,11 +362,12 @@ module Run_environment = struct
     let qemu_arm_openwrt ~ssh_port more_setup =
       let setup =
         let open Genspio.EDSL in
-        check_sequence
-          [ ("opkg-update", exec ["opkg"; "update"])
-          ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
-          ; ("install-make", exec ["opkg"; "install"; "make"])
-          ; ("additional-setup", more_setup) ]
+        Setup.ssh_to_vm
+          (check_sequence
+             [ ("opkg-update", exec ["opkg"; "update"])
+             ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
+             ; ("install-make", exec ["opkg"; "install"; "make"]) ])
+        @ more_setup
       in
       let base_url =
         "https://downloads.openwrt.org/snapshots/trunk/realview/generic/"
@@ -368,9 +387,10 @@ module Run_environment = struct
       in
       let setup =
         let open Genspio.EDSL in
-        check_sequence
-          [ ("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])
-          ; ("additional-setup", more_setup) ]
+        Setup.ssh_to_vm
+          (check_sequence
+             [("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])])
+        @ more_setup
       in
       qemu_arm "qemu_arm_wheezy" ~ssh_port ~machine:"vexpress-a9"
         ~kernel:(aurel32 "vmlinuz-3.2.0-4-vexpress")
@@ -472,7 +492,7 @@ let () =
     | None -> path := Some arg
   in
   Arg.parse args anon usage ;
-  let more_setup = Genspio.EDSL.(nop) in
+  let more_setup = [] in
   let re =
     match !example with
     | Some e -> e ~ssh_port:!ssh_port more_setup
