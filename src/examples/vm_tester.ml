@@ -476,10 +476,18 @@ let () =
   let ssh_port = ref 20202 in
   let copy_directories = ref [] in
   let examples =
-    [ ("arm-owrt", Run_environment.Example.qemu_arm_openwrt)
-    ; ("arm-dw", Run_environment.Example.qemu_arm_wheezy)
-    ; ("amd64-fb", Run_environment.Example.qemu_amd64_freebsd)
-    ; ("amd64-dw", Run_environment.Example.qemu_amd64_darwin) ]
+    [ ( "arm-owrt"
+      , Run_environment.Example.qemu_arm_openwrt
+      , "Qemu ARM VM with OpenWRT." )
+    ; ( "arm-dw"
+      , Run_environment.Example.qemu_arm_wheezy
+      , "Qemu ARM with Debian Wheezy." )
+    ; ( "amd64-fb"
+      , Run_environment.Example.qemu_amd64_freebsd
+      , "Qemu x86_64 with FreeBSD." )
+    ; ( "amd64-dw"
+      , Run_environment.Example.qemu_amd64_darwin
+      , "Qemu x86_64 with Darwin 8 (old Mac OSX)." ) ]
   in
   let set_example arg =
     match !example with
@@ -488,7 +496,7 @@ let () =
         example :=
           Some
             ( match
-                List.find_map examples ~f:(fun (e, v) ->
+                List.find_map examples ~f:(fun (e, v, _) ->
                     if e = arg then Some v else None )
               with
             | Some s -> s
@@ -501,8 +509,12 @@ let () =
         , sprintf "<int> Set the SSH-port (default: %d)." !ssh_port )
       ; ( "--vm"
         , Arg.String set_example
-        , sprintf "<name> The Name of the VM (one of {%s})."
-            (String.concat ~sep:", " (List.map ~f:fst examples)) )
+        , sprintf "<name> The Name of the VM, one of:\n%s"
+            (String.concat ~sep:"\n"
+               (List.map
+                  ~f:(fun (n, _, d) ->
+                    sprintf "%s* `%s`: %s" (String.make 25 ' ') n d )
+                  examples)) )
       ; ( "--copy"
         , Arg.String
             (fun s ->
@@ -516,8 +528,9 @@ let () =
               | [] | [_] -> fail "Error in --copy: need a `:` separator (%S)" s
               | [p; lp] -> add p lp
               | p :: more -> add p (String.concat ~sep:":" more) )
-        , "<path:local-path> Copy <path> in the output directory and add its \
-           upload to the VM to the `make setup` target." ) ]
+        , "<p-src:p-dst> Copy <p-src> in the output directory and add its \
+           upload to the VM to the `make setup` target as a relative path \
+           <p-dst>." ) ]
   in
   let usage = sprintf "vm-tester --vm <vm-name> <path>" in
   let anon arg =
