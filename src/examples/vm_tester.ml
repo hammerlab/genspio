@@ -132,9 +132,13 @@ module Run_environment = struct
     | Qemu_amd46 of {hda: File.t; ui: [`No_graphic | `Curses]}
 
   module Setup = struct
-    type t = Ssh_to_vm of unit Genspio.EDSL.t
+    type t =
+      | Ssh_to_vm of unit Genspio.EDSL.t
+      | Copy_relative of string * string
 
     let ssh_to_vm u = [Ssh_to_vm u]
+
+    let copy (`Relative src) (`Relative dst) = Copy_relative (src, dst)
   end
 
   type t =
@@ -294,17 +298,28 @@ module Run_environment = struct
       make_entry ?doc ?phony ?deps target call
     in
     let setup_entries =
-      List.mapi setup ~f:(fun idx -> function
-        | Ssh_to_vm cmds ->
-            let name = sprintf "setup-%d" idx in
-            ( name
-            , make_script_entry ~phony:true name
-                (Ssh.script_over_ssh ?root_password ~ssh_port ~name
-                   (Shell_script.make (sprintf "setup-%s" name) cmds)) ) )
+      List.mapi setup ~f:(fun idx ->
+          let name = sprintf "setup-%d" idx in
+          let deps = List.init idx ~f:(fun i -> sprintf "setup-%d" i) in
+          function
+          | Ssh_to_vm cmds ->
+              ( name
+              , make_script_entry ~phony:true name ~deps
+                  (Ssh.script_over_ssh ?root_password ~ssh_port ~name
+                     (Shell_script.make (sprintf "setup-%s" name) cmds)) )
+          | Copy_relative (src, dst) ->
+              ( name
+              , make_entry ~phony:true name ~deps
+                  Genspio.EDSL.(
+                    exec ["tar"; "c"; src]
+                    ||> exec
+                          ( Ssh.sshpass ?password:root_password
+                          @@ ["ssh"; "-p"; Int.to_string ssh_port]
+                          @ Ssh.ssh_options
+                          @ [ "root@localhost"
+                            ; sprintf "tar -x -f - ; mv %s %s" src dst ] )) )
+      )
     in
-    (* Genspio.EDSL.(
-         *   seq [
-         *     exec ["echo"; "test"]])  *)
     let makefile =
       ["# Makefile genrated by Genspio's VM-Tester"]
       @ List.concat_map dependencies ~f:(fun (base, deps, cmd) ->
@@ -326,8 +341,11 @@ module Run_environment = struct
             \  started in another terminal)."
       @ make_entry ~phony:true "ssh" ~doc:"Display an SSH command"
           Genspio.EDSL.(
+            let prefix =
+              Ssh.sshpass ?password:root_password [] |> String.concat ~sep:" "
+            in
             printf
-              (ksprintf string "ssh -p %d %s root@localhost" ssh_port
+              (ksprintf string "%s ssh -p %d %s root@localhost" prefix ssh_port
                  (String.concat ~sep:" " Ssh.ssh_options))
               [])
     in
@@ -456,6 +474,7 @@ let () =
   let example = ref None in
   let path = ref None in
   let ssh_port = ref 20202 in
+  let copy_directories = ref [] in
   let examples =
     [ ("arm-owrt", Run_environment.Example.qemu_arm_openwrt)
     ; ("arm-dw", Run_environment.Example.qemu_arm_wheezy)
@@ -483,7 +502,22 @@ let () =
       ; ( "--vm"
         , Arg.String set_example
         , sprintf "<name> The Name of the VM (one of {%s})."
-            (String.concat ~sep:", " (List.map ~f:fst examples)) ) ]
+            (String.concat ~sep:", " (List.map ~f:fst examples)) )
+      ; ( "--copy"
+        , Arg.String
+            (fun s ->
+              let add p lp =
+                let local_rel =
+                  String.map p ~f:(function '/' -> '_' | c -> c)
+                in
+                copy_directories := (p, local_rel, lp) :: !copy_directories
+              in
+              match String.split ~on:(`Character ':') s with
+              | [] | [_] -> fail "Error in --copy: need a `:` separator (%S)" s
+              | [p; lp] -> add p lp
+              | p :: more -> add p (String.concat ~sep:":" more) )
+        , "<path:local-path> Copy <path> in the output directory and add its \
+           upload to the VM to the `make setup` target." ) ]
   in
   let usage = sprintf "vm-tester --vm <vm-name> <path>" in
   let anon arg =
@@ -492,7 +526,10 @@ let () =
     | None -> path := Some arg
   in
   Arg.parse args anon usage ;
-  let more_setup = [] in
+  let more_setup =
+    List.map !copy_directories ~f:(fun (_, locrel, hostp) ->
+        Run_environment.Setup.copy (`Relative locrel) (`Relative hostp) )
+  in
   let re =
     match !example with
     | Some e -> e ~ssh_port:!ssh_port more_setup
@@ -507,4 +544,6 @@ let () =
   List.iter content ~f:(fun (filepath, content) ->
       let full = path // filepath in
       cmdf "mkdir -p %s" (Filename.dirname full) ;
-      write_lines full content )
+      write_lines full content ) ;
+  List.iter !copy_directories ~f:(fun (p, local_rel, _) ->
+      cmdf "rsync -az %s %s/%s" p path local_rel )
