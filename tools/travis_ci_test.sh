@@ -176,12 +176,9 @@ $genspio_small_examples
 
 echo "================== EXAMPLES: vm_tester ============================================"
 
-$genspio_vm_tester arm-owrt /tmp/vmt/arm-owrt/
-( cd /tmp/vmt/arm-owrt/ ; make help ; )
-$genspio_vm_tester arm-dw /tmp/vmt/arm-dw/
-( cd /tmp/vmt/arm-dw/ ; make help ; )
-$genspio_vm_tester amd64-fb /tmp/vmt/amd64-fb/
-( cd /tmp/vmt/amd64-fb ; make help ; )
+$genspio_vm_tester --vm arm-owrt /tmp/vmt/arm-owrt/  ; ( cd /tmp/vmt/arm-owrt/ ; make help ; )
+$genspio_vm_tester --vm arm-dw /tmp/vmt/arm-dw/      ; ( cd /tmp/vmt/arm-dw/ ; make help ; )
+$genspio_vm_tester --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; make help ; )
 
 
 echo "================== EXAMPLES: Service-composer======================================="

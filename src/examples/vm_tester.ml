@@ -131,16 +131,25 @@ module Run_environment = struct
         ; root_device: string }
     | Qemu_amd46 of {hda: File.t; ui: [`No_graphic | `Curses]}
 
+  module Setup = struct
+    type t =
+      | Ssh_to_vm of unit Genspio.EDSL.t
+      | Copy_relative of string * string
+
+    let ssh_to_vm u = [Ssh_to_vm u]
+
+    let copy (`Relative src) (`Relative dst) = Copy_relative (src, dst)
+  end
+
   type t =
     { name: string
     ; root_password: string option
-    ; setup: unit Genspio.EDSL.t
+    ; setup: Setup.t list
     ; ssh_port: int
     ; local_dependencies: [`Command of string] list
     ; vm: vm }
 
-  let make vm ?root_password ?(setup = Genspio.EDSL.nop) ~local_dependencies
-      ~ssh_port name =
+  let make vm ?root_password ?(setup = []) ~local_dependencies ~ssh_port name =
     {vm; root_password; setup; local_dependencies; name; ssh_port}
 
   let qemu_arm ~kernel ~sd_card ~machine ?initrd ~root_device =
@@ -288,6 +297,29 @@ module Run_environment = struct
       other_files := !other_files @ files ;
       make_entry ?doc ?phony ?deps target call
     in
+    let setup_entries =
+      List.mapi setup ~f:(fun idx ->
+          let name = sprintf "setup-%d" idx in
+          let deps = List.init idx ~f:(fun i -> sprintf "setup-%d" i) in
+          function
+          | Ssh_to_vm cmds ->
+              ( name
+              , make_script_entry ~phony:true name ~deps
+                  (Ssh.script_over_ssh ?root_password ~ssh_port ~name
+                     (Shell_script.make (sprintf "setup-%s" name) cmds)) )
+          | Copy_relative (src, dst) ->
+              ( name
+              , make_entry ~phony:true name ~deps
+                  Genspio.EDSL.(
+                    exec ["tar"; "c"; src]
+                    ||> exec
+                          ( Ssh.sshpass ?password:root_password
+                          @@ ["ssh"; "-p"; Int.to_string ssh_port]
+                          @ Ssh.ssh_options
+                          @ [ "root@localhost"
+                            ; sprintf "tar -x -f - ; mv %s %s" src dst ] )) )
+      )
+    in
     let makefile =
       ["# Makefile genrated by Genspio's VM-Tester"]
       @ List.concat_map dependencies ~f:(fun (base, deps, cmd) ->
@@ -300,16 +332,20 @@ module Run_environment = struct
           (start_qemu_vm tvm)
       @ make_script_entry ~phony:true "kill" (kill_qemu_vm tvm)
           ~doc:"Kill the Qemu VM."
-      @ make_script_entry ~phony:true "setup"
-          (Ssh.script_over_ssh ?root_password ~ssh_port ~name:"setup"
-             (Shell_script.make (sprintf "setup-%s" name) setup))
+      @ List.concat_map setup_entries ~f:snd
+      @ make_entry ~phony:true "setup"
+          ~deps:(List.map setup_entries ~f:fst)
+          Genspio.EDSL.(seq [exec ["echo"; "Setup done"]])
           ~doc:
-            "Run the “setup” recipe on the Qemu VM (requires the VM\n  \
-             started in another terminal)."
+            "Run the “setup” recipe on the Qemu VM (requires the VM\n\
+            \  started in another terminal)."
       @ make_entry ~phony:true "ssh" ~doc:"Display an SSH command"
           Genspio.EDSL.(
+            let prefix =
+              Ssh.sshpass ?password:root_password [] |> String.concat ~sep:" "
+            in
             printf
-              (ksprintf string "ssh -p %d %s root@localhost" ssh_port
+              (ksprintf string "%s ssh -p %d %s root@localhost" prefix ssh_port
                  (String.concat ~sep:" " Ssh.ssh_options))
               [])
     in
@@ -344,11 +380,12 @@ module Run_environment = struct
     let qemu_arm_openwrt ~ssh_port more_setup =
       let setup =
         let open Genspio.EDSL in
-        check_sequence
-          [ ("opkg-update", exec ["opkg"; "update"])
-          ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
-          ; ("install-make", exec ["opkg"; "install"; "make"])
-          ; ("additional-setup", more_setup) ]
+        Setup.ssh_to_vm
+          (check_sequence
+             [ ("opkg-update", exec ["opkg"; "update"])
+             ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
+             ; ("install-make", exec ["opkg"; "install"; "make"]) ])
+        @ more_setup
       in
       let base_url =
         "https://downloads.openwrt.org/snapshots/trunk/realview/generic/"
@@ -368,9 +405,10 @@ module Run_environment = struct
       in
       let setup =
         let open Genspio.EDSL in
-        check_sequence
-          [ ("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])
-          ; ("additional-setup", more_setup) ]
+        Setup.ssh_to_vm
+          (check_sequence
+             [("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])])
+        @ more_setup
       in
       qemu_arm "qemu_arm_wheezy" ~ssh_port ~machine:"vexpress-a9"
         ~kernel:(aurel32 "vmlinuz-3.2.0-4-vexpress")
@@ -433,24 +471,92 @@ let () =
         exit 2 )
       fmt
   in
-  let args = Array.to_list Sys.argv |> List.tl_exn in
-  if List.length args < 2 then fail "Need more args..." else () ;
-  let re =
-    let more_setup = Genspio.EDSL.(nop) in
-    match List.nth_exn args 0 with
-    | "arm-owrt" ->
-        Run_environment.Example.qemu_arm_openwrt ~ssh_port:20022 more_setup
-    | "arm-dw" ->
-        Run_environment.Example.qemu_arm_wheezy ~ssh_port:20023 more_setup
-    | "amd64-fb" ->
-        Run_environment.Example.qemu_amd64_freebsd ~ssh_port:20024 more_setup
-    | "amd64-dw" ->
-        Run_environment.Example.qemu_amd64_darwin ~ssh_port:20025 more_setup
-    | other -> fail "Don't know VM %S" other
+  let example = ref None in
+  let path = ref None in
+  let ssh_port = ref 20202 in
+  let copy_directories = ref [] in
+  let examples =
+    [ ( "arm-owrt"
+      , Run_environment.Example.qemu_arm_openwrt
+      , "Qemu ARM VM with OpenWRT." )
+    ; ( "arm-dw"
+      , Run_environment.Example.qemu_arm_wheezy
+      , "Qemu ARM with Debian Wheezy." )
+    ; ( "amd64-fb"
+      , Run_environment.Example.qemu_amd64_freebsd
+      , "Qemu x86_64 with FreeBSD." )
+    ; ( "amd64-dw"
+      , Run_environment.Example.qemu_amd64_darwin
+      , "Qemu x86_64 with Darwin 8 (old Mac OSX)." ) ]
   in
-  let path = List.nth_exn args 1 in
+  let set_example arg =
+    match !example with
+    | Some s -> fail "Too many arguments (%S)!" arg
+    | None ->
+        example :=
+          Some
+            ( match
+                List.find_map examples ~f:(fun (e, v, _) ->
+                    if e = arg then Some v else None )
+              with
+            | Some s -> s
+            | None -> fail "Don't know VM %S" arg )
+  in
+  let args =
+    Arg.align
+      [ ( "--ssh-port"
+        , Arg.Int (fun s -> ssh_port := s)
+        , sprintf "<int> Set the SSH-port (default: %d)." !ssh_port )
+      ; ( "--vm"
+        , Arg.String set_example
+        , sprintf "<name> The Name of the VM, one of:\n%s"
+            (String.concat ~sep:"\n"
+               (List.map
+                  ~f:(fun (n, _, d) ->
+                    sprintf "%s* `%s`: %s" (String.make 25 ' ') n d )
+                  examples)) )
+      ; ( "--copy"
+        , Arg.String
+            (fun s ->
+              let add p lp =
+                let local_rel =
+                  String.map p ~f:(function '/' -> '_' | c -> c)
+                in
+                copy_directories := (p, local_rel, lp) :: !copy_directories
+              in
+              match String.split ~on:(`Character ':') s with
+              | [] | [_] -> fail "Error in --copy: need a `:` separator (%S)" s
+              | [p; lp] -> add p lp
+              | p :: more -> add p (String.concat ~sep:":" more) )
+        , "<p-src:p-dst> Copy <p-src> in the output directory and add its \
+           upload to the VM to the `make setup` target as a relative path \
+           <p-dst>." ) ]
+  in
+  let usage = sprintf "vm-tester --vm <vm-name> <path>" in
+  let anon arg =
+    match !path with
+    | Some s -> fail "Too many arguments (%S)!" arg
+    | None -> path := Some arg
+  in
+  Arg.parse args anon usage ;
+  let more_setup =
+    List.map !copy_directories ~f:(fun (_, locrel, hostp) ->
+        Run_environment.Setup.copy (`Relative locrel) (`Relative hostp) )
+  in
+  let re =
+    match !example with
+    | Some e -> e ~ssh_port:!ssh_port more_setup
+    | None -> fail "Missing VM name\nUsage: %s" usage
+  in
   let content = Run_environment.setup_dir_content re in
+  let path =
+    match !path with
+    | Some p -> p
+    | None -> fail "Missing path!\nUsage: %s" usage
+  in
   List.iter content ~f:(fun (filepath, content) ->
       let full = path // filepath in
       cmdf "mkdir -p %s" (Filename.dirname full) ;
-      write_lines full content )
+      write_lines full content ) ;
+  List.iter !copy_directories ~f:(fun (p, local_rel, _) ->
+      cmdf "rsync -az %s %s/%s" p path local_rel )
