@@ -91,8 +91,9 @@ You can build it with:
     export genspio_vm_tester=_build/default/src/examples/vm_tester.exe
     jbuilder build $genspio_vm_tester
 
-A version is also available in the genspio-doc docker-images (the build of the
-docker images sometimes lags behind Genspio's master branch):
+A version is also available in the genspio-doc docker-images (note that the 
+[build](https://hub.docker.com/r/smondet/genspio-doc-dockerfiles/builds/)
+of the docker images sometimes lags behind Genspio's `master` branch):
 
     docker pull smondet/genspio-doc-dockerfiles:apps406
     docker run -it smondet/genspio-doc-dockerfiles:apps406 genspio-vm-tester --help
