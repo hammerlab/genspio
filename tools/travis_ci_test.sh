@@ -189,13 +189,16 @@ echo "================== Trigger Docker build ==================================
 
 git branch --all
 
-if [ "$(git rev-parse --abbrev-ref HEAD)" = "master" ] ; then
+echo "TRAVIS_BRANCH: $TRAVIS_BRANCH"
+echo "DOCKER_BUILD: $DOCKER_BUILD"
+
+if [ "$TRAVIS_BRANCH" = "master" ] && [ "$DOCKER_BUILD" = "true" ] ; then
     curl -H "Content-Type: application/json" \
          --data '{"source_type": "Branch", "source_name": "apps406"}' \
          -X POST \
          https://registry.hub.docker.com/u/smondet/genspio-doc-dockerfiles/trigger/f113ff75-c7d4-446d-9a71-2e4d7db63389/
 else
-    echo "This is not the master branch"
+    echo "Not triggering the Docker build this time."
 fi
 
 
