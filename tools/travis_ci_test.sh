@@ -184,3 +184,18 @@ $genspio_vm_tester --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; 
 echo "================== EXAMPLES: Service-composer======================================="
 
 $genspio_service_composer --name cosc --output-path $HOME/bin
+
+echo "================== Trigger Docker build ======================================"
+
+git branch --all
+
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "master" ] ; then
+    curl -H "Content-Type: application/json" \
+         --data '{"source_type": "Branch", "source_name": "apps406"}' \
+         -X POST \
+         https://registry.hub.docker.com/u/smondet/genspio-doc-dockerfiles/trigger/f113ff75-c7d4-446d-9a71-2e4d7db63389/
+else
+    echo "This is not the master branch"
+fi
+
+
