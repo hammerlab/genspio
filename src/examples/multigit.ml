@@ -58,6 +58,20 @@ let multi_status () =
   let behind_branches = branches_vv ||> grep "behind" in
   let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
   let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
+  let repo_kind p =
+    let remote_greps g o =
+      case
+        (succeeds_silently (exec ["git"; "remote"; "-v"] ||> grep g))
+        [out o []]
+    in
+    switch
+      [ remote_greps "gpg_remote" "GGPG"
+      ; remote_greps "github.com" "GHub"
+      ; remote_greps "gitlab" "GLab"
+      ; remote_greps "bitbucket" "BBkt"
+      ; default [out "Git?" []] ]
+    |> get_stdout_one_line
+  in
   let display_all ~show_modified list_of_paths =
     Elist.iter list_of_paths ~f:(fun p ->
         seq
@@ -67,9 +81,9 @@ let multi_status () =
                     seq
                       [ call [str "cd"; line]
                       ; out
-                          "%-30s | U: %-6s | M: %-4s | Ahead: %-4s | Behind: \
-                           %-4s"
-                          ( repo_name line
+                          "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
+                           Behind: %-4s"
+                          ( repo_kind line :: repo_name line
                           :: List.map ~f:get_count
                                [ untracked_files
                                ; modified_files

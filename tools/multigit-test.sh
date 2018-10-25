@@ -27,6 +27,7 @@ mkdir -p $moregits
     git clone https://github.com/hammerlab/coclobas.git
     echo "GREEEAAAT" >> coclobas/README.md
     echo "Stuff" > coclobas/doeas-not-exist
+    git clone https://gitlab.com/smondet/genspio-doc.git
 )
 
 try_cmd "git multi-status $moregits"
@@ -37,4 +38,8 @@ try_cmd "git multi-status $moregits 2>&1 | grep coclobas | egrep 'U: *1'"
 
 try_cmd "git multi-status $moregits 2>&1 --show-modified  | grep 'README.md'"
 try_cmd "git multi-status $moregits 2>&1 --show-modified  | grep 'LICENSE'"
+
+
+try_cmd "git multi-status $moregits 2>&1 | grep 'GHub: coclobas'"
+try_cmd "git multi-status $moregits 2>&1 | grep 'GLab: genspio-doc'"
 
