@@ -100,6 +100,7 @@ genspio_downloader_maker=_build/default/src/examples/downloader.exe
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 genspio_vm_tester=_build/default/src/examples/vm_tester.exe
 genspio_service_composer=_build/default/src/examples/service_composer.exe
+genspio_multigit=_build/default/src/examples/multigit.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.mlt configure
@@ -110,8 +111,7 @@ jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
 jbuilder build $genspio_vm_tester
 jbuilder build $genspio_service_composer
-
-
+jbuilder build $genspio_multigit
 
 echo "================== TESTS ======================================================="
 
@@ -184,6 +184,30 @@ $genspio_vm_tester --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; 
 echo "================== EXAMPLES: Service-composer======================================="
 
 $genspio_service_composer --name cosc --output-path $HOME/bin
+
+echo "================== EXAMPLES: Multigit ======================================="
+
+$genspio_multigit $HOME/bin
+git multi-status -h
+git multi-status --version
+
+mkdir -p moregits
+(
+    cd moregits
+    git clone https://github.com/hammerlab/ketrew.git
+    git clone https://github.com/hammerlab/biokepi.git
+    echo "GREEEAAAT" >> biokepi/README.md
+    echo "Boooo" >> biokepi/LICENSE
+    git clone https://github.com/hammerlab/coclobas.git
+    echo "GREEEAAAT" >> coclobas/README.md
+    echo "Stuff" > coclobas/doeas-not-exist
+)
+git multi-status $PWD/moregits
+git multi-status $PWD/moregits 2>&1 | grep ketrew | grep 'M: 0'
+git multi-status $PWD/moregits 2>&1 | grep biokepi | grep 'M: 2'
+git multi-status $PWD/moregits 2>&1 | grep coclobas | grep 'U: 1'
+
+
 
 echo "================== Trigger Docker build ======================================"
 
