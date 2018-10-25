@@ -46,7 +46,7 @@ let multi_status () =
     ||> exec ["sort"]
   in
   let untracked_files =
-    exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\??"]
+    exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
   in
   let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
   let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
