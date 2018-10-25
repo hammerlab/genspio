@@ -25,83 +25,91 @@ let cmdf fmt =
       | other -> ksprintf failwith "CMD: %S failed with %d" s other )
     fmt
 
-let multi_status () =
-  let open Gedsl in
-  let open Command_line in
-  let version_string = "0.0.0-dev" in
-  let module D = Gedsl.Script_with_describe (struct
+module Multi_status = struct
+  let version_string = "0.0.0-dev"
+
+  include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
 
     let description = "Show the status of a bunch of Git repositories."
-  end) in
-  let opts =
-    let open Arg in
-    flag ["--show-modified"] ~doc:"Show modified files"
-    & flag ["--version"] ~doc:"Show version number"
-    & D.describe_option_and_usage ()
-  in
-  let out f l = printf (ksprintf str "%s\n" f) l in
-  let list_repos paths =
-    call
-      ( [str "find"] @ paths
-      @ strs ["-maxdepth"; "2"; "-type"; "d"; "-name"; ".git"] )
-    ||> exec ["sed"; "s:/\\.git::"]
-    ||> exec ["sort"]
-  in
-  let untracked_files =
-    exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
-  in
-  let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
-  let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
-  let grep s = exec ["grep"; s] in
-  let ahead_branches = branches_vv ||> grep "ahead" in
-  let behind_branches = branches_vv ||> grep "behind" in
-  let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
-  let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-  let repo_kind p =
-    let remote_greps g o =
-      case
-        (succeeds_silently (exec ["git"; "remote"; "-v"] ||> grep g))
-        [out o []]
+  end)
+
+  let long_description () =
+    [ sprintf "This is `%s` version %s." name version_string
+    ; sprintf "Description: “%s”" description ]
+
+  let script () =
+    let open Gedsl in
+    let open Command_line in
+    let opts =
+      let open Arg in
+      flag ["--show-modified"] ~doc:"Show modified files"
+      & flag ["--version"] ~doc:"Show version number"
+      & describe_option_and_usage ()
     in
-    switch
-      [ remote_greps "gpg_remote" "GGPG"
-      ; remote_greps "github.com" "GHub"
-      ; remote_greps "gitlab" "GLab"
-      ; remote_greps "bitbucket" "BBkt"
-      ; default [out "Git?" []] ]
-    |> get_stdout_one_line
-  in
-  let display_all ~show_modified list_of_paths =
-    Elist.iter list_of_paths ~f:(fun p ->
-        seq
-          [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [p ()]
-          ; list_repos [p ()]
-            ||> on_stdin_lines (fun line ->
-                    seq
-                      [ call [str "cd"; line]
-                      ; out
-                          "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
-                           Behind: %-4s"
-                          ( repo_kind line :: repo_name line
-                          :: List.map ~f:get_count
-                               [ untracked_files
-                               ; modified_files
-                               ; ahead_branches
-                               ; behind_branches ] )
-                      ; if_seq
-                          ( show_modified
-                          &&& Str.(get_count modified_files <$> str "0") )
-                          ~t:
-                            [ out "  |- Modified:" []
-                            ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"]
-                            ] ] ) ] )
-  in
-  parse opts (fun ~anon show_modified version describe ->
-      D.deal_with_describe describe
-        [ if_seq version
-            ~t:[out (sprintf "%s: %s" D.name version_string) []]
-            ~e:[display_all ~show_modified anon] ] )
+    let out f l = printf (ksprintf str "%s\n" f) l in
+    let list_repos paths =
+      call
+        ( [str "find"] @ paths
+        @ strs ["-maxdepth"; "2"; "-type"; "d"; "-name"; ".git"] )
+      ||> exec ["sed"; "s:/\\.git::"]
+      ||> exec ["sort"]
+    in
+    let untracked_files =
+      exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
+    in
+    let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
+    let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
+    let grep s = exec ["grep"; s] in
+    let ahead_branches = branches_vv ||> grep "ahead" in
+    let behind_branches = branches_vv ||> grep "behind" in
+    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
+    let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
+    let repo_kind p =
+      let remote_greps g o =
+        case
+          (succeeds_silently (exec ["git"; "remote"; "-v"] ||> grep g))
+          [out o []]
+      in
+      switch
+        [ remote_greps "gpg_remote" "GGPG"
+        ; remote_greps "github.com" "GHub"
+        ; remote_greps "gitlab" "GLab"
+        ; remote_greps "bitbucket" "BBkt"
+        ; default [out "Git?" []] ]
+      |> get_stdout_one_line
+    in
+    let display_all ~show_modified list_of_paths =
+      Elist.iter list_of_paths ~f:(fun p ->
+          seq
+            [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [p ()]
+            ; list_repos [p ()]
+              ||> on_stdin_lines (fun line ->
+                      seq
+                        [ call [str "cd"; line]
+                        ; out
+                            "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
+                             Behind: %-4s"
+                            ( repo_kind line :: repo_name line
+                            :: List.map ~f:get_count
+                                 [ untracked_files
+                                 ; modified_files
+                                 ; ahead_branches
+                                 ; behind_branches ] )
+                        ; if_seq
+                            ( show_modified
+                            &&& Str.(get_count modified_files <$> str "0") )
+                            ~t:
+                              [ out "  |- Modified:" []
+                              ; modified_files
+                                ||> exec ["sed"; "s:^ M:  |    -:"] ] ] ) ] )
+    in
+    parse opts (fun ~anon show_modified version describe ->
+        deal_with_describe describe
+          [ if_seq version
+              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~e:[display_all ~show_modified anon] ] )
+end
 
 let () =
   let path = Sys.argv.(1) in
@@ -112,8 +120,16 @@ let () =
   Format.(
     fprintf
       (formatter_of_out_channel o)
-      "#!/bin/sh\n\n%a\n" Genspio.Compile.To_slow_flow.Script.pp_posix
+      "#!/bin/sh\n\n%s\n\n%a\n"
+      ( Multi_status.long_description ()
+        @ [ "The following is generated by an OCaml program using the \
+             Genspio EDSL."
+          ; "See <https://smondet.gitlab.io/genspio-doc/>." ]
+      |> List.map ~f:(sprintf "# %s")
+      |> String.concat ~sep:"\n" )
+      Genspio.Compile.To_slow_flow.Script.pp_posix
       (Genspio.Compile.To_slow_flow.compile
-         (multi_status () |> Genspio.Transform.Constant_propagation.process))) ;
+         ( Multi_status.script ()
+         |> Genspio.Transform.Constant_propagation.process ))) ;
   close_out o ;
   cmdf "chmod +x %s" (Filename.quote gms)
