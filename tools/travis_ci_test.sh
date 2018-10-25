@@ -187,6 +187,8 @@ $genspio_service_composer --name cosc --output-path $HOME/bin
 
 echo "================== EXAMPLES: Multigit ======================================="
 
+$genspio_multigit $HOME/bin
+export PATH=$HOME/bin:$PATH
 ./tools/multigit-test.sh
 
 

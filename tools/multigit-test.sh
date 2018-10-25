@@ -2,15 +2,9 @@
 
 set -e
 
-genspio_multigit=_build/default/src/examples/multigit.exe
-
 tmpdir=/tmp/multigittest/
 
 rm -fr $tmpdir
-
-$genspio_multigit $tmpdir/bin
-
-export PATH=$tmpdir/bin:$PATH
 
 try_cmd () {
     echo "================================================================================"
@@ -37,7 +31,7 @@ mkdir -p $moregits
 
 try_cmd "git multi-status $moregits"
 
-try_cmd "git multi-status $moregits 2>&1 | grep ketrew | grep 'M: 0'"
-try_cmd "git multi-status $moregits 2>&1 | grep biokepi | grep 'M: 2'"
-try_cmd "git multi-status $moregits 2>&1 | grep coclobas | grep 'U: 1'"
+try_cmd "git multi-status $moregits 2>&1 | grep ketrew   | egrep 'M: *0'"
+try_cmd "git multi-status $moregits 2>&1 | grep biokepi  | egrep 'M: *2'"
+try_cmd "git multi-status $moregits 2>&1 | grep coclobas | egrep 'U: *1'"
 
