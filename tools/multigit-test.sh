@@ -46,3 +46,6 @@ try_cmd "$gms $moregits 2>&1 --show-modified  | grep 'LICENSE'"
 try_cmd "$gms $moregits 2>&1 | grep 'GHub: coclobas'"
 try_cmd "$gms $moregits 2>&1 | grep 'GLab: genspio-doc'"
 
+gar="git activity-report --no-config"
+
+try_cmd "$gar $moregits --since 2018-07-01"
