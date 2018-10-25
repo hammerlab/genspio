@@ -30,16 +30,19 @@ mkdir -p $moregits
     git clone https://gitlab.com/smondet/genspio-doc.git
 )
 
-try_cmd "git multi-status $moregits"
+gms="git multi-status --no-config"
 
-try_cmd "git multi-status $moregits 2>&1 | grep ketrew   | egrep 'M: *0'"
-try_cmd "git multi-status $moregits 2>&1 | grep biokepi  | egrep 'M: *2'"
-try_cmd "git multi-status $moregits 2>&1 | grep coclobas | egrep 'U: *1'"
+try_cmd "$gms $moregits"
+try_cmd "$gms $moregits --show-modified"
 
-try_cmd "git multi-status $moregits 2>&1 --show-modified  | grep 'README.md'"
-try_cmd "git multi-status $moregits 2>&1 --show-modified  | grep 'LICENSE'"
+try_cmd "$gms $moregits 2>&1 | grep ketrew   | egrep 'M: *0'"
+try_cmd "$gms $moregits 2>&1 | grep biokepi  | egrep 'M: *2'"
+try_cmd "$gms $moregits 2>&1 | grep coclobas | egrep 'U: *1'"
+
+try_cmd "$gms $moregits 2>&1 --show-modified  | grep 'README.md'"
+try_cmd "$gms $moregits 2>&1 --show-modified  | grep 'LICENSE'"
 
 
-try_cmd "git multi-status $moregits 2>&1 | grep 'GHub: coclobas'"
-try_cmd "git multi-status $moregits 2>&1 | grep 'GLab: genspio-doc'"
+try_cmd "$gms $moregits 2>&1 | grep 'GHub: coclobas'"
+try_cmd "$gms $moregits 2>&1 | grep 'GLab: genspio-doc'"
 

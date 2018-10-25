@@ -23,21 +23,39 @@ module Multi_status = struct
   include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
 
-    let description = "Show the status of a bunch of Git repositories."
+    let description = "Show the status of a bunch of Git repositories"
   end)
+
+  let paths_git_config_option = "multi-git.paths"
 
   let long_description () =
     [ sprintf "This is `%s` version %s." name version_string
     ; sprintf "Description: “%s”" description ]
+
+  let extra_help () =
+    [ ""
+    ; "Use `git multi-status /path/to/repos1 /path/to/repos2` to display"
+    ; "a compact report of all the git repositories found in the folders "
+    ; "`/path/to/repos1` and `/path/to/repos2`."
+    ; ""
+    ; "Default paths to explore can be set in Git's configuration:"
+    ; ""
+    ; "    git config --global --add multi-git.paths /path/to/repos1"
+    ; "    git config --global --add multi-git.paths /path/to/repos2"
+    ; "" ]
 
   let script () =
     let open Gedsl in
     let open Command_line in
     let opts =
       let open Arg in
-      flag ["--show-modified"] ~doc:"Show modified files"
-      & flag ["--version"] ~doc:"Show version number"
-      & describe_option_and_usage ()
+      flag ["--show-modified"] ~doc:"Show the list of modified files."
+      & flag ["--no-config"]
+          ~doc:
+            (sprintf "Do not look at the `%s` git-config option."
+               paths_git_config_option)
+      & flag ["--version"] ~doc:"Show version information."
+      & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let list_repos paths =
@@ -71,36 +89,45 @@ module Multi_status = struct
         ; default [out "Git?" []] ]
       |> get_stdout_one_line
     in
-    let display_all ~show_modified list_of_paths =
-      Elist.iter list_of_paths ~f:(fun p ->
-          seq
-            [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [p ()]
-            ; list_repos [p ()]
-              ||> on_stdin_lines (fun line ->
-                      seq
-                        [ call [str "cd"; line]
-                        ; out
-                            "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
-                             Behind: %-4s"
-                            ( repo_kind line :: repo_name line
-                            :: List.map ~f:get_count
-                                 [ untracked_files
-                                 ; modified_files
-                                 ; ahead_branches
-                                 ; behind_branches ] )
-                        ; if_seq
-                            ( show_modified
-                            &&& Str.(get_count modified_files <$> str "0") )
-                            ~t:
-                              [ out "  |- Modified:" []
-                              ; modified_files
-                                ||> exec ["sed"; "s:^ M:  |    -:"] ] ] ) ] )
+    let display_section ~show_modified path =
+      seq
+        [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [path]
+        ; list_repos [path]
+          ||> on_stdin_lines (fun line ->
+                  seq
+                    [ call [str "cd"; line]
+                    ; out
+                        "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
+                         Behind: %-4s"
+                        ( repo_kind line :: repo_name line
+                        :: List.map ~f:get_count
+                             [ untracked_files
+                             ; modified_files
+                             ; ahead_branches
+                             ; behind_branches ] )
+                    ; if_seq
+                        ( show_modified
+                        &&& Str.(get_count modified_files <$> str "0") )
+                        ~t:
+                          [ out "  |- Modified:" []
+                          ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"]
+                          ] ] ) ]
     in
-    parse opts (fun ~anon show_modified version describe ->
+    let from_config =
+      exec ["git"; "config"; "--get-all"; paths_git_config_option]
+    in
+    parse opts (fun ~anon show_modified no_config version describe ->
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
-              ~e:[display_all ~show_modified anon] ] )
+              ~e:
+                [ Elist.iter anon ~f:(fun p ->
+                      display_section ~show_modified (p ()) )
+                ; if_seq no_config ~t:[]
+                    ~e:
+                      [ from_config
+                        ||> on_stdin_lines (fun line ->
+                                display_section ~show_modified line ) ] ] ] )
 end
 
 (*md
