@@ -100,6 +100,7 @@ genspio_downloader_maker=_build/default/src/examples/downloader.exe
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 genspio_vm_tester=_build/default/src/examples/vm_tester.exe
 genspio_service_composer=_build/default/src/examples/service_composer.exe
+genspio_multigit=_build/default/src/examples/multigit.exe
 
 echo "================== BUILD ALL ==================================================="
 ocaml please.mlt configure
@@ -110,8 +111,7 @@ jbuilder build $genspio_downloader_maker
 jbuilder build $genspio_small_examples
 jbuilder build $genspio_vm_tester
 jbuilder build $genspio_service_composer
-
-
+jbuilder build $genspio_multigit
 
 echo "================== TESTS ======================================================="
 
@@ -184,6 +184,13 @@ $genspio_vm_tester --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; 
 echo "================== EXAMPLES: Service-composer======================================="
 
 $genspio_service_composer --name cosc --output-path $HOME/bin
+
+echo "================== EXAMPLES: Multigit ======================================="
+
+$genspio_multigit $HOME/bin
+export PATH=$HOME/bin:$PATH
+./tools/multigit-test.sh
+
 
 echo "================== Trigger Docker build ======================================"
 

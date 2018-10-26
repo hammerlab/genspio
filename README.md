@@ -139,6 +139,7 @@ From here, one can explore:
 <!--TOSLOWFLOW-->
 <!--TRANSFORM-->
 <!--SERCOEX-->
+<!--MUGITEX-->
 
 Testing
 -------

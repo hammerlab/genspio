@@ -158,6 +158,8 @@ call_caml2html src/lib/transform.ml $output_path/transform-module.html \
                "The AST Transformations"
 call_caml2html src/examples/service_composer.ml $output_path/service-composer-example.html \
                "The Service Composer Example"
+call_caml2html src/examples/multigit.ml $output_path/multigit-example.html \
+               "The “Multi-Git” Example"
 
 
 pandocify () {
@@ -171,6 +173,7 @@ pandocify () {
         | sed 's:<!--TOSLOWFLOW-->:- Code [documentation](./to-slow-flow.html) for the `To_slow_flow` *compiler.*:' \
         | sed 's:<!--TRANSFORM-->:- Code [documentation](./transform-module.html) for the `Transform` module (AST *optimizations*).:' \
         | sed 's:<!--SERCOEX-->:- Code [documentation](./service-composer-example.html) for the *“Service-composer Example”*.:' \
+        | sed 's:<!--MUGITEX-->:- Code [documentation](./multigit-example.html) for the *“Multi-Git Example”*.:' \
         | pandoc -c $css_file -s \
                  --variable title="$title" --variable pagetitle="$title" \
                  --toc -o $output_path/$2.html
