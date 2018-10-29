@@ -208,7 +208,7 @@ module Activity_report = struct
                   let list_report branch =
                     git_log
                       ( [since_opt]
-                      @ strs ["--reverse"; "--pretty=tformat:- %s.%n%b"]
+                      @ strs ["--reverse"; "--pretty=tformat:- %s.  %n%b"]
                       @ [branch] )
                     ||> exec ["grep"; "-Ev"; "^$"]
                   in
@@ -217,7 +217,7 @@ module Activity_report = struct
                     ; if_seq
                         Str.(commit_number [] <$> str "0")
                         ~t:
-                          [ out "\\n%s# %s: %-30s\\n\\n```"
+                          [ out "\\n%s# %s: %s\\n\\n```"
                               [ section_base
                               ; Repository.get_kind ()
                               ; repo_name line ]
