@@ -48,4 +48,12 @@ try_cmd "$gms $moregits 2>&1 | grep 'GLab: genspio-doc'"
 
 gar="git activity-report --no-config"
 
+try_cmd "$gar $moregits --version"
+
+try_cmd "$gar $moregits"
+
 try_cmd "$gar $moregits --since 2018-07-01"
+
+try_cmd "$gar $moregits  --since 2018-08-01 --section-base '###'"
+
+
