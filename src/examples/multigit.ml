@@ -283,7 +283,7 @@ module Activity_report = struct
 end
 
 module Meta_repository = struct
-  let wrap ?(indent = 0) ?(columns = 72) s =
+  let wrap ?(newline = "\n") ?(indent = 0) ?(columns = 72) s =
     let buf = Buffer.create 42 in
     let indentation = String.make indent ' ' in
     let rec assemble col = function
@@ -291,7 +291,7 @@ module Meta_repository = struct
       | one :: more ->
           let potential = col + String.length one + 1 in
           if potential > columns then (
-            Buffer.add_string buf ("\n" ^ indentation ^ one) ;
+            Buffer.add_string buf (newline ^ indentation ^ one) ;
             assemble (String.length one) more )
           else (
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
@@ -320,17 +320,17 @@ module Meta_repository = struct
     let title = sec '=' in
     let section = sec '-' in
     let par f = ksprintf (fun s -> out "%s\n\n" (wrap s)) f in
+    let cmd_lines s = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
+    let cmd_output s = cmd_lines s |> String.concat ~sep:"\n" in
     let describe s =
-      let lines = cmd_to_string_list ("PATH=%s:$PATH " ^ s ^ " --describe") in
-      par "%s." (String.concat ~sep:"\n" lines)
+      let lines = cmd_output (s ^ " --describe") in
+      par "%s." lines
     in
     let see_output_of fmt =
       ksprintf
         (fun s ->
-          let lines = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
-          out "See `%s`:\n\n```\n" s ;
-          List.iter lines ~f:(out "%s\n") ;
-          out "```\n\n" )
+          let lines = cmd_output s in
+          out "See `%s`:\n\n```\n" s ; out "%s\n" lines ; out "```\n\n" )
         fmt
     in
     title "Git: Multi-Repository" ;
@@ -355,6 +355,65 @@ module Meta_repository = struct
     par
       "Similarly check out the <https://github.com/smondet/cosc> repository, \
        which is also a bunch of shell scripts maintained by an OCaml program." ;
+    section "Example Session" ;
+    let git_repos_top = "/tmp/git-repos-example" in
+    let git_repos_hammerlab = git_repos_top // "hammerlab" in
+    let git_repos_smondet = git_repos_top // "smondet" in
+    let git_repos_tezos = git_repos_top // "tezos" in
+    let all_git_repo_tops =
+      [git_repos_hammerlab; git_repos_smondet; git_repos_tezos]
+    in
+    let hammerlabs = ["ketrew"; "biokepi"; "genspio"; "coclobas"] in
+    let smondets = ["genspio-doc"; "vecosek"] in
+    let example_cmd ?(wrap_display = true) ?(with_fence = `Yes)
+        ?(ignore_output = false) f =
+      ksprintf
+        (fun s ->
+          let lines = cmd_lines s |> List.map ~f:String.strip in
+          let w =
+            if wrap_display then wrap ~newline:" \\\n" ~indent:6 ~columns:70
+            else fun e -> e
+          in
+          out "    $ %s\n" (w s) ;
+          if lines <> [] || ignore_output then
+            let fence = String.make 72 '`' in
+            match with_fence with
+            | `Yes ->
+                out "\n%sok-output\n" fence ;
+                List.iter lines ~f:(out "    %s\n") ;
+                out "%s\n\n" fence
+            | `Quote ->
+                out "\n" ;
+                List.iter lines ~f:(out "> %s\n") )
+        f
+    in
+    par "Let's prepare a set of repositories in `%s`:" git_repos_top ;
+    List.iter all_git_repo_tops ~f:(example_cmd "mkdir -p %s") ;
+    let clone repos uri_prefix path =
+      List.iter repos ~f:(fun r ->
+          example_cmd "git clone %s/%s.git %s/%s" uri_prefix r path r )
+    in
+    clone hammerlabs "https://github.com/hammerlab/" git_repos_hammerlab ;
+    clone smondets "https://gitlab.com/smondet/" git_repos_smondet ;
+    clone ["tezos"] "https://gitlab.com/tezos/" git_repos_tezos ;
+    par "" ;
+    par
+      "For now, we haven't changed anything locally (we use the `--no-config` \
+       option to get consistent output w.r.t. users' configuration):" ;
+    let on_all f cmd =
+      ksprintf f "%s --no-config %s" cmd
+        (String.concat ~sep:" " all_git_repo_tops)
+    in
+    on_all (example_cmd "%s") "git multi-status" ;
+    par "" ;
+    par
+      "The activity-report is already interesting though, and it outputs \
+       directly Markdown:" ;
+    on_all
+      (example_cmd ~with_fence:`Quote "%s")
+      "git activity-report --section-base '####' --since 2018-10-20" ;
+    par "" ;
+    par "And that's all for today!" ;
     section "License" ;
     par
       "The code generator is covered by the Apache 2.0 \
