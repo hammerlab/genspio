@@ -169,6 +169,7 @@ module Activity_report = struct
     let open Gedsl in
     let open Command_line in
     let default_since = "Nooooooooooooooo-since" in
+    let default_section_base = "###" in
     let opts =
       let open Arg in
       flag ["--no-config"]
@@ -177,15 +178,21 @@ module Activity_report = struct
              Git_config.paths_option)
       & string ["--since"] ~doc:"Date to get the logs/information from"
           ~default:(str default_since)
+      & string ["--section-base"]
+          ~doc:
+            (sprintf
+               "The base markdown section ('##', '###', etc. default: %s)"
+               default_section_base)
+          ~default:(str default_section_base)
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~since path =
+    let display_section ~section_base ~since path =
       seq
-        [ out (sprintf "\n## In `%%-28s`") [path]
+        [ out "\n%s In `%-28s`" [section_base; path]
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   let since_opt = Str.concat_list [str "--since="; since] in
@@ -207,8 +214,10 @@ module Activity_report = struct
                     ; if_seq
                         Str.(commit_number [] <$> str "0")
                         ~t:
-                          [ out "\\n### %s: %-30s\\n\\n```"
-                              [Repository.get_kind (); repo_name line]
+                          [ out "\\n%s# %s: %-30s\\n\\n```"
+                              [ section_base
+                              ; Repository.get_kind ()
+                              ; repo_name line ]
                           ; git_log
                               ( [since_opt]
                               @ strs
@@ -217,7 +226,7 @@ module Activity_report = struct
                                   ; "--pretty=tformat:%D"
                                   ; "--all"
                                   ; "--simplify-by-decoration" ] )
-                          ; out "```\n\n#### On `master`:" []
+                          ; out "```\n\n%s## On `master`:" [section_base]
                           ; list_report (str "master")
                           ; exec ["git"; "branch"; "--no-merged"; "master"]
                             ||> exec ["sed"; "s/*//"]
@@ -228,10 +237,11 @@ module Activity_report = struct
                                     if_seq
                                       Str.(commit_number [treeish] <$> str "0")
                                       ~t:
-                                        [ out "\n#### On `%s`\n" [branch]
+                                        [ out "\n%s## On `%s`\n"
+                                            [section_base; branch]
                                         ; list_report treeish ] ) ] ] ) ]
     in
-    parse opts (fun ~anon no_config since version describe ->
+    parse opts (fun ~anon no_config since section_base version describe ->
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
@@ -239,12 +249,14 @@ module Activity_report = struct
                 [ if_then
                     Str.(since =$= str default_since)
                     (fail "ERROR: Option --since is for now mandatory!")
-                ; Elist.iter anon ~f:(fun p -> display_section ~since (p ()))
+                ; Elist.iter anon ~f:(fun p ->
+                      display_section ~section_base ~since (p ()) )
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
                         ||> on_stdin_lines (fun line ->
-                                display_section ~since line ) ] ] ] )
+                                display_section ~since ~section_base line ) ]
+                ] ] )
 end
 
 (*md
