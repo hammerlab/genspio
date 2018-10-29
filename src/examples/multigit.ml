@@ -176,7 +176,10 @@ module Activity_report = struct
         ~doc:
           (sprintf "Do not look at the `%s` git-config option."
              Git_config.paths_option)
-      & string ["--since"] ~doc:"Date to get the logs/information from"
+      & string ["--since"]
+          ~doc:
+            "Date to get the logs/information since (default: “last \
+             sunday”)."
           ~default:(str default_since)
       & string ["--section-base"]
           ~doc:
@@ -192,7 +195,7 @@ module Activity_report = struct
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~section_base ~since path =
       seq
-        [ out "\n%s In `%-28s`" [section_base; path]
+        [ out "\n%s In `%s`" [section_base; path]
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   let since_opt = Str.concat_list [str "--since="; since] in
@@ -242,21 +245,41 @@ module Activity_report = struct
                                         ; list_report treeish ] ) ] ] ) ]
     in
     parse opts (fun ~anon no_config since section_base version describe ->
+        let tmp_since = tmp_file "gar-since" in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ if_then
+                [ tmp_since#set since
+                ; if_seq
                     Str.(since =$= str default_since)
-                    (fail "ERROR: Option --since is for now mandatory!")
+                    ~t:
+                      (let date_format = "+%Y-%m-%d" in
+                       let today = exec ["date"; date_format] in
+                       let today_nth = exec ["date"; "+%u"] in
+                       let last_sunday =
+                         call
+                           [ str "date"
+                           ; str "-d"
+                           ; Str.concat_list
+                               [ get_stdout_one_line today
+                               ; str " -"
+                               ; get_stdout_one_line today_nth
+                               ; str " days" ]
+                           ; str date_format ]
+                       in
+                       [ out "Last Sunday was %s.\\n"
+                           [get_stdout_one_line last_sunday]
+                       ; tmp_since#set (get_stdout_one_line last_sunday) ])
                 ; Elist.iter anon ~f:(fun p ->
-                      display_section ~section_base ~since (p ()) )
+                      display_section ~section_base ~since:tmp_since#get (p ())
+                  )
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
                         ||> on_stdin_lines (fun line ->
-                                display_section ~since ~section_base line ) ]
-                ] ] )
+                                display_section ~since:tmp_since#get
+                                  ~section_base line ) ] ] ] )
 end
 
 (*md
