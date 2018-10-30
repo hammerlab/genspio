@@ -282,6 +282,14 @@ module Activity_report = struct
                                   ~section_base line ) ] ] ] )
 end
 
+let cmdf fmt =
+  ksprintf
+    (fun s ->
+      match Sys.command s with
+      | 0 -> ()
+      | other -> ksprintf failwith "CMD: %S failed with %d" s other )
+    fmt
+
 module Meta_repository = struct
   let wrap ?(newline = "\n") ?(indent = 0) ?(columns = 72) s =
     let buf = Buffer.create 42 in
@@ -322,10 +330,6 @@ module Meta_repository = struct
     let par f = ksprintf (fun s -> out "%s\n\n" (wrap s)) f in
     let cmd_lines s = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
     let cmd_output s = cmd_lines s |> String.concat ~sep:"\n" in
-    let describe s =
-      let lines = cmd_output (s ^ " --describe") in
-      par "%s." lines
-    in
     let see_output_of fmt =
       ksprintf
         (fun s ->
@@ -339,11 +343,28 @@ module Meta_repository = struct
        repositories at once. One can provide a list of directories to scan \
        for repositories (non-recursively) on the command line or through \
        Git's configuration mechanism." ;
-    section "Git-multi-status" ;
+    par "The scripts provided as of now are:" ;
+    let describe s =
+      let lines = cmd_output (s ^ " --describe") in
+      out "- `%s`: %s.\n" s lines
+    in
     describe "git-multi-status" ;
-    see_output_of "git-multi-status --help" ;
-    section "Git-activity-report" ;
     describe "git-activity-report" ;
+    par "" ;
+    par
+      "It may be interesting for the user to also alias them in \
+       `~/.gitconfig`, for instance:" ;
+    out
+      {code|
+    [alias]
+        mst = multi-status --show-modified
+        arfd = activity-report --section-base '####' --since
+|code} ;
+    par "" ;
+    par "See below for detailed usage information ⮷." ;
+    section "Usage: Git-multi-status" ;
+    see_output_of "git-multi-status --help" ;
+    section "Usage: Git-activity-report" ;
     see_output_of "git-activity-report --help" ;
     section "Authors / Making-of" ;
     par
@@ -353,9 +374,10 @@ module Meta_repository = struct
        serves as one of its examples of usage, see also its \
        [implementation](https://github.com/hammerlab/genspio/tree/master/src/examples/multigit.ml). " ;
     par
-      "Similarly check out the <https://github.com/smondet/cosc> repository, \
-       which is also a bunch of shell scripts maintained by an OCaml program." ;
-    section "Example Session" ;
+      "Similarly, you may check out the <https://github.com/smondet/cosc> \
+       repository, which is also a bunch of shell scripts maintained by an \
+       OCaml program." ;
+    section "Example Session / Demo" ;
     let git_repos_top = "/tmp/git-repos-example" in
     let git_repos_hammerlab = git_repos_top // "hammerlab" in
     let git_repos_smondet = git_repos_top // "smondet" in
@@ -387,19 +409,24 @@ module Meta_repository = struct
                 List.iter lines ~f:(out "> %s\n") )
         f
     in
-    par "Let's prepare a set of repositories in `%s`:" git_repos_top ;
+    par
+      "Let's see a sequence of examples to demo the scripts. First, we \
+       prepare a set of *“test”* repositories in `%s`:"
+      git_repos_top ;
+    (* Silent command: *) cmdf "rm -fr %s" git_repos_top ;
     List.iter all_git_repo_tops ~f:(example_cmd "mkdir -p %s") ;
     let clone repos uri_prefix path =
       List.iter repos ~f:(fun r ->
-          example_cmd "git clone %s/%s.git %s/%s" uri_prefix r path r )
+          example_cmd "git clone %s%s.git %s/%s" uri_prefix r path r )
     in
     clone hammerlabs "https://github.com/hammerlab/" git_repos_hammerlab ;
     clone smondets "https://gitlab.com/smondet/" git_repos_smondet ;
     clone ["tezos"] "https://gitlab.com/tezos/" git_repos_tezos ;
     par "" ;
     par
-      "For now, we haven't changed anything locally (we use the `--no-config` \
-       option to get consistent output w.r.t. users' configuration):" ;
+      "For now, we haven't changed anything to the repositories so the \
+       “multi-status” is full of zeros (we use the `--no-config` option \
+       to get consistent output w.r.t. users' configuration):" ;
     let on_all f cmd =
       ksprintf f "%s --no-config %s" cmd
         (String.concat ~sep:" " all_git_repo_tops)
@@ -407,13 +434,45 @@ module Meta_repository = struct
     on_all (example_cmd "%s") "git multi-status" ;
     par "" ;
     par
-      "The activity-report is already interesting though, and it outputs \
+      "The activity-report is, for now, more interesting, and it outputs \
        directly Markdown:" ;
     on_all
       (example_cmd ~with_fence:`Quote "%s")
       "git activity-report --section-base '####' --since 2018-10-20" ;
     par "" ;
-    par "And that's all for today!" ;
+    par "Let's do some modifications:" ;
+    example_cmd "echo 'This is Great!' >> %s/biokepi/README.md"
+      git_repos_hammerlab ;
+    example_cmd "echo 'More lawyery stuff' >> %s/biokepi/LICENSE"
+      git_repos_hammerlab ;
+    example_cmd "echo 'This is tracked' >> %s/coclobas/README.md"
+      git_repos_hammerlab ;
+    example_cmd "echo 'This is *not* tracked' >> %s/coclobas/NOT-TRACKED.md"
+      git_repos_hammerlab ;
+    example_cmd "echo 'This is Great' >> %s/ketrew/README.md"
+      git_repos_hammerlab ;
+    example_cmd
+      "git -C %s/ketrew/ checkout -b new-branch-for-the-example -t master"
+      git_repos_hammerlab ;
+    example_cmd "git -C %s/ketrew/ commit -a -m 'Add greatness to the README'"
+      git_repos_hammerlab ;
+    par "" ;
+    par
+      "Now in the multi-status we can see the modified files, the untracked \
+       counts, and one branch is “ahead” (since we used `-t master` while \
+       creating, it has a remote to define it):" ;
+    on_all (example_cmd "%s") "git multi-status --show-modified" ;
+    par "" ;
+    par "Let's concentrate the activity-report on `%s` and on the past 3 days:"
+      git_repos_hammerlab ;
+    example_cmd
+      "git activity-report --no-config --since $(date -d '-3 days' \
+       +%%Y-%%m-%%d) %s"
+      git_repos_hammerlab ;
+    par "" ;
+    par
+      "We can see the new commit in the new branch appear in the report ⮵." ;
+    par "And that's all for today ☺ !" ;
     section "License" ;
     par
       "The code generator is covered by the Apache 2.0 \
@@ -429,13 +488,6 @@ to a directory.
 To write the scripts in a `./bin` directory and add a `README.md` just
 set the environment variable: `repomode=true`.
 *)
-let cmdf fmt =
-  ksprintf
-    (fun s ->
-      match Sys.command s with
-      | 0 -> ()
-      | other -> ksprintf failwith "CMD: %S failed with %d" s other )
-    fmt
 
 let () =
   let path = Sys.argv.(1) in
