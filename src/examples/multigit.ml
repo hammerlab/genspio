@@ -471,7 +471,7 @@ module Meta_repository = struct
       git_repos_hammerlab ;
     par "" ;
     par
-      "We can see the new commit in the new branch appear in the report ⮵." ;
+      "We can see the new commit in the new branch appears in the report ⮵." ;
     par "And that's all for today ☺ !" ;
     section "License" ;
     par
