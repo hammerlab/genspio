@@ -218,41 +218,55 @@ module Activity_report = struct
                   let list_report branch =
                     git_log
                       ( [since_opt]
-                      @ strs ["--reverse"; "--pretty=tformat:- %s.  %n%b"]
+                      @ strs ["--reverse"; "--pretty=tformat:- %s.  %n  %b"]
                       @ [branch] )
-                    ||> exec ["grep"; "-Ev"; "^$"]
+                    ||> exec ["grep"; "-Ev"; "^ *$"]
                   in
+                  let fence () = out (String.make 80 '`') [] in
                   seq
                     [ call [str "cd"; line] (* | egrep -v '^$' *)
                     ; if_seq
                         Str.(commit_number [] <$> str "0")
                         ~t:
-                          [ out "\\n%s# %s: %s\\n\\n```"
+                          [ out "\\n%s# %s: %s\\n"
                               [ section_base
                               ; Repository.get_kind ()
                               ; repo_name line ]
-                          ; exec ["git"; "status"; "--short"]
+                          ; out "\\nWorking tree:\\n" []
+                          ; fence ()
+                          ; exec
+                              [ "git"
+                              ; "status"
+                              ; "--short"
+                              ; "--branch"
+                              ; "--show-stash" ]
+                          ; fence ()
+                          ; out "\\nGraph:\\n" []
+                          ; fence ()
                           ; git_log
                               ( [since_opt]
                               @ strs
                                   [ "--graph"
                                   ; "--decorate"
-                                  ; "--oneline"
+                                  ; "--pretty=tformat:%w(72,0,2)%d %s"
                                   ; "--all" ] )
-                          ; out "```\n\n%s## On `master`\n" [section_base]
-                          ; list_report (str "master")
-                          ; exec ["git"; "branch"; "--no-merged"; "master"]
-                            ||> exec ["sed"; "s/*//"]
-                            ||> on_stdin_lines (fun branch ->
-                                    let treeish =
-                                      Str.concat_list [str "master.."; branch]
-                                    in
+                          ; fence ()
+                          ; git_log
+                              ( [since_opt]
+                              @ strs
+                                  [ "--simplify-by-decoration"
+                                  ; "--pretty=tformat:%D" ] )
+                            ||> on_stdin_lines (fun line ->
                                     if_seq
-                                      Str.(commit_number [treeish] <$> str "0")
+                                      Str.(line <$> str "")
                                       ~t:
-                                        [ out "\n%s## On `%s`\n"
-                                            [section_base; branch]
-                                        ; list_report treeish ] ) ] ] ) ]
+                                        [ out "\\n%s## On `%s`\\n"
+                                            [section_base; line]
+                                        ; list_report
+                                            (get_stdout_one_line
+                                               ( line
+                                               >> exec ["sed"; "s/[ ,].*$//"]
+                                               )) ] ) ] ] ) ]
     in
     parse opts (fun ~anon no_config since section_base version describe ->
         let tmp_since = tmp_file "gar-since" in
@@ -378,12 +392,8 @@ module Meta_repository = struct
     see_output_of "git-activity-report --help" ;
     par "**Current Limitations:**" ;
     par
-      "- The script does not guess the “default branch” and has a \
-       preference for the `master` branch (it shows more information for \
-       branches that are *not merged* in `master`)." ;
-    par
-      "- Sometimes there are redundancies between branches that the script \
-       does not detect." ;
+      "- Often, there are redundancies between branches that the script does \
+       not detect." ;
     par "" ;
     section "Authors / Making-of" ;
     par
