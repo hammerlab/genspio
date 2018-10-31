@@ -197,13 +197,15 @@ module Activity_report = struct
                "The base markdown section ('##', '###', etc. default: %s)"
                default_section_base)
           ~default:(str default_section_base)
+      & flag ["--fetch"]
+          ~doc:(sprintf "Run `git fetch --all` before showing a repository.")
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~section_base ~since path =
+    let display_section ~section_base ~since ~fetch_before path =
       seq
         [ out "\n%s In `%s`" [section_base; path]
         ; Repository.list_all [path]
@@ -225,6 +227,12 @@ module Activity_report = struct
                   let fence () = out (String.make 80 '`') [] in
                   seq
                     [ call [str "cd"; line] (* | egrep -v '^$' *)
+                    ; if_seq fetch_before
+                        ~t:
+                          [ eprintf (str "Fetching...\n") []
+                          ; with_redirections
+                              (exec ["git"; "fetch"; "--all"])
+                              [to_fd (int 1) (int 2)] ]
                     ; if_seq
                         Str.(commit_number [] <$> str "0")
                         ~t:
@@ -268,7 +276,8 @@ module Activity_report = struct
                                                >> exec ["sed"; "s/[ ,].*$//"]
                                                )) ] ) ] ] ) ]
     in
-    parse opts (fun ~anon no_config since section_base version describe ->
+    parse opts
+      (fun ~anon no_config since section_base fetch_before version describe ->
         let tmp_since = tmp_file "gar-since" in
         deal_with_describe describe
           [ if_seq version
@@ -292,18 +301,19 @@ module Activity_report = struct
                                ; str " days" ]
                            ; str date_format ]
                        in
-                       [ out "Last Sunday was %s.\\n"
+                       [ eprintf
+                           (str "Last Sunday was %s.\\n")
                            [get_stdout_one_line last_sunday]
                        ; tmp_since#set (get_stdout_one_line last_sunday) ])
                 ; Elist.iter anon ~f:(fun p ->
-                      display_section ~section_base ~since:tmp_since#get (p ())
-                  )
+                      display_section ~section_base ~since:tmp_since#get
+                        ~fetch_before (p ()) )
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
                         ||> on_stdin_lines (fun line ->
                                 display_section ~since:tmp_since#get
-                                  ~section_base line ) ] ] ] )
+                                  ~section_base ~fetch_before line ) ] ] ] )
 end
 
 let cmdf fmt =
