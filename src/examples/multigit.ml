@@ -228,15 +228,15 @@ module Activity_report = struct
                               [ section_base
                               ; Repository.get_kind ()
                               ; repo_name line ]
+                          ; exec ["git"; "status"; "--short"]
                           ; git_log
                               ( [since_opt]
                               @ strs
                                   [ "--graph"
                                   ; "--decorate"
-                                  ; "--pretty=tformat:%D"
-                                  ; "--all"
-                                  ; "--simplify-by-decoration" ] )
-                          ; out "```\n\n%s## On `master`:" [section_base]
+                                  ; "--oneline"
+                                  ; "--all" ] )
+                          ; out "```\n\n%s## On `master`\n" [section_base]
                           ; list_report (str "master")
                           ; exec ["git"; "branch"; "--no-merged"; "master"]
                             ||> exec ["sed"; "s/*//"]
