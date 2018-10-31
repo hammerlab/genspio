@@ -365,7 +365,7 @@ module Meta_repository = struct
       {code|
     [alias]
         mst = multi-status --show-modified
-        arfd = activity-report --section-base '####' --since
+        arfd = activity-report --since
 |code} ;
     par "" ;
     par "See below for detailed usage information ⮷." ;
