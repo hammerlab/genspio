@@ -101,24 +101,31 @@ module Multi_status = struct
     let grep s = exec ["grep"; s] in
     let ahead_branches = branches_vv ||> grep "ahead" in
     let behind_branches = branches_vv ||> grep "behind" in
+    let no_merged_in_head = exec ["git"; "branch"; "--no-merged"; "HEAD"] in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~show_modified path =
       seq
-        [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [path]
+        [ printf (str "===== ") []
+        ; printf (str "%-30s") [Str.concat_list [path; str ":"]]
+          ||> exec ["sed"; "s/ /=/g"]
+        ; out
+            (sprintf
+               " | Untrk | Modf | Ahd | Behd | Umrg |"
+               (* (String.make 80 '-') *))
+            []
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   seq
                     [ call [str "cd"; line]
-                    ; out
-                        "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
-                         Behind: %-4s"
+                    ; out "%s: %-30s | %-5s | %-4s | %-3s | %-4s | %-4s |"
                         ( Repository.get_kind () :: repo_name line
                         :: List.map ~f:get_count
                              [ untracked_files
                              ; modified_files
                              ; ahead_branches
-                             ; behind_branches ] )
+                             ; behind_branches
+                             ; no_merged_in_head ] )
                     ; if_seq
                         ( show_modified
                         &&& Str.(get_count modified_files <$> str "0") )
