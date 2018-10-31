@@ -410,7 +410,7 @@ module Meta_repository = struct
         ?(ignore_output = false) f =
       ksprintf
         (fun s ->
-          let lines = cmd_lines s |> List.map ~f:String.strip in
+          let lines = cmd_lines s in
           let w =
             if wrap_display then wrap ~newline:" \\\n" ~indent:6 ~columns:70
             else fun e -> e
