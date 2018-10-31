@@ -106,26 +106,29 @@ module Multi_status = struct
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~show_modified path =
       seq
-        [ printf (str "===== ") []
-        ; printf (str "%-30s") [Str.concat_list [path; str ":"]]
+        [ printf (str "#=== ") []
+        ; printf (str "%-72s\n") [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
         ; out
-            (sprintf
-               " | Untrk | Modf | Ahd | Behd | Umrg |"
-               (* (String.make 80 '-') *))
+            (sprintf "%s | Untrk | Modf | Ahd | Behd | Umrg |"
+               (String.make 40 ' '))
             []
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   seq
                     [ call [str "cd"; line]
-                    ; out "%s: %-30s | %-5s | %-4s | %-3s | %-4s | %-4s |"
-                        ( Repository.get_kind () :: repo_name line
-                        :: List.map ~f:get_count
-                             [ untracked_files
-                             ; modified_files
-                             ; ahead_branches
-                             ; behind_branches
-                             ; no_merged_in_head ] )
+                    ; printf (str "%-40s")
+                        [ Str.concat_list
+                            [Repository.get_kind (); str "::"; repo_name line]
+                        ]
+                      ||> exec ["sed"; "s/ /./g"]
+                    ; out " | %-5s | %-4s | %-3s | %-4s | %-4s |"
+                        (List.map ~f:get_count
+                           [ untracked_files
+                           ; modified_files
+                           ; ahead_branches
+                           ; behind_branches
+                           ; no_merged_in_head ])
                     ; if_seq
                         ( show_modified
                         &&& Str.(get_count modified_files <$> str "0") )
