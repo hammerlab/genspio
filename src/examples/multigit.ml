@@ -84,7 +84,10 @@ module Multi_status = struct
       let open Gedsl in
       let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
       let grep s = exec ["grep"; s] in
-      let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
+      let get_count u =
+        get_stdout_one_line
+          (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
+      in
       let counts =
         [ ( "Untrk"
           , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
@@ -165,6 +168,7 @@ module Multi_status = struct
                             [Repository.get_kind (); str "::"; repo_name line]
                         ]
                       ||> exec ["sed"; "s/ /./g"]
+                      ||> exec ["tr"; "-d"; "\\n"]
                     ; Columns.row ()
                     ; if_seq
                         ( show_modified
