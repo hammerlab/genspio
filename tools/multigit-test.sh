@@ -35,16 +35,16 @@ gms="git multi-status --no-config"
 try_cmd "$gms $moregits"
 try_cmd "$gms $moregits --show-modified"
 
-try_cmd "$gms $moregits 2>&1 | grep ketrew   | egrep 'M: *0'"
-try_cmd "$gms $moregits 2>&1 | grep biokepi  | egrep 'M: *2'"
-try_cmd "$gms $moregits 2>&1 | grep coclobas | egrep 'U: *1'"
+gmstest="$gms $moregits 2>&1"
+sedstuff="sed 's/[a-zA-Z\.: ]*//g'"
 
-try_cmd "$gms $moregits 2>&1 --show-modified  | grep 'README.md'"
-try_cmd "$gms $moregits 2>&1 --show-modified  | grep 'LICENSE'"
-
-
-try_cmd "$gms $moregits 2>&1 | grep 'GHub: coclobas'"
-try_cmd "$gms $moregits 2>&1 | grep 'GLab: genspio-doc'"
+try_cmd "$gmstest | grep ketrew   | $sedstuff | grep '|0|0|0|0|0|' "
+try_cmd "$gmstest | grep biokepi  | $sedstuff | grep '|0|2|0|0|0|' "
+try_cmd "$gmstest | grep coclobas | $sedstuff | grep '|1|1|0|0|0|' "
+try_cmd "$gmstest --show-modified  | grep 'README.md'"
+try_cmd "$gmstest --show-modified  | grep 'LICENSE'"
+try_cmd "$gmstest | grep 'GHub::coclobas'"
+try_cmd "$gmstest | grep 'GLab::genspio-doc'"
 
 gar="git activity-report --no-config"
 
