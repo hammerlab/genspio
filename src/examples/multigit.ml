@@ -135,6 +135,10 @@ module Multi_status = struct
               (description c) )
   end
 
+  let msgf fmt l =
+    let open Gedsl in
+    eprintf (ksprintf str "%s: %s\\n" name fmt) l
+
   let script () =
     let open Gedsl in
     let open Command_line in
@@ -154,15 +158,18 @@ module Multi_status = struct
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~show_modified path =
+      let topdir = tmp_file "topdir" in
       seq
         [ printf (str "#=== ") []
         ; printf (str "%-72s\n") [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
         ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
+        ; topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   seq
-                    [ call [str "cd"; line]
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line]
                     ; printf (str "%-41s")
                         [ Str.concat_list
                             [Repository.get_kind (); str "::"; repo_name line]
@@ -247,8 +254,10 @@ module Activity_report = struct
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~section_base ~since ~fetch_before path =
+      let topdir = tmp_file "topdir" in
       seq
         [ out "\n%s In `%s`" [section_base; path]
+        ; topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   let since_opt = Str.concat_list [str "--since="; since] in
@@ -267,7 +276,8 @@ module Activity_report = struct
                   in
                   let fence () = out (String.make 80 '`') [] in
                   seq
-                    [ call [str "cd"; line] (* | egrep -v '^$' *)
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line] (* | egrep -v '^$' *)
                     ; if_seq fetch_before
                         ~t:
                           [ eprintf (str "Fetching...\n") []
