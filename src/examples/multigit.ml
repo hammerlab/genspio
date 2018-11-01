@@ -401,11 +401,13 @@ module Meta_repository = struct
     let par f = ksprintf (fun s -> out "%s\n\n" (wrap s)) f in
     let cmd_lines s = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
     let cmd_output s = cmd_lines s |> String.concat ~sep:"\n" in
-    let see_output_of fmt =
+    let see_output_of_help fmt =
       ksprintf
         (fun s ->
-          let lines = cmd_output s in
-          out "See `%s`:\n\n```\n" s ; out "%s\n" lines ; out "```\n\n" )
+          let lines =
+            cmd_output (s ^ " | grep -E -v '^usage:' | sed 's/->/→/'")
+          in
+          out "%s\n" lines ; out "\n\n" ; out "See also `%s`.\n\n" s )
         fmt
     in
     title "Git: Multi-Repository" ;
@@ -434,9 +436,9 @@ module Meta_repository = struct
     par "" ;
     par "See below for detailed usage information ⮷." ;
     section "Usage: Git-multi-status" ;
-    see_output_of "git-multi-status --help" ;
+    see_output_of_help "git-multi-status --help" ;
     section "Usage: Git-activity-report" ;
-    see_output_of "git-activity-report --help" ;
+    see_output_of_help "git-activity-report --help" ;
     par "**Current Limitations:**" ;
     par
       "- Often, there are redundancies between branches that the script does \
