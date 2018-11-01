@@ -79,6 +79,59 @@ module Multi_status = struct
     ; "" ]
     @ Git_config.paths_help ()
 
+  module Columns = struct
+    let all () =
+      let open Gedsl in
+      let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
+      let grep s = exec ["grep"; s] in
+      let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
+      let counts =
+        [ ( "Untrk"
+          , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
+          , "Untracked files" )
+        ; ("Modf", exec ["git"; "status"; "-s"; "-uno"], "Modified files")
+        ; ( "Ahd"
+          , branches_vv ||> grep "ahead"
+          , "Branches ahead of their remote" )
+        ; ( "Behd"
+          , branches_vv ||> grep "behind"
+          , "Branches behind on their remote" )
+        ; ( "Umrg"
+          , exec ["git"; "branch"; "--no-merged"; "HEAD"]
+          , "Branches not merged in `HEAD`" ) ]
+      in
+      List.map ~f:(fun (t, e, d) -> (t, get_count e, d)) counts
+
+    let title (c, _, _) = c
+
+    let code (_, c, _) = c
+
+    let description (_, _, c) = c
+
+    let top_row () =
+      sprintf "| %s |" (String.concat ~sep:" | " (List.map (all ()) ~f:title))
+
+    let row () =
+      let open Gedsl in
+      printf
+        (ksprintf str "| %s |\\n"
+           ( List.map ~f:title (all ())
+           |> List.map ~f:(fun t -> sprintf "%%-%ds" (String.length t))
+           |> String.concat ~sep:" | " ))
+        (List.map (all ()) ~f:code)
+
+    let help () =
+      let longest =
+        List.map (all ()) ~f:(fun c -> title c |> String.length)
+        |> List.fold ~init:0 ~f:max
+      in
+      [sprintf "The table shows %d columns:" (List.length (all ())); ""]
+      @ List.map (all ()) ~f:(fun c ->
+            sprintf "* `%s`%s-> %s." (title c)
+              (String.make (longest - (title c |> String.length)) ' ')
+              (description c) )
+  end
+
   let script () =
     let open Gedsl in
     let open Command_line in
@@ -90,18 +143,11 @@ module Multi_status = struct
             (sprintf "Do not look at the `%s` git-config option."
                Git_config.paths_option)
       & flag ["--version"] ~doc:"Show version information."
-      & describe_option_and_usage () ~more_usage:(extra_help ())
+      & describe_option_and_usage ()
+          ~more_usage:(extra_help () @ [""] @ Columns.help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
-    let untracked_files =
-      exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
-    in
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
-    let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
-    let grep s = exec ["grep"; s] in
-    let ahead_branches = branches_vv ||> grep "ahead" in
-    let behind_branches = branches_vv ||> grep "behind" in
-    let no_merged_in_head = exec ["git"; "branch"; "--no-merged"; "HEAD"] in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~show_modified path =
@@ -109,26 +155,17 @@ module Multi_status = struct
         [ printf (str "#=== ") []
         ; printf (str "%-72s\n") [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
-        ; out
-            (sprintf "%s | Untrk | Modf | Ahd | Behd | Umrg |"
-               (String.make 40 ' '))
-            []
+        ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   seq
                     [ call [str "cd"; line]
-                    ; printf (str "%-40s")
+                    ; printf (str "%-41s")
                         [ Str.concat_list
                             [Repository.get_kind (); str "::"; repo_name line]
                         ]
                       ||> exec ["sed"; "s/ /./g"]
-                    ; out " | %-5s | %-4s | %-3s | %-4s | %-4s |"
-                        (List.map ~f:get_count
-                           [ untracked_files
-                           ; modified_files
-                           ; ahead_branches
-                           ; behind_branches
-                           ; no_merged_in_head ])
+                    ; Columns.row ()
                     ; if_seq
                         ( show_modified
                         &&& Str.(get_count modified_files <$> str "0") )
