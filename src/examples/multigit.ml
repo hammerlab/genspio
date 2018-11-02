@@ -96,12 +96,18 @@ module Multi_status = struct
         ; ( "Ahd"
           , branches_vv ||> grep "ahead"
           , "Branches ahead of their remote" )
-        ; ( "Behd"
+        ; ( "Bhd"
           , branches_vv ||> grep "behind"
           , "Branches behind on their remote" )
-        ; ( "Umrg"
+        ; ( "Umr"
           , exec ["git"; "branch"; "--no-merged"; "HEAD"]
-          , "Branches not merged in `HEAD`" ) ]
+          , "Branches not merged in `HEAD`" )
+        ; ( "Lcl"
+          , exec ["git"; "branch"; "-vv"; "--no-merged"; "HEAD"]
+            ||> exec ["grep"; "-v"; "\\["]
+          , "Not-remote-tracking local branches not merged in `HEAD`" )
+        (* git branch -vv --no-merged HEAD | grep -v '\[' *)
+         ]
       in
       List.map ~f:(fun (t, e, d) -> (t, get_count e, d)) counts
 
@@ -161,7 +167,7 @@ module Multi_status = struct
       let topdir = tmp_file "topdir" in
       seq
         [ printf (str "#=== ") []
-        ; printf (str "%-72s\n") [Str.concat_list [path; str ":"]]
+        ; printf (str "%-76s\n") [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
         ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
         ; topdir#set (getenv (str "PWD"))
