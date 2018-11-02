@@ -87,7 +87,14 @@ module Multi_status = struct
     let list_ahead_branches =
       branches_vv ||> exec ["grep"; "-E"; {re|ahead *[0-9]+\]|re}]
 
-(*md
+    let list_local_branches ?not_merged_in () =
+      exec
+        ( ["git"; "branch"; "-vv"]
+        @ Option.value_map not_merged_in ~default:[] ~f:(fun br ->
+              ["--no-merged"; br] ) )
+      ||> exec ["grep"; "-v"; "\\["]
+
+    (*md
 
 If you have `git`, you have a shell line wrapper:
 
@@ -133,9 +140,9 @@ Pretty cool, right:
         ; ( "Umr"
           , exec ["git"; "branch"; "--no-merged"; "HEAD"]
           , "Branches not merged in `HEAD`" )
-        ; ( "Lcl"
-          , exec ["git"; "branch"; "-vv"; "--no-merged"; "HEAD"]
-            ||> exec ["grep"; "-v"; "\\["]
+        ; ("Lcl", list_local_branches (), "Not-remote-tracking local branches.")
+        ; ( "L/H"
+          , list_local_branches ~not_merged_in:"HEAD" ()
           , "Not-remote-tracking local branches not merged in `HEAD`" )
         (* git branch -vv --no-merged HEAD | grep -v '\[' *)
          ]
@@ -199,7 +206,7 @@ Pretty cool, right:
       let topdir = tmp_file "topdir" in
       seq
         [ printf (str "#=== ") []
-        ; printf (str "%-76s\n") [Str.concat_list [path; str ":"]]
+        ; printf (str "%-81s\n") [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
         ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
         ; topdir#set (getenv (str "PWD"))
