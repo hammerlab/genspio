@@ -98,7 +98,7 @@ module Multi_status = struct
 
 If you have `git`, you have a shell line wrapper:
 
-    $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" HEAD^..HEAD
+    $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" -1
       DISCLAIMER: Use of this advanced
     computing technology does not imply an
     endorsement of Western industrial
@@ -116,7 +116,7 @@ Pretty cool, right:
                 first_line_indent other_lines_indent
             ; str_value
             ; (if final_newline then str "%n" else str "") ]
-        ; str "HEAD^..HEAD" ]
+        ; str "-1" ]
   end
 
   module Columns = struct
