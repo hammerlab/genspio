@@ -197,8 +197,11 @@ Pretty cool, right:
       ||> exec ["sed"; {|s/,/, /g|}]
     in
     let total_width = 86 in
-    let display_section ~show_modified ~show_ahead ~show_local path =
+    let display_section ~show_modified ~show_ahead ~show_local ~show_all path =
       let topdir = tmp_file "topdir" in
+      let if_show show count t =
+        if_seq (show_all ||| show &&& Str.(get_count count <$> str "0")) ~t
+      in
       seq
         [ printf (str "#=== ") []
         ; printf
@@ -219,38 +222,25 @@ Pretty cool, right:
                       ||> exec ["sed"; "s/ /./g"]
                       ||> exec ["tr"; "-d"; "\\n"]
                     ; Columns.row ()
-                    ; if_seq
-                        ( show_modified
-                        &&& Str.(get_count modified_files <$> str "0") )
-                        ~t:
-                          [ out "  |- Modified:" []
-                          ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"]
-                          ]
-                    ; if_seq
-                        ( show_ahead
-                        &&& Str.(get_count Git.list_ahead_branches <$> str "0")
-                        )
-                        ~t:
-                          [ printf (str "  |- Ahead: ") []
-                          ; Git.wrap_string_hack ~columns:(total_width - 10)
-                              ~first_line_indent:0 ~other_lines_indent:12
-                              ~final_newline:true
-                            @@ get_stdout
-                                 (Git.list_ahead_branches |> to_list_of_names)
-                          ]
-                    ; if_seq
-                        ( show_local
-                        &&& Str.(
-                              get_count (Git.list_local_branches ())
-                              <$> str "0") )
-                        ~t:
-                          [ printf (str "  |- Local: ") []
-                          ; Git.wrap_string_hack ~columns:(total_width - 10)
-                              ~first_line_indent:0 ~other_lines_indent:12
-                              ~final_newline:true
-                            @@ get_stdout
-                                 ( Git.list_local_branches ()
-                                 |> to_list_of_names ) ] ] ) ]
+                    ; if_show show_modified modified_files
+                        [ out "  |- Modified:" []
+                        ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"] ]
+                    ; if_show show_ahead Git.list_ahead_branches
+                        [ printf (str "  |- Ahead: ") []
+                        ; Git.wrap_string_hack ~columns:(total_width - 10)
+                            ~first_line_indent:0 ~other_lines_indent:12
+                            ~final_newline:true
+                          @@ get_stdout
+                               (Git.list_ahead_branches |> to_list_of_names) ]
+                    ; if_show show_local
+                        (Git.list_local_branches ())
+                        [ printf (str "  |- Local: ") []
+                        ; Git.wrap_string_hack ~columns:(total_width - 10)
+                            ~first_line_indent:0 ~other_lines_indent:12
+                            ~final_newline:true
+                          @@ get_stdout
+                               (Git.list_local_branches () |> to_list_of_names)
+                        ] ] ) ]
     in
     let open Command_line in
     let opts =
@@ -258,6 +248,8 @@ Pretty cool, right:
       flag ["--show-modified"] ~doc:"Show the list of modified files."
       & flag ["--show-ahead"] ~doc:"Show the list of ahead branches."
       & flag ["--show-local"] ~doc:"Show the list of local branches."
+      & flag ["--show-all-extras"]
+          ~doc:"Like all the `--show-*` options together."
       & flag ["--no-config"]
           ~doc:
             (sprintf "Do not look at the `%s` git-config option."
@@ -271,12 +263,13 @@ Pretty cool, right:
       show_modified
       show_ahead
       show_local
+      show_all
       no_config
       version
       describe
       ->
         let do_section =
-          display_section ~show_modified ~show_ahead ~show_local
+          display_section ~show_modified ~show_ahead ~show_local ~show_all
         in
         deal_with_describe describe
           [ if_seq version
