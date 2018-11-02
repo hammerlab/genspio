@@ -58,8 +58,12 @@ module Repository = struct
     |> get_stdout_one_line
 end
 
+let version_string =
+  sprintf "%s (Genspio: %s)"
+    (try Sys.getenv "multigit_version" with _ -> "0")
+    Genspio.Meta.version
+
 module Multi_status = struct
-  let version_string = "0.0.0-dev"
 
   include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
@@ -285,7 +289,6 @@ Pretty cool, right:
 end
 
 module Activity_report = struct
-  let version_string = Multi_status.version_string
 
   include Gedsl.Script_with_describe (struct
     let name = "git-activity-report"
