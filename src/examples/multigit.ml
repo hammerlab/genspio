@@ -79,10 +79,43 @@ module Multi_status = struct
     ; "" ]
     @ Git_config.paths_help ()
 
+  module Git = struct
+    open Gedsl
+
+    let branches_vv = exec ["git"; "branch"; "-v"; "-v"]
+
+    let list_ahead_branches =
+      branches_vv ||> exec ["grep"; "-E"; {re|ahead *[0-9]+\]|re}]
+
+(*md
+
+If you have `git`, you have a shell line wrapper:
+
+    $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" HEAD^..HEAD
+      DISCLAIMER: Use of this advanced
+    computing technology does not imply an
+    endorsement of Western industrial
+    civilization.
+
+Pretty cool, right:
+*)
+    let wrap_string_hack ~columns ~first_line_indent ~other_lines_indent
+        ~final_newline str_value =
+      call
+        [ str "git"
+        ; str "log"
+        ; Str.concat_list
+            [ ksprintf str "--pretty=format:%%w(%d,%d,%d)" columns
+                first_line_indent other_lines_indent
+            ; str_value
+            ; (if final_newline then str "%n" else str "") ]
+        ; str "HEAD^..HEAD" ]
+  end
+
   module Columns = struct
     let all () =
       let open Gedsl in
-      let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
+      let open Git in
       let grep s = exec ["grep"; s] in
       let get_count u =
         get_stdout_one_line
@@ -93,9 +126,7 @@ module Multi_status = struct
           , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
           , "Untracked files" )
         ; ("Modf", exec ["git"; "status"; "-s"; "-uno"], "Modified files")
-        ; ( "Ahd"
-          , branches_vv ||> grep "ahead"
-          , "Branches ahead of their remote" )
+        ; ("Ahd", list_ahead_branches, "Branches ahead of their remote")
         ; ( "Bhd"
           , branches_vv ||> grep "behind"
           , "Branches behind on their remote" )
@@ -151,6 +182,7 @@ module Multi_status = struct
     let opts =
       let open Arg in
       flag ["--show-modified"] ~doc:"Show the list of modified files."
+      & flag ["--show-ahead"] ~doc:"Show the list of ahead branches."
       & flag ["--no-config"]
           ~doc:
             (sprintf "Do not look at the `%s` git-config option."
@@ -163,7 +195,7 @@ module Multi_status = struct
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~show_modified path =
+    let display_section ~show_modified ~show_ahead path =
       let topdir = tmp_file "topdir" in
       seq
         [ printf (str "#=== ") []
@@ -189,20 +221,39 @@ module Multi_status = struct
                         ~t:
                           [ out "  |- Modified:" []
                           ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"]
-                          ] ] ) ]
+                          ]
+                    ; if_seq
+                        ( show_ahead
+                        &&& Str.(get_count Git.list_ahead_branches <$> str "0")
+                        )
+                        ~t:
+                          [ printf (str "  |- Ahead: ") []
+                          ; Git.wrap_string_hack ~columns:70
+                              ~first_line_indent:0 ~other_lines_indent:12
+                              ~final_newline:true
+                            @@ get_stdout
+                                 ( Git.list_ahead_branches
+                                 ||> exec
+                                       [ "sed"
+                                       ; {sed|s/^\*\? *\([^ ]\+\).*$/\1/|sed}
+                                       ]
+                                 ||> exec ["tr"; "\\n"; ","]
+                                 ||> exec ["sed"; {|s/,$/./|}]
+                                 ||> exec ["sed"; {|s/,/, /g|}] ) ] ] ) ]
     in
-    parse opts (fun ~anon show_modified no_config version describe ->
+    parse opts
+      (fun ~anon show_modified show_ahead no_config version describe ->
+        let do_section = display_section ~show_modified ~show_ahead in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ Elist.iter anon ~f:(fun p ->
-                      display_section ~show_modified (p ()) )
+                [ Elist.iter anon ~f:(fun p -> do_section (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
-                        ||> on_stdin_lines (fun line ->
-                                display_section ~show_modified line ) ] ] ] )
+                        ||> on_stdin_lines (fun line -> do_section line) ] ] ]
+    )
 end
 
 module Activity_report = struct
