@@ -185,28 +185,25 @@ Pretty cool, right:
 
   let script () =
     let open Gedsl in
-    let open Command_line in
-    let opts =
-      let open Arg in
-      flag ["--show-modified"] ~doc:"Show the list of modified files."
-      & flag ["--show-ahead"] ~doc:"Show the list of ahead branches."
-      & flag ["--no-config"]
-          ~doc:
-            (sprintf "Do not look at the `%s` git-config option."
-               Git_config.paths_option)
-      & flag ["--version"] ~doc:"Show version information."
-      & describe_option_and_usage ()
-          ~more_usage:(extra_help () @ [""] @ Columns.help ())
-    in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~show_modified ~show_ahead path =
+    let to_list_of_names u =
+      u
+      ||> exec ["sed"; {sed|s/^\*\? *\([^ ]\+\).*$/\1/|sed}]
+      ||> exec ["tr"; "\\n"; ","]
+      ||> exec ["sed"; {|s/,$/./|}]
+      ||> exec ["sed"; {|s/,/, /g|}]
+    in
+    let total_width = 86 in
+    let display_section ~show_modified ~show_ahead ~show_local path =
       let topdir = tmp_file "topdir" in
       seq
         [ printf (str "#=== ") []
-        ; printf (str "%-81s\n") [Str.concat_list [path; str ":"]]
+        ; printf
+            (ksprintf str "%%-%ds\n" (total_width - 5))
+            [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
         ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
         ; topdir#set (getenv (str "PWD"))
@@ -235,22 +232,52 @@ Pretty cool, right:
                         )
                         ~t:
                           [ printf (str "  |- Ahead: ") []
-                          ; Git.wrap_string_hack ~columns:70
+                          ; Git.wrap_string_hack ~columns:(total_width - 10)
                               ~first_line_indent:0 ~other_lines_indent:12
                               ~final_newline:true
                             @@ get_stdout
-                                 ( Git.list_ahead_branches
-                                 ||> exec
-                                       [ "sed"
-                                       ; {sed|s/^\*\? *\([^ ]\+\).*$/\1/|sed}
-                                       ]
-                                 ||> exec ["tr"; "\\n"; ","]
-                                 ||> exec ["sed"; {|s/,$/./|}]
-                                 ||> exec ["sed"; {|s/,/, /g|}] ) ] ] ) ]
+                                 (Git.list_ahead_branches |> to_list_of_names)
+                          ]
+                    ; if_seq
+                        ( show_local
+                        &&& Str.(
+                              get_count (Git.list_local_branches ())
+                              <$> str "0") )
+                        ~t:
+                          [ printf (str "  |- Local: ") []
+                          ; Git.wrap_string_hack ~columns:(total_width - 10)
+                              ~first_line_indent:0 ~other_lines_indent:12
+                              ~final_newline:true
+                            @@ get_stdout
+                                 ( Git.list_local_branches ()
+                                 |> to_list_of_names ) ] ] ) ]
+    in
+    let open Command_line in
+    let opts =
+      let open Arg in
+      flag ["--show-modified"] ~doc:"Show the list of modified files."
+      & flag ["--show-ahead"] ~doc:"Show the list of ahead branches."
+      & flag ["--show-local"] ~doc:"Show the list of local branches."
+      & flag ["--no-config"]
+          ~doc:
+            (sprintf "Do not look at the `%s` git-config option."
+               Git_config.paths_option)
+      & flag ["--version"] ~doc:"Show version information."
+      & describe_option_and_usage ()
+          ~more_usage:(extra_help () @ [""] @ Columns.help ())
     in
     parse opts
-      (fun ~anon show_modified show_ahead no_config version describe ->
-        let do_section = display_section ~show_modified ~show_ahead in
+      (fun ~anon
+      show_modified
+      show_ahead
+      show_local
+      no_config
+      version
+      describe
+      ->
+        let do_section =
+          display_section ~show_modified ~show_ahead ~show_local
+        in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
