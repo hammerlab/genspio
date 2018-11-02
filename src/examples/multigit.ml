@@ -255,7 +255,8 @@ Pretty cool, right:
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ Elist.iter anon ~f:(fun p -> do_section (p ()))
+                [ setenv (str "PAGER") (str "cat")
+                ; Elist.iter anon ~f:(fun p -> do_section (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
