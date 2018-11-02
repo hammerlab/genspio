@@ -140,7 +140,7 @@ Pretty cool, right:
         ; ( "Umr"
           , exec ["git"; "branch"; "--no-merged"; "HEAD"]
           , "Branches not merged in `HEAD`" )
-        ; ("Lcl", list_local_branches (), "Not-remote-tracking local branches.")
+        ; ("Lcl", list_local_branches (), "Not-remote-tracking local branches")
         ; ( "L/H"
           , list_local_branches ~not_merged_in:"HEAD" ()
           , "Not-remote-tracking local branches not merged in `HEAD`" )
