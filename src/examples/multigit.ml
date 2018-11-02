@@ -529,7 +529,7 @@ module Meta_repository = struct
     out
       {code|
     [alias]
-        mst = multi-status --show-modified
+        mst = multi-status --show-all-extras
         arfd = activity-report --since
 |code} ;
     par "" ;
@@ -629,16 +629,18 @@ module Meta_repository = struct
     example_cmd "echo 'This is Great' >> %s/ketrew/README.md"
       git_repos_hammerlab ;
     example_cmd
-      "git -C %s/ketrew/ checkout -b new-branch-for-the-example -t master"
+      "git -C %s/ketrew/ checkout -b new-branch-that-tracks -t master"
       git_repos_hammerlab ;
     example_cmd "git -C %s/ketrew/ commit -a -m 'Add greatness to the README'"
+      git_repos_hammerlab ;
+    example_cmd "git -C %s/ketrew/ checkout -b new-branch-more-local"
       git_repos_hammerlab ;
     par "" ;
     par
       "Now in the multi-status we can see the modified files, the untracked \
        counts, and one branch is “ahead” (since we used `-t master` while \
        creating, it has a remote to define it):" ;
-    on_all (example_cmd "%s") "git multi-status --show-modified" ;
+    on_all (example_cmd "%s") "git multi-status --show-all-extras" ;
     par "" ;
     par "Let's concentrate the activity-report on `%s` and on the past 3 days:"
       git_repos_hammerlab ;
