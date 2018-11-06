@@ -58,8 +58,12 @@ module Repository = struct
     |> get_stdout_one_line
 end
 
+let version_string =
+  sprintf "%s (Genspio: %s)"
+    (try Sys.getenv "multigit_version" with _ -> "0")
+    Genspio.Meta.version
+
 module Multi_status = struct
-  let version_string = "0.0.0-dev"
 
   include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
@@ -79,70 +83,212 @@ module Multi_status = struct
     ; "" ]
     @ Git_config.paths_help ()
 
+  module Git = struct
+    open Gedsl
+
+    let branches_vv = exec ["git"; "branch"; "-v"; "-v"]
+
+    let list_ahead_branches =
+      branches_vv ||> exec ["grep"; "-E"; {re|ahead *[0-9]+\]|re}]
+
+    let list_local_branches ?not_merged_in () =
+      exec
+        ( ["git"; "branch"; "-vv"]
+        @ Option.value_map not_merged_in ~default:[] ~f:(fun br ->
+              ["--no-merged"; br] ) )
+      ||> exec ["grep"; "-v"; "\\["]
+
+    (*md
+
+If you have `git`, you have a shell line wrapper:
+
+    $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" -1
+      DISCLAIMER: Use of this advanced
+    computing technology does not imply an
+    endorsement of Western industrial
+    civilization.
+
+Pretty cool, right:
+*)
+    let wrap_string_hack ~columns ~first_line_indent ~other_lines_indent
+        ~final_newline str_value =
+      call
+        [ str "git"
+        ; str "log"
+        ; Str.concat_list
+            [ ksprintf str "--pretty=format:%%w(%d,%d,%d)" columns
+                first_line_indent other_lines_indent
+            ; str_value
+            ; (if final_newline then str "%n" else str "") ]
+        ; str "-1" ]
+  end
+
+  module Columns = struct
+    let all () =
+      let open Gedsl in
+      let open Git in
+      let grep s = exec ["grep"; s] in
+      let get_count u =
+        get_stdout_one_line
+          (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
+      in
+      let counts =
+        [ ( "Untrk"
+          , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
+          , "Untracked files" )
+        ; ("Modf", exec ["git"; "status"; "-s"; "-uno"], "Modified files")
+        ; ("Ahd", list_ahead_branches, "Branches ahead of their remote")
+        ; ( "Bhd"
+          , branches_vv ||> grep "behind"
+          , "Branches behind on their remote" )
+        ; ( "Umr"
+          , exec ["git"; "branch"; "--no-merged"; "HEAD"]
+          , "Branches not merged in `HEAD`" )
+        ; ("Lcl", list_local_branches (), "Not-remote-tracking local branches")
+        ; ( "L/H"
+          , list_local_branches ~not_merged_in:"HEAD" ()
+          , "Not-remote-tracking local branches not merged in `HEAD`" )
+        (* git branch -vv --no-merged HEAD | grep -v '\[' *)
+         ]
+      in
+      List.map ~f:(fun (t, e, d) -> (t, get_count e, d)) counts
+
+    let title (c, _, _) = c
+
+    let code (_, c, _) = c
+
+    let description (_, _, c) = c
+
+    let top_row () =
+      sprintf "| %s |" (String.concat ~sep:" | " (List.map (all ()) ~f:title))
+
+    let row () =
+      let open Gedsl in
+      printf
+        (ksprintf str "| %s |\\n"
+           ( List.map ~f:title (all ())
+           |> List.map ~f:(fun t -> sprintf "%%-%ds" (String.length t))
+           |> String.concat ~sep:" | " ))
+        (List.map (all ()) ~f:code)
+
+    let help () =
+      let longest =
+        List.map (all ()) ~f:(fun c -> title c |> String.length)
+        |> List.fold ~init:0 ~f:max
+      in
+      [sprintf "The table shows %d columns:" (List.length (all ())); ""]
+      @ List.map (all ()) ~f:(fun c ->
+            sprintf "* `%s`%s-> %s." (title c)
+              (String.make (longest - (title c |> String.length)) ' ')
+              (description c) )
+  end
+
+  let msgf fmt l =
+    let open Gedsl in
+    eprintf (ksprintf str "%s: %s\\n" name fmt) l
+
   let script () =
     let open Gedsl in
+    let out f l = printf (ksprintf str "%s\n" f) l in
+    let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
+    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
+    let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
+    let to_list_of_names u =
+      u
+      ||> exec ["sed"; {sed|s/^\*\? *\([^ ]\+\).*$/\1/|sed}]
+      ||> exec ["tr"; "\\n"; ","]
+      ||> exec ["sed"; {|s/,$/./|}]
+      ||> exec ["sed"; {|s/,/, /g|}]
+    in
+    let total_width = 86 in
+    let display_section ~show_modified ~show_ahead ~show_local ~show_all path =
+      let topdir = tmp_file "topdir" in
+      let if_show show count t =
+        if_seq (show_all ||| show &&& Str.(get_count count <$> str "0")) ~t
+      in
+      seq
+        [ printf (str "#=== ") []
+        ; printf
+            (ksprintf str "%%-%ds\n" (total_width - 5))
+            [Str.concat_list [path; str ":"]]
+          ||> exec ["sed"; "s/ /=/g"]
+        ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
+        ; topdir#set (getenv (str "PWD"))
+        ; Repository.list_all [path]
+          ||> on_stdin_lines (fun line ->
+                  seq
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line]
+                    ; printf (str "%-41s")
+                        [ Str.concat_list
+                            [Repository.get_kind (); str "::"; repo_name line]
+                        ]
+                      ||> exec ["sed"; "s/ /./g"]
+                      ||> exec ["tr"; "-d"; "\\n"]
+                    ; Columns.row ()
+                    ; if_show show_modified modified_files
+                        [ out "  |- Modified:" []
+                        ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"] ]
+                    ; if_show show_ahead Git.list_ahead_branches
+                        [ printf (str "  |- Ahead: ") []
+                        ; Git.wrap_string_hack ~columns:(total_width - 10)
+                            ~first_line_indent:0 ~other_lines_indent:12
+                            ~final_newline:true
+                          @@ get_stdout
+                               (Git.list_ahead_branches |> to_list_of_names) ]
+                    ; if_show show_local
+                        (Git.list_local_branches ())
+                        [ printf (str "  |- Local: ") []
+                        ; Git.wrap_string_hack ~columns:(total_width - 10)
+                            ~first_line_indent:0 ~other_lines_indent:12
+                            ~final_newline:true
+                          @@ get_stdout
+                               (Git.list_local_branches () |> to_list_of_names)
+                        ] ] ) ]
+    in
     let open Command_line in
     let opts =
       let open Arg in
       flag ["--show-modified"] ~doc:"Show the list of modified files."
+      & flag ["--show-ahead"] ~doc:"Show the list of ahead branches."
+      & flag ["--show-local"] ~doc:"Show the list of local branches."
+      & flag ["--show-all-extras"]
+          ~doc:"Like all the `--show-*` options together."
       & flag ["--no-config"]
           ~doc:
             (sprintf "Do not look at the `%s` git-config option."
                Git_config.paths_option)
       & flag ["--version"] ~doc:"Show version information."
-      & describe_option_and_usage () ~more_usage:(extra_help ())
+      & describe_option_and_usage ()
+          ~more_usage:(extra_help () @ [""] @ Columns.help ())
     in
-    let out f l = printf (ksprintf str "%s\n" f) l in
-    let untracked_files =
-      exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
-    in
-    let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
-    let branches_vv = exec ["git"; "branch"; "-v"; "-v"] in
-    let grep s = exec ["grep"; s] in
-    let ahead_branches = branches_vv ||> grep "ahead" in
-    let behind_branches = branches_vv ||> grep "behind" in
-    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
-    let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~show_modified path =
-      seq
-        [ out (sprintf "%s\n>> %%-28s" (String.make 80 '-')) [path]
-        ; Repository.list_all [path]
-          ||> on_stdin_lines (fun line ->
-                  seq
-                    [ call [str "cd"; line]
-                    ; out
-                        "%s: %-30s | U: %-6s | M: %-4s | Ahead: %-4s | \
-                         Behind: %-4s"
-                        ( Repository.get_kind () :: repo_name line
-                        :: List.map ~f:get_count
-                             [ untracked_files
-                             ; modified_files
-                             ; ahead_branches
-                             ; behind_branches ] )
-                    ; if_seq
-                        ( show_modified
-                        &&& Str.(get_count modified_files <$> str "0") )
-                        ~t:
-                          [ out "  |- Modified:" []
-                          ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"]
-                          ] ] ) ]
-    in
-    parse opts (fun ~anon show_modified no_config version describe ->
+    parse opts
+      (fun ~anon
+      show_modified
+      show_ahead
+      show_local
+      show_all
+      no_config
+      version
+      describe
+      ->
+        let do_section =
+          display_section ~show_modified ~show_ahead ~show_local ~show_all
+        in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ Elist.iter anon ~f:(fun p ->
-                      display_section ~show_modified (p ()) )
+                [ setenv (str "PAGER") (str "cat")
+                ; Elist.iter anon ~f:(fun p -> do_section (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
-                        ||> on_stdin_lines (fun line ->
-                                display_section ~show_modified line ) ] ] ] )
+                        ||> on_stdin_lines (fun line -> do_section line) ] ] ]
+    )
 end
 
 module Activity_report = struct
-  let version_string = Multi_status.version_string
 
   include Gedsl.Script_with_describe (struct
     let name = "git-activity-report"
@@ -187,15 +333,19 @@ module Activity_report = struct
                "The base markdown section ('##', '###', etc. default: %s)"
                default_section_base)
           ~default:(str default_section_base)
+      & flag ["--fetch"]
+          ~doc:(sprintf "Run `git fetch --all` before showing a repository.")
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let display_section ~section_base ~since path =
+    let display_section ~section_base ~since ~fetch_before path =
+      let topdir = tmp_file "topdir" in
       seq
         [ out "\n%s In `%s`" [section_base; path]
+        ; topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   let since_opt = Str.concat_list [str "--since="; since] in
@@ -208,43 +358,65 @@ module Activity_report = struct
                   let list_report branch =
                     git_log
                       ( [since_opt]
-                      @ strs ["--reverse"; "--pretty=tformat:- %s.  %n%b"]
+                      @ strs ["--reverse"; "--pretty=tformat:- %s.  %n  %b"]
                       @ [branch] )
-                    ||> exec ["grep"; "-Ev"; "^$"]
+                    ||> exec ["grep"; "-Ev"; "^ *$"]
                   in
+                  let fence () = out (String.make 80 '`') [] in
                   seq
-                    [ call [str "cd"; line] (* | egrep -v '^$' *)
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line] (* | egrep -v '^$' *)
+                    ; if_seq fetch_before
+                        ~t:
+                          [ eprintf (str "Fetching...\n") []
+                          ; with_redirections
+                              (exec ["git"; "fetch"; "--all"])
+                              [to_fd (int 1) (int 2)] ]
                     ; if_seq
                         Str.(commit_number [] <$> str "0")
                         ~t:
-                          [ out "\\n%s# %s: %s\\n\\n```"
+                          [ out "\\n%s# %s: %s\\n"
                               [ section_base
                               ; Repository.get_kind ()
                               ; repo_name line ]
+                          ; out "\\nWorking tree:\\n" []
+                          ; fence ()
+                          ; exec
+                              [ "git"
+                              ; "status"
+                              ; "--short"
+                              ; "--branch"
+                              ; "--show-stash" ]
+                          ; fence ()
+                          ; out "\\nGraph:\\n" []
+                          ; fence ()
                           ; git_log
                               ( [since_opt]
                               @ strs
                                   [ "--graph"
                                   ; "--decorate"
-                                  ; "--pretty=tformat:%D"
-                                  ; "--all"
-                                  ; "--simplify-by-decoration" ] )
-                          ; out "```\n\n%s## On `master`:" [section_base]
-                          ; list_report (str "master")
-                          ; exec ["git"; "branch"; "--no-merged"; "master"]
-                            ||> exec ["sed"; "s/*//"]
-                            ||> on_stdin_lines (fun branch ->
-                                    let treeish =
-                                      Str.concat_list [str "master.."; branch]
-                                    in
+                                  ; "--pretty=tformat:%w(72,0,2)%d %s"
+                                  ; "--all" ] )
+                          ; fence ()
+                          ; git_log
+                              ( [since_opt]
+                              @ strs
+                                  [ "--simplify-by-decoration"
+                                  ; "--pretty=tformat:%D" ] )
+                            ||> on_stdin_lines (fun line ->
                                     if_seq
-                                      Str.(commit_number [treeish] <$> str "0")
+                                      Str.(line <$> str "")
                                       ~t:
-                                        [ out "\n%s## On `%s`\n"
-                                            [section_base; branch]
-                                        ; list_report treeish ] ) ] ] ) ]
+                                        [ out "\\n%s## On `%s`\\n"
+                                            [section_base; line]
+                                        ; list_report
+                                            (get_stdout_one_line
+                                               ( line
+                                               >> exec ["sed"; "s/[ ,].*$//"]
+                                               )) ] ) ] ] ) ]
     in
-    parse opts (fun ~anon no_config since section_base version describe ->
+    parse opts
+      (fun ~anon no_config since section_base fetch_before version describe ->
         let tmp_since = tmp_file "gar-since" in
         deal_with_describe describe
           [ if_seq version
@@ -268,18 +440,19 @@ module Activity_report = struct
                                ; str " days" ]
                            ; str date_format ]
                        in
-                       [ out "Last Sunday was %s.\\n"
+                       [ eprintf
+                           (str "Last Sunday was %s.\\n")
                            [get_stdout_one_line last_sunday]
                        ; tmp_since#set (get_stdout_one_line last_sunday) ])
                 ; Elist.iter anon ~f:(fun p ->
-                      display_section ~section_base ~since:tmp_since#get (p ())
-                  )
+                      display_section ~section_base ~since:tmp_since#get
+                        ~fetch_before (p ()) )
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
                         ||> on_stdin_lines (fun line ->
                                 display_section ~since:tmp_since#get
-                                  ~section_base line ) ] ] ] )
+                                  ~section_base ~fetch_before line ) ] ] ] )
 end
 
 let cmdf fmt =
@@ -330,11 +503,13 @@ module Meta_repository = struct
     let par f = ksprintf (fun s -> out "%s\n\n" (wrap s)) f in
     let cmd_lines s = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
     let cmd_output s = cmd_lines s |> String.concat ~sep:"\n" in
-    let see_output_of fmt =
+    let see_output_of_help fmt =
       ksprintf
         (fun s ->
-          let lines = cmd_output s in
-          out "See `%s`:\n\n```\n" s ; out "%s\n" lines ; out "```\n\n" )
+          let lines =
+            cmd_output (s ^ " | grep -E -v '^usage:' | sed 's/->/→/'")
+          in
+          out "%s\n" lines ; out "\n\n" ; out "See also `%s`.\n\n" s )
         fmt
     in
     title "Git: Multi-Repository" ;
@@ -357,23 +532,19 @@ module Meta_repository = struct
     out
       {code|
     [alias]
-        mst = multi-status --show-modified
-        arfd = activity-report --section-base '####' --since
+        mst = multi-status --show-all-extras
+        arfd = activity-report --since
 |code} ;
     par "" ;
     par "See below for detailed usage information ⮷." ;
     section "Usage: Git-multi-status" ;
-    see_output_of "git-multi-status --help" ;
+    see_output_of_help "git-multi-status --help" ;
     section "Usage: Git-activity-report" ;
-    see_output_of "git-activity-report --help" ;
+    see_output_of_help "git-activity-report --help" ;
     par "**Current Limitations:**" ;
     par
-      "- The script does not guess the “default branch” and has a \
-       preference for the `master` branch (it shows more information for \
-       branches that are *not merged* in `master`)." ;
-    par
-      "- Sometimes there are redundancies between branches that the script \
-       does not detect." ;
+      "- Often, there are redundancies between branches that the script does \
+       not detect." ;
     par "" ;
     section "Authors / Making-of" ;
     par
@@ -400,7 +571,7 @@ module Meta_repository = struct
         ?(ignore_output = false) f =
       ksprintf
         (fun s ->
-          let lines = cmd_lines s |> List.map ~f:String.strip in
+          let lines = cmd_lines s in
           let w =
             if wrap_display then wrap ~newline:" \\\n" ~indent:6 ~columns:70
             else fun e -> e
@@ -461,16 +632,18 @@ module Meta_repository = struct
     example_cmd "echo 'This is Great' >> %s/ketrew/README.md"
       git_repos_hammerlab ;
     example_cmd
-      "git -C %s/ketrew/ checkout -b new-branch-for-the-example -t master"
+      "git -C %s/ketrew/ checkout -b new-branch-that-tracks -t master"
       git_repos_hammerlab ;
     example_cmd "git -C %s/ketrew/ commit -a -m 'Add greatness to the README'"
+      git_repos_hammerlab ;
+    example_cmd "git -C %s/ketrew/ checkout -b new-branch-more-local"
       git_repos_hammerlab ;
     par "" ;
     par
       "Now in the multi-status we can see the modified files, the untracked \
        counts, and one branch is “ahead” (since we used `-t master` while \
        creating, it has a remote to define it):" ;
-    on_all (example_cmd "%s") "git multi-status --show-modified" ;
+    on_all (example_cmd "%s") "git multi-status --show-all-extras" ;
     par "" ;
     par "Let's concentrate the activity-report on `%s` and on the past 3 days:"
       git_repos_hammerlab ;
