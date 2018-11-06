@@ -64,7 +64,6 @@ let version_string =
     Genspio.Meta.version
 
 module Multi_status = struct
-
   include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
 
@@ -289,7 +288,6 @@ Pretty cool, right:
 end
 
 module Activity_report = struct
-
   include Gedsl.Script_with_describe (struct
     let name = "git-activity-report"
 
@@ -453,6 +451,66 @@ module Activity_report = struct
                         ||> on_stdin_lines (fun line ->
                                 display_section ~since:tmp_since#get
                                   ~section_base ~fetch_before line ) ] ] ] )
+end
+
+module Fetch_all = struct
+  include Gedsl.Script_with_describe (struct
+    let name = "git-fetch-all"
+
+    let description = "Call git fetch a bunch of Git repositories"
+  end)
+
+  let long_description () =
+    [ sprintf "This is `%s` version %s." name version_string
+    ; sprintf "Description: “%s”" description ]
+
+  let extra_help () =
+    [ ""
+    ; "Use `git fetch-all /path/to/repos1 /path/to/repos2` to run"
+    ; "`git fetch --all` in the folders `/path/to/repos1` and `/path/to/repos2`."
+    ; "" ]
+    @ Git_config.paths_help ()
+
+  let script () =
+    let open Gedsl in
+    let out f l = printf (ksprintf str "%s\n" f) l in
+    let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
+    let fetch_in path =
+      let topdir = tmp_file "topdir" in
+      seq
+        [ topdir#set (getenv (str "PWD"))
+        ; Repository.list_all [path]
+          ||> on_stdin_lines (fun line ->
+                  seq
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line]
+                    ; out (sprintf "%s" (String.make 80 '-')) []
+                    ; out "### Repository: %s" [repo_name (getenv (str "PWD"))]
+                    ; eprintf (str "Fetching...\n") []
+                    ; with_redirections
+                        (exec ["git"; "fetch"; "--all"])
+                        [to_fd (int 1) (int 2)] ] ) ]
+    in
+    let open Command_line in
+    let opts =
+      let open Arg in
+      flag ["--no-config"]
+        ~doc:
+          (sprintf "Do not look at the `%s` git-config option."
+             Git_config.paths_option)
+      & flag ["--version"] ~doc:"Show version information."
+      & describe_option_and_usage () ~more_usage:(extra_help ())
+    in
+    parse opts (fun ~anon no_config version describe ->
+        deal_with_describe describe
+          [ if_seq version
+              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~e:
+                [ Elist.iter anon ~f:(fun p -> fetch_in (p ()))
+                ; if_seq no_config ~t:[]
+                    ~e:
+                      [ Git_config.all_paths ()
+                        ||> on_stdin_lines (fun line -> fetch_in line) ] ] ] )
 end
 
 let cmdf fmt =
@@ -700,6 +758,7 @@ let () =
   in
   Multi_status.(output name script long_description) ;
   Activity_report.(output name script long_description) ;
+  Fetch_all.(output name script long_description) ;
   if repomode then
     Meta_repository.readme_md ~path:(path // "bin")
       ~output:(path // "README.md") ;
