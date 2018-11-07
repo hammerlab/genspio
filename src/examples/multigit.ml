@@ -301,7 +301,7 @@ module Activity_report = struct
 
   let extra_help () =
     [ ""
-    ; "Use `git activity-report --since 2018-10-23 /path/to/repos1 \
+    ; "Use `git activity-report --since 2018-10-31 /path/to/repos1 \
        /path/to/repos2` to display"
     ; "a detailed “recent happenings” report of all the git repositories \
        found"
@@ -614,6 +614,7 @@ module Meta_repository = struct
     in
     describe "git-multi-status" ;
     describe "git-activity-report" ;
+    describe "git-fetch-all" ;
     par "" ;
     par
       "It may be interesting for the user to also alias them in \
@@ -634,6 +635,8 @@ module Meta_repository = struct
     par
       "- Often, there are redundancies between branches that the script does \
        not detect." ;
+    section "Usage: Git-fetch-all" ;
+    see_output_of_help "git-fetch-all --help" ;
     par "" ;
     section "Authors / Making-of" ;
     par
@@ -650,9 +653,9 @@ module Meta_repository = struct
     let git_repos_top = "/tmp/git-repos-example" in
     let git_repos_hammerlab = git_repos_top // "hammerlab" in
     let git_repos_smondet = git_repos_top // "smondet" in
-    let git_repos_tezos = git_repos_top // "tezos" in
+    let git_repos_bitbucket = git_repos_top // "bitbucket" in
     let all_git_repo_tops =
-      [git_repos_hammerlab; git_repos_smondet; git_repos_tezos]
+      [git_repos_hammerlab; git_repos_smondet; git_repos_bitbucket]
     in
     let hammerlabs = ["ketrew"; "biokepi"; "genspio"; "coclobas"] in
     let smondets = ["genspio-doc"; "vecosek"] in
@@ -690,7 +693,7 @@ module Meta_repository = struct
     in
     clone hammerlabs "https://github.com/hammerlab/" git_repos_hammerlab ;
     clone smondets "https://gitlab.com/smondet/" git_repos_smondet ;
-    clone ["tezos"] "https://gitlab.com/tezos/" git_repos_tezos ;
+    clone ["nonstd"] "https://bitbucket.org/smondet/" git_repos_bitbucket ;
     par "" ;
     par
       "For now, we haven't changed anything to the repositories so the \
@@ -707,7 +710,24 @@ module Meta_repository = struct
        directly Markdown:" ;
     on_all
       (example_cmd ~with_fence:`Quote "%s")
-      "git activity-report --section-base '####' --since 2018-10-20" ;
+      "git activity-report --section-base '####' --since 2018-10-31" ;
+    par "" ;
+    par
+      "The script `git-fetch-all` is the simplest it just provides a nice \
+       display even when working with ≥ 30 repositories, and with \
+       **errors**, so we are going to add a couple of wrong remotes to spice \
+       things up." ;
+    example_cmd
+      "git -C %s/ketrew remote add wrong-http \
+       https://example.com/dadams/h2g2.git"
+      git_repos_hammerlab ;
+    example_cmd
+      "git -C %s/vecosek remote add wrong-ssh \
+       git@gitlab.com/i-don-t-have-access/to-this.git"
+      git_repos_smondet ;
+    par "" ;
+    par "And *now,* we call `git-fetch-all`:" ;
+    on_all (example_cmd "%s") "git fetch-all" ;
     par "" ;
     par "Let's do some modifications:" ;
     example_cmd "echo 'This is Great!' >> %s/biokepi/README.md"
