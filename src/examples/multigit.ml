@@ -467,7 +467,8 @@ module Fetch_all = struct
   let extra_help () =
     [ ""
     ; "Use `git fetch-all /path/to/repos1 /path/to/repos2` to run"
-    ; "`git fetch --all` in the folders `/path/to/repos1` and `/path/to/repos2`."
+    ; "`git fetch --all` in the folders `/path/to/repos1` and \
+       `/path/to/repos2`."
     ; "" ]
     @ Git_config.paths_help ()
 
@@ -475,21 +476,44 @@ module Fetch_all = struct
     let open Gedsl in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
-    let fetch_in path =
+    let fetch_remote errors_file repo line =
+      let log =
+        Str.concat_list
+          [str "/tmp/multi-fetch-"; repo; str "-"; line; str ".log"]
+      in
+      seq
+        [ if_seq
+            (succeeds
+               (with_redirections
+                  (call [str "git"; str "fetch"; line])
+                  [to_file (int 2) log; to_fd (int 1) (int 2)]))
+            ~t:[printf (str "[%s: OK]") [line]]
+            ~e:
+              [ printf (str "[%s: ERROR]") [line]
+              ; errors_file#append
+                  (get_stdout
+                     (seq
+                        [ printf
+                            (str "* Repository `%s`, remote `%s`:\\n")
+                            [repo; line]
+                        ; call [str "tail"; str "-n"; str "3"; log]
+                          ||> exec ["sed"; "s/^/    * > /"]
+                        ; printf (str "    * See also `%s`.\\n") [log] ])) ] ]
+    in
+    let fetch_in ~errors_file path =
       let topdir = tmp_file "topdir" in
       seq
         [ topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
+                  let repo = repo_name (getenv (str "PWD")) in
                   seq
                     [ call [str "cd"; topdir#get]
                     ; call [str "cd"; line]
-                    ; out (sprintf "%s" (String.make 80 '-')) []
-                    ; out "### Repository: %s" [repo_name (getenv (str "PWD"))]
-                    ; eprintf (str "Fetching...\n") []
-                    ; with_redirections
-                        (exec ["git"; "fetch"; "--all"])
-                        [to_fd (int 1) (int 2)] ] ) ]
+                    ; printf (str ">> Repository %s: ") [repo]
+                    ; exec ["git"; "remote"]
+                      ||> on_stdin_lines (fetch_remote errors_file repo)
+                    ; printf (str "\\n") [] ] ) ]
     in
     let open Command_line in
     let opts =
@@ -502,15 +526,22 @@ module Fetch_all = struct
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     parse opts (fun ~anon no_config version describe ->
+        let errors = tmp_file "fetch-all-errors" in
+        let go = fetch_in ~errors_file:errors in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ Elist.iter anon ~f:(fun p -> fetch_in (p ()))
+                [ errors#set (str "")
+                ; Elist.iter anon ~f:(fun p -> go (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
-                        ||> on_stdin_lines (fun line -> fetch_in line) ] ] ] )
+                        ||> on_stdin_lines (fun line -> go line) ]
+                ; if_seq
+                    Str.(errors#get <$> str "")
+                    ~t:[out "\\n## Errors:" []; call [str "cat"; errors#path]]
+                ] ] )
 end
 
 let cmdf fmt =
