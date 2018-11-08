@@ -47,11 +47,15 @@ module Repository = struct
     ||> exec ["sort"]
 
   (** Get the 4-letter “kind” of the current repository. *)
-  let get_kind () =
+  let get_kind ?remote () =
     let open Gedsl in
     let remote_greps g o =
       case
-        (succeeds_silently (exec ["git"; "remote"; "-v"] ||> exec ["grep"; g]))
+        (succeeds_silently
+           ( ( match remote with
+             | None -> exec ["git"; "remote"; "-v"]
+             | Some s -> call (strs ["git"; "remote"; "get-url"] @ [s]) )
+           ||> exec ["grep"; g] ))
         [printf (str o) []]
     in
     switch
@@ -59,7 +63,7 @@ module Repository = struct
       ; remote_greps "github.com" "GHub"
       ; remote_greps "gitlab" "GLab"
       ; remote_greps "bitbucket" "BBkt"
-      ; default [printf (str "Git?") []] ]
+      ; default [printf (str "Unkn") []] ]
     |> get_stdout_one_line
 end
 
@@ -486,9 +490,12 @@ module Fetch_all = struct
                (with_redirections
                   (call [str "git"; str "fetch"; line])
                   [to_file (int 2) log; to_fd (int 1) (int 2)]))
-            ~t:[printf (str "[%s: OK]") [line]]
+            ~t:
+              [ printf (str "[%s:%s OK]")
+                  [Repository.get_kind ~remote:line (); line] ]
             ~e:
-              [ printf (str "[%s: ERROR]") [line]
+              [ printf (str "[%s:%s ERROR]")
+                  [Repository.get_kind ~remote:line (); line]
               ; errors_file#append
                   (get_stdout
                      (seq
