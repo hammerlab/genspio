@@ -15,7 +15,12 @@ let ( // ) = Filename.concat
 let msg fmt = ksprintf (eprintf "%s\n%!") fmt
 
 (*md We rename the EDSL locally to, e.g., be able to add functions. *)
-module Gedsl = Genspio.EDSL
+module Gedsl = struct
+  include Genspio.EDSL
+
+  let get_count u =
+    get_stdout_one_line (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
+end
 
 module Git_config = struct
   let paths_option = "multi-git.paths"
@@ -127,10 +132,6 @@ Pretty cool, right:
       let open Gedsl in
       let open Git in
       let grep s = exec ["grep"; s] in
-      let get_count u =
-        get_stdout_one_line
-          (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
-      in
       let counts =
         [ ( "Untrk"
           , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
@@ -190,7 +191,6 @@ Pretty cool, right:
     let open Gedsl in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
-    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let to_list_of_names u =
       u
@@ -337,7 +337,6 @@ module Activity_report = struct
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
-    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~section_base ~since ~fetch_before path =
       let topdir = tmp_file "topdir" in
@@ -502,6 +501,7 @@ module Fetch_all = struct
     in
     let fetch_in ~errors_file path =
       let topdir = tmp_file "topdir" in
+      let ls_remotes = exec ["git"; "remote"] in
       seq
         [ topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
@@ -511,8 +511,13 @@ module Fetch_all = struct
                     [ call [str "cd"; topdir#get]
                     ; call [str "cd"; line]
                     ; printf (str ">> Repository %s: ") [repo]
-                    ; exec ["git"; "remote"]
-                      ||> on_stdin_lines (fetch_remote errors_file repo)
+                    ; if_seq
+                        Str.(get_count ls_remotes =$= str "0")
+                        ~t:[printf (str "No remotes.") []]
+                        ~e:
+                          [ ls_remotes
+                            ||> on_stdin_lines (fetch_remote errors_file repo)
+                          ]
                     ; printf (str "\\n") [] ] ) ]
     in
     let open Command_line in
