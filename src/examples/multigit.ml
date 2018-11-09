@@ -15,7 +15,12 @@ let ( // ) = Filename.concat
 let msg fmt = ksprintf (eprintf "%s\n%!") fmt
 
 (*md We rename the EDSL locally to, e.g., be able to add functions. *)
-module Gedsl = Genspio.EDSL
+module Gedsl = struct
+  include Genspio.EDSL
+
+  let get_count u =
+    get_stdout_one_line (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
+end
 
 module Git_config = struct
   let paths_option = "multi-git.paths"
@@ -42,11 +47,15 @@ module Repository = struct
     ||> exec ["sort"]
 
   (** Get the 4-letter “kind” of the current repository. *)
-  let get_kind () =
+  let get_kind ?remote () =
     let open Gedsl in
     let remote_greps g o =
       case
-        (succeeds_silently (exec ["git"; "remote"; "-v"] ||> exec ["grep"; g]))
+        (succeeds_silently
+           ( ( match remote with
+             | None -> exec ["git"; "remote"; "-v"]
+             | Some s -> call (strs ["git"; "remote"; "get-url"] @ [s]) )
+           ||> exec ["grep"; g] ))
         [printf (str o) []]
     in
     switch
@@ -54,7 +63,7 @@ module Repository = struct
       ; remote_greps "github.com" "GHub"
       ; remote_greps "gitlab" "GLab"
       ; remote_greps "bitbucket" "BBkt"
-      ; default [printf (str "Git?") []] ]
+      ; default [printf (str "Unkn") []] ]
     |> get_stdout_one_line
 end
 
@@ -64,7 +73,6 @@ let version_string =
     Genspio.Meta.version
 
 module Multi_status = struct
-
   include Gedsl.Script_with_describe (struct
     let name = "git-multi-status"
 
@@ -128,10 +136,6 @@ Pretty cool, right:
       let open Gedsl in
       let open Git in
       let grep s = exec ["grep"; s] in
-      let get_count u =
-        get_stdout_one_line
-          (u ||> exec ["wc"; "-l"] ||> exec ["tr"; "-d"; " \\n"])
-      in
       let counts =
         [ ( "Untrk"
           , exec ["git"; "status"; "-s"; "-uall"] ||> exec ["egrep"; "^\\?\\?"]
@@ -191,7 +195,6 @@ Pretty cool, right:
     let open Gedsl in
     let out f l = printf (ksprintf str "%s\n" f) l in
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
-    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let to_list_of_names u =
       u
@@ -289,7 +292,6 @@ Pretty cool, right:
 end
 
 module Activity_report = struct
-
   include Gedsl.Script_with_describe (struct
     let name = "git-activity-report"
 
@@ -303,7 +305,7 @@ module Activity_report = struct
 
   let extra_help () =
     [ ""
-    ; "Use `git activity-report --since 2018-10-23 /path/to/repos1 \
+    ; "Use `git activity-report --since 2018-10-31 /path/to/repos1 \
        /path/to/repos2` to display"
     ; "a detailed “recent happenings” report of all the git repositories \
        found"
@@ -339,7 +341,6 @@ module Activity_report = struct
       & describe_option_and_usage () ~more_usage:(extra_help ())
     in
     let out f l = printf (ksprintf str "%s\n" f) l in
-    let get_count u = get_stdout_one_line (u ||> exec ["wc"; "-l"]) in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~section_base ~since ~fetch_before path =
       let topdir = tmp_file "topdir" in
@@ -455,6 +456,106 @@ module Activity_report = struct
                                   ~section_base ~fetch_before line ) ] ] ] )
 end
 
+module Fetch_all = struct
+  include Gedsl.Script_with_describe (struct
+    let name = "git-fetch-all"
+
+    let description = "Call git fetch a bunch of Git repositories"
+  end)
+
+  let long_description () =
+    [ sprintf "This is `%s` version %s." name version_string
+    ; sprintf "Description: “%s”" description ]
+
+  let extra_help () =
+    [ ""
+    ; "Use `git fetch-all /path/to/repos1 /path/to/repos2` to run"
+    ; "`git fetch --all` in the folders `/path/to/repos1` and \
+       `/path/to/repos2`."
+    ; "" ]
+    @ Git_config.paths_help ()
+
+  let script () =
+    let open Gedsl in
+    let out f l = printf (ksprintf str "%s\n" f) l in
+    let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
+    let fetch_remote errors_file repo line =
+      let log =
+        Str.concat_list
+          [str "/tmp/multi-fetch-"; repo; str "-"; line; str ".log"]
+      in
+      seq
+        [ if_seq
+            (succeeds
+               (with_redirections
+                  (call [str "git"; str "fetch"; line])
+                  [to_file (int 2) log; to_fd (int 1) (int 2)]))
+            ~t:
+              [ printf (str "[%s:%s OK]")
+                  [Repository.get_kind ~remote:line (); line] ]
+            ~e:
+              [ printf (str "[%s:%s ERROR]")
+                  [Repository.get_kind ~remote:line (); line]
+              ; errors_file#append
+                  (get_stdout
+                     (seq
+                        [ printf
+                            (str "* Repository `%s`, remote `%s`:\\n")
+                            [repo; line]
+                        ; call [str "tail"; str "-n"; str "3"; log]
+                          ||> exec ["sed"; "s/^/    * > /"]
+                        ; printf (str "    * See also `%s`.\\n") [log] ])) ] ]
+    in
+    let fetch_in ~errors_file path =
+      let topdir = tmp_file "topdir" in
+      let ls_remotes = exec ["git"; "remote"] in
+      seq
+        [ topdir#set (getenv (str "PWD"))
+        ; Repository.list_all [path]
+          ||> on_stdin_lines (fun line ->
+                  let repo = repo_name (getenv (str "PWD")) in
+                  seq
+                    [ call [str "cd"; topdir#get]
+                    ; call [str "cd"; line]
+                    ; printf (str ">> Repository %s: ") [repo]
+                    ; if_seq
+                        Str.(get_count ls_remotes =$= str "0")
+                        ~t:[printf (str "No remotes.") []]
+                        ~e:
+                          [ ls_remotes
+                            ||> on_stdin_lines (fetch_remote errors_file repo)
+                          ]
+                    ; printf (str "\\n") [] ] ) ]
+    in
+    let open Command_line in
+    let opts =
+      let open Arg in
+      flag ["--no-config"]
+        ~doc:
+          (sprintf "Do not look at the `%s` git-config option."
+             Git_config.paths_option)
+      & flag ["--version"] ~doc:"Show version information."
+      & describe_option_and_usage () ~more_usage:(extra_help ())
+    in
+    parse opts (fun ~anon no_config version describe ->
+        let errors = tmp_file "fetch-all-errors" in
+        let go = fetch_in ~errors_file:errors in
+        deal_with_describe describe
+          [ if_seq version
+              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~e:
+                [ errors#set (str "")
+                ; Elist.iter anon ~f:(fun p -> go (p ()))
+                ; if_seq no_config ~t:[]
+                    ~e:
+                      [ Git_config.all_paths ()
+                        ||> on_stdin_lines (fun line -> go line) ]
+                ; if_seq
+                    Str.(errors#get <$> str "")
+                    ~t:[out "\\n## Errors:" []; call [str "cat"; errors#path]]
+                ] ] )
+end
+
 let cmdf fmt =
   ksprintf
     (fun s ->
@@ -525,6 +626,7 @@ module Meta_repository = struct
     in
     describe "git-multi-status" ;
     describe "git-activity-report" ;
+    describe "git-fetch-all" ;
     par "" ;
     par
       "It may be interesting for the user to also alias them in \
@@ -545,6 +647,8 @@ module Meta_repository = struct
     par
       "- Often, there are redundancies between branches that the script does \
        not detect." ;
+    section "Usage: Git-fetch-all" ;
+    see_output_of_help "git-fetch-all --help" ;
     par "" ;
     section "Authors / Making-of" ;
     par
@@ -561,9 +665,9 @@ module Meta_repository = struct
     let git_repos_top = "/tmp/git-repos-example" in
     let git_repos_hammerlab = git_repos_top // "hammerlab" in
     let git_repos_smondet = git_repos_top // "smondet" in
-    let git_repos_tezos = git_repos_top // "tezos" in
+    let git_repos_bitbucket = git_repos_top // "bitbucket" in
     let all_git_repo_tops =
-      [git_repos_hammerlab; git_repos_smondet; git_repos_tezos]
+      [git_repos_hammerlab; git_repos_smondet; git_repos_bitbucket]
     in
     let hammerlabs = ["ketrew"; "biokepi"; "genspio"; "coclobas"] in
     let smondets = ["genspio-doc"; "vecosek"] in
@@ -601,7 +705,7 @@ module Meta_repository = struct
     in
     clone hammerlabs "https://github.com/hammerlab/" git_repos_hammerlab ;
     clone smondets "https://gitlab.com/smondet/" git_repos_smondet ;
-    clone ["tezos"] "https://gitlab.com/tezos/" git_repos_tezos ;
+    clone ["nonstd"] "https://bitbucket.org/smondet/" git_repos_bitbucket ;
     par "" ;
     par
       "For now, we haven't changed anything to the repositories so the \
@@ -618,7 +722,24 @@ module Meta_repository = struct
        directly Markdown:" ;
     on_all
       (example_cmd ~with_fence:`Quote "%s")
-      "git activity-report --section-base '####' --since 2018-10-20" ;
+      "git activity-report --section-base '####' --since 2018-10-31" ;
+    par "" ;
+    par
+      "The script `git-fetch-all` is the simplest it just provides a nice \
+       display even when working with ≥ 30 repositories, and with \
+       **errors**, so we are going to add a couple of wrong remotes to spice \
+       things up." ;
+    example_cmd
+      "git -C %s/ketrew remote add wrong-http \
+       https://example.com/dadams/h2g2.git"
+      git_repos_hammerlab ;
+    example_cmd
+      "git -C %s/vecosek remote add wrong-ssh \
+       git@gitlab.com/i-don-t-have-access/to-this.git"
+      git_repos_smondet ;
+    par "" ;
+    par "And *now,* we call `git-fetch-all`:" ;
+    on_all (example_cmd "%s") "git fetch-all" ;
     par "" ;
     par "Let's do some modifications:" ;
     example_cmd "echo 'This is Great!' >> %s/biokepi/README.md"
@@ -700,6 +821,7 @@ let () =
   in
   Multi_status.(output name script long_description) ;
   Activity_report.(output name script long_description) ;
+  Fetch_all.(output name script long_description) ;
   if repomode then
     Meta_repository.readme_md ~path:(path // "bin")
       ~output:(path // "README.md") ;
