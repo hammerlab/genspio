@@ -27,19 +27,19 @@ let describe _ = print_endline description
 
 let files =
   let open File in
-  let open Jbuilder in
+  let open Dune in
   [ file ".merlin" toplevel_merlin
-  ; file "src/lib/jbuild"
-    @@ jbuild
+  ; file "src/lib/dune"
+    @@ dune
          [ rule ~targets:["meta.ml"] [write_file "meta.ml" meta_content]
          ; lib "genspio" ~deps:main_libs ]
-  ; file "src/test-lib/jbuild"
-    @@ jbuild
+  ; file "src/test-lib/dune"
+    @@ dune
          [lib "tests" ~deps:("genspio" :: "uri" :: main_libs) ~internal:true]
-  ; file "src/test/jbuild"
-    @@ jbuild [executable "main" ~libraries:("genspio" :: "tests" :: main_libs)]
-  ; file "src/examples/jbuild"
-    @@ jbuild
+  ; file "src/test/dune"
+    @@ dune [executable "main" ~libraries:("genspio" :: "tests" :: main_libs)]
+  ; file "src/examples/dune"
+    @@ dune
          [ executable ~single_module:true "downloader"
              ~libraries:("genspio" :: main_libs)
          ; executable ~single_module:true "vm_tester"
@@ -63,9 +63,7 @@ let files =
           ~license:"Apache 2.0" ~version ~ocaml_min_version:"4.03.0"
           ~description ~synopsis
           ~deps:
-            ( Opam.dep
-                ~qualify:(`Version (`GT, "1.0+beta20"))
-                ~build:true "jbuilder"
+            ( Opam.dep "dune"
             :: List.map main_libs ~f:dep )) ]
 
 let () =

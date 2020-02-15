@@ -11,11 +11,11 @@ license: "Apache 2.0"
 version: "0.0.3-dev"
 build: [
   ["ocaml" "please.mlt" "configure"]
-  ["jbuilder" "build" "-p" "genspio" "-j" jobs ]
+  ["dune" "build" "-p" name "-j" jobs ]
 ]
 depends: [
   "ocaml" { >= "4.03.0" }
-  "jbuilder" {build & >= "1.0+beta20"}
+  "dune"
   "nonstd"
   "sosa"
 ]
