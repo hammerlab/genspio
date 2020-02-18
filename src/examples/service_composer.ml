@@ -65,9 +65,7 @@ module Version = struct
                ; tm_mday
                ; tm_mon
                ; tm_year
-               ; tm_wday
-               ; tm_yday
-               ; tm_isdst } ->
+               ; _ } ->
         sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
           tm_mday tm_hour tm_min tm_sec)
 
@@ -296,7 +294,7 @@ module Manual = struct
 
   let () =
     add
-    @@ from (fun ~root env ->
+    @@ from (fun ~root _ ->
            ksprintf title "%s: Compose Processes With Screen" (pre_title root)
        )
     @ from (fun ~root env ->
@@ -329,7 +327,7 @@ module Manual = struct
               root env.Environment.default_configuration_path )
     @ extended
         ( section "Installation"
-        @ from (fun ~root env ->
+        @ from (fun ~root _ ->
               ksprintf par
                 "Simply copy `%s*` to somewhere in your `$PATH`, the scripts \
                  depend on a reasonably valid version of `/bin/sh` and GNU \
@@ -339,7 +337,7 @@ module Manual = struct
                   "If you are using the code-generator, you can just point \
                    the `--output-path` option at the right directory." ) )
     @ section "Usage"
-    @ from (fun ~root env ->
+    @ from (fun ~root _ ->
           let intro fmt =
             ksprintf
               (ksprintf par
@@ -358,7 +356,7 @@ module Manual = struct
                `%s <command> --help`."
               root root )
     @ section "Screen Session Isolation"
-    @ from (fun ~root env ->
+    @ from (fun ~root _ ->
           ksprintf par
             "`%s` isolates Screen sessions by using their session name." root
           @ ksprintf par
@@ -379,7 +377,7 @@ module Manual = struct
               root )
     @ extended
         ( section "Docker Image For the Generator"
-        @ from (fun ~root env ->
+        @ from (fun ~root:_ _ ->
               let image = "smondet/genspio-doc-dockerfiles:apps406" in
               ksprintf par
                 "If you have [`opam`](https://opam.ocaml.org), setting up the \
@@ -578,7 +576,7 @@ module Manual_script = struct
           & flag ["--no-pager"] ~doc:"Do not use a pager."
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon extended no_pager describe ->
+        parse opts (fun ~anon:_ extended no_pager describe ->
             deal_with_describe describe
               [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()]
         ) )
@@ -591,7 +589,7 @@ module Version_script = struct
     let description = "Show the version information."
   end)
 
-  let make ~env () =
+  let make ~env:_ () =
     Script.make [name] ~description (fun ~root ->
         let open Gedsl in
         let open Command_line in
@@ -600,7 +598,7 @@ module Version_script = struct
           flag ["--extended"; "-X"] ~doc:"Provide extra information"
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon extended describe ->
+        parse opts (fun ~anon:_ extended describe ->
             deal_with_describe describe
               [ if_seq extended
                   ~t:
@@ -617,7 +615,7 @@ module Init_script = struct
   end)
 
   let make ~env () =
-    Script.make ["configuration"; name] ~description (fun ~root ->
+    Script.make ["configuration"; name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -631,7 +629,7 @@ module Init_script = struct
             ~default:(Environment.make_default_screen_name env)
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon screen_name describe ->
+        parse opts (fun ~anon:_ screen_name describe ->
             deal_with_describe describe
               [Environment.init ~screen_name env; say "Done." []] ) )
 end
@@ -644,7 +642,7 @@ module Add_job_script = struct
   end)
 
   let make ~env () =
-    Script.make ["configuration"; name] ~description (fun ~root ->
+    Script.make ["configuration"; name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let default_none = str "--none--" in
@@ -660,7 +658,7 @@ module Add_job_script = struct
                  like `top`)"
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon name shell_command interpreter no_log describe ->
+        parse opts (fun ~anon:_ name shell_command interpreter no_log describe ->
             let jpath = Job.job_path env name in
             deal_with_describe describe
               [ if_then
@@ -689,13 +687,10 @@ module Remove_job_script = struct
   end)
 
   let make ~env () =
-    Script.make ["configuration"; name] ~description (fun ~root ->
+    Script.make ["configuration"; name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
-        let opts =
-          let open Arg in
-          describe_option_and_usage ()
-        in
+        let opts = describe_option_and_usage () in
         parse opts (fun ~anon describe ->
             deal_with_describe describe
               [ Elist.iter anon ~f:(fun name ->
@@ -718,7 +713,7 @@ module Start_script = struct
   end)
 
   let make ~env () =
-    Script.make [name] ~description (fun ~root ->
+    Script.make [name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -777,14 +772,11 @@ module Configuration_display_script = struct
   end)
 
   let make ~env () =
-    Script.make ["configuration"; name] ~description (fun ~root ->
+    Script.make ["configuration"; name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
-        let opts =
-          let open Arg in
-          describe_option_and_usage ()
-        in
-        parse opts (fun ~anon describe ->
+        let opts = describe_option_and_usage () in
+        parse opts (fun ~anon:_ describe ->
             let path = Environment.configuration_path env in
             deal_with_describe describe
               [ say "Configuration path: %s" [path]
@@ -815,14 +807,11 @@ module Configuration_destroy_script = struct
   end)
 
   let make ~env () =
-    Script.make ["configuration"; name] ~description (fun ~root ->
+    Script.make ["configuration"; name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
-        let opts =
-          let open Arg in
-          describe_option_and_usage ()
-        in
-        parse opts (fun ~anon describe ->
+        let opts = describe_option_and_usage () in
+        parse opts (fun ~anon:_ describe ->
             let path = Environment.configuration_path env in
             deal_with_describe describe
               [ say "Configuration path: %s" [path]
@@ -857,7 +846,7 @@ module Attach_script = struct
                   ; fail "STOPPING" ] ] ]
 
   let make ~env () =
-    Script.make [name] ~description (fun ~root ->
+    Script.make [name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -865,7 +854,7 @@ module Attach_script = struct
           flag ["--create"] ~doc:"Create if it doesn't exist."
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon create describe ->
+        parse opts (fun ~anon:_ create describe ->
             deal_with_describe describe [go env create] ) )
 end
 
@@ -877,7 +866,7 @@ module Kill_script = struct
   end)
 
   let make ~env () =
-    Script.make [name] ~description (fun ~root ->
+    Script.make [name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -927,7 +916,7 @@ module Logs_script = struct
   end)
 
   let make ~env () =
-    Script.make [name] ~description (fun ~root ->
+    Script.make [name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -986,7 +975,7 @@ module Status_script = struct
   end)
 
   let make ~env () =
-    Script.make [name] ~description (fun ~root ->
+    Script.make [name] ~description (fun ~root:_ ->
         let open Gedsl in
         let open Command_line in
         let opts =
@@ -994,7 +983,7 @@ module Status_script = struct
           flag ["--short"; "-s"] ~doc:"Don't output a ton of info"
           & describe_option_and_usage ()
         in
-        parse opts (fun ~anon short describe ->
+        parse opts (fun ~anon:_ short describe ->
             let prefix_output = exec ["sed"; "s/^/    |    /"] in
             deal_with_describe describe
               [ if_seq (Screen.is_on env)
@@ -1119,7 +1108,7 @@ module Example_script = struct
                   (List.map example ~f:(fun s ->
                        printf (str "    %s\\n") [str s] )) ]
         in
-        parse opts (fun ~anon run example describe ->
+        parse opts (fun ~anon:_ run example describe ->
             deal_with_describe describe
               [ switch
                   ( List.map [basic env root] ~f:(fun (n, cl) ->

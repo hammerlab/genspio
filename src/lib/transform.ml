@@ -199,13 +199,13 @@ The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only 
  *)
   class propagator ?trace () =
     object (self)
-      inherit Visitor.nothing_doer ?trace () as super
+      inherit Visitor.nothing_doer ?trace () as _super
 
       (*md
 Boolean operators are not commutative, the left side has to be
 evaluated first and may break the execution flow (e.g. with `fail`).
 *)
-      method bool_operator (a, op, b) =
+      method! bool_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         match (ga, op, gb) with
@@ -219,7 +219,7 @@ literals (all non-literals can be non-deterministic and
 side-effectful).
 
  *)
-      method string_operator (a, op, b) =
+      method! string_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         match (ga, op, gb) with
@@ -230,7 +230,7 @@ side-effectful).
               | `Eq -> Literal.Bool (sa = sb) )
         | _ -> String_operator (ga, op, gb)
 
-      method returns : type a. expr:a t -> _ =
+      method! returns : type a. expr:a t -> _ =
         fun ~expr ~value ->
           let e = self#expression expr in
           match (e, value) with
@@ -238,7 +238,7 @@ side-effectful).
           | No_op, _ -> Construct.bool false
           | _ -> Returns {expr; value}
 
-      method if_ (c, t, e) =
+      method! if_ (c, t, e) =
         let gc = self#expression c in
         let gt = self#expression t in
         let ge = self#expression e in
@@ -247,28 +247,28 @@ side-effectful).
         | Literal (Literal.Bool false) -> ge
         | _ -> If (gc, gt, ge)
 
-      method while_ ~condition ~body =
+      method! while_ ~condition ~body =
         match self#expression condition with
         | Literal (Literal.Bool false) -> No_op
         | cond -> While {condition= cond; body= self#expression body}
 
-      method not b =
+      method! not b =
         let gb = self#expression b in
         match gb with
         | Literal (Literal.Bool b) -> Literal (Literal.Bool (not b))
         | other -> Not other
 
-      method seq l =
+      method! seq l =
         let transformed =
           List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op)
         in
         match transformed with [] -> No_op | [one] -> one | l -> Seq l
 
-      method pipe l =
+      method! pipe l =
         let tr = List.map ~f:self#expression l in
         match tr with Pipe l :: more -> Pipe (l @ more) | other -> Pipe other
 
-      method c_string_concat l =
+      method! c_string_concat l =
         let gl = self#expression l in
         match gl with
         | List [] -> Construct.c_string ""
@@ -294,7 +294,7 @@ side-effectful).
             | more -> C_string_concat (List more) )
         | default -> C_string_concat default
 
-      method byte_array_concat l =
+      method! byte_array_concat l =
         let gl = self#expression l in
         match gl with
         | List [] -> Construct.byte_array ""
@@ -315,7 +315,7 @@ side-effectful).
             | more -> Byte_array_concat (List more) )
         | default -> Byte_array_concat default
 
-      method list_append (a, b) =
+      method! list_append (a, b) =
         let la = self#expression a in
         let lb = self#expression b in
         match (la, lb) with
@@ -324,11 +324,11 @@ side-effectful).
         | List lla, List llb -> List (lla @ llb)
         | _, _ -> List_append (la, lb)
 
-      method list_iter (l, f) =
+      method! list_iter (l, f) =
         let gl = self#expression l in
         match gl with List [] -> No_op | _ -> List_iter (gl, f)
 
-      method int_bin_op (a, op, b) =
+      method! int_bin_op (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         let default = Int_bin_op (ga, op, gb) in
@@ -347,7 +347,7 @@ side-effectful).
           | _ -> default )
         | _ -> default
 
-      method int_bin_comparison (a, op, b) =
+      method! int_bin_comparison (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         let default = Int_bin_comparison (ga, op, gb) in
@@ -438,7 +438,7 @@ side-effectful).
           [ e 42
           ; loop_seq_while
               ("Comment on the success" %%% succeeds (s 0))
-              [e 1; "Comment on the `setenv`" %%% setenv (string "bouh") expr]
+              [e 1; "Comment on the `setenv`" %%% setenv ~var:(string "bouh") expr]
           ])
     in
     check "deep1"

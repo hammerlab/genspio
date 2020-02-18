@@ -20,7 +20,7 @@ let switch l =
   let default = ref None in
   let cases =
     List.filter_map l ~f:(function
-      | `Default d when !default <> None ->
+      | `Default _ when !default <> None ->
           failwith "Cannot build switch with >1 defaults"
       | `Default d ->
           default := Some d ;
@@ -64,7 +64,7 @@ let tmp_file ?tmp_dir name : file =
     let clean =
       String.map name ~f:(function
         | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-') as c -> c
-        | other -> '_' )
+        | _ -> '_' )
     in
     C_string.concat_list
       [ get_tmp_dir
@@ -137,7 +137,7 @@ module Command_line = struct
   let parse (options : ('a, unit t) cli_options)
       (action : anon:c_string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
-    let variable {switches; doc} =
+    let variable {switches; _} =
       sprintf "%s_%s" prefix
         (String.concat ~sep:"" switches |> Digest.string |> Digest.to_hex)
     in
@@ -181,7 +181,7 @@ module Command_line = struct
             f
         | Opt_cons (Opt_string x, more) ->
             let var = variable x in
-            to_init (setenv (string var) x.default) ;
+            to_init (setenv ~var:(string var) x.default) ;
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
@@ -193,7 +193,7 @@ module Command_line = struct
                            (string "ERROR option '%s' requires an argument\\n")
                            [getenv (string "1")]
                        ; fail "Wrong command line" ]
-                     ~e:[setenv (string var) (getenv (string "2"))]
+                     ~e:[setenv ~var:(string var) (getenv (string "2"))]
                  ; exec ["shift"]
                  ; exec ["shift"] ]) ;
             ksprintf to_help "* `%s <string>`: %s"
@@ -202,12 +202,12 @@ module Command_line = struct
             loop (f (string_of_var var)) more
         | Opt_cons (Opt_flag x, more) ->
             let var = variable x in
-            to_init (setenv (string var) (Bool.to_string x.default)) ;
+            to_init (setenv ~var:(string var) (Bool.to_string x.default)) ;
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
                       p ||| C_string.equals (string s) (getenv (string "1")) ))
-                 [ setenv (string var) (Bool.to_string (bool true))
+                 [ setenv ~var:(string var) (Bool.to_string (bool true))
                  ; exec ["shift"] ]) ;
             ksprintf to_help "* `%s`: %s"
               (String.concat ~sep:"," x.switches)
@@ -236,7 +236,7 @@ module Command_line = struct
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
                  p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
-            [ setenv help_flag_var (Bool.to_string (bool true))
+            [ setenv ~var:help_flag_var (Bool.to_string (bool true))
             ; byte_array help_msg >> exec ["cat"]
             ; exec ["break"] ]
         in
@@ -264,7 +264,7 @@ module Command_line = struct
       loop_while (bool true) ~body
     in
     seq
-      [ setenv help_flag_var (Bool.to_string (bool false))
+      [ setenv ~var:help_flag_var (Bool.to_string (bool false))
       ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
       ; seq (List.rev !inits)
       ; while_loop
@@ -331,9 +331,9 @@ let fresh_name suf =
 let sanitize_name n =
   String.map n ~f:(function
     | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
-    | other -> '_' )
+    | _ -> '_' )
 
-let default_on_failure ~step:(i, u) ~stdout ~stderr =
+let default_on_failure ~step:(i, _) ~stdout ~stderr =
   seq
     [ printf (ksprintf c_string "Step '%s' FAILED:\\n" i) []
     ; cat_markdown "stdout" stdout
@@ -342,7 +342,7 @@ let default_on_failure ~step:(i, u) ~stdout ~stderr =
 
 let check_sequence ?(verbosity = `Announce ">> ")
     ?(on_failure = default_on_failure)
-    ?(on_success = fun ~step ~stdout ~stderr -> nop) ?(tmpdir = "/tmp") cmds =
+    ?(on_success = fun ~step:_ ~stdout:_ ~stderr:_ -> nop) ?(tmpdir = "/tmp") cmds =
   let tmp_prefix = fresh_name "-cmd" in
   let tmpout which id =
     c_string

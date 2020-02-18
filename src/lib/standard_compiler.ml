@@ -90,7 +90,7 @@ let error ?code ~comment_backtrace error =
 let pp_error fmt {code; comment_backtrace; error} =
   let open Format in
   let summary s =
-    match String.sub s 0 70 with Some s -> s ^ " …" | None -> s
+    match String.sub s ~index:0 ~length:70 with Some s -> s ^ " …" | None -> s
   in
   let big_string fmt s = fprintf fmt "@[%s@]" (summary s) in
   fprintf fmt "@[<hov 2>" ;
@@ -391,9 +391,9 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
         | one :: two :: t -> one :: "printf -- ' '" :: build (two :: t)
       in
       seq (build outputs) |> ir_list
-  | List_to_string (l, f) ->
+  | List_to_string (l, _) ->
       continue (Output_as_string (Raw_cmd (None, continue l))) |> ir_octostring
-  | String_to_list (s, f) ->
+  | String_to_list (s, _) ->
       continue s |> expand_octal
       |> sprintf "printf -- '%%s' \"$(%s)\""
       |> ir_list

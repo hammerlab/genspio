@@ -118,12 +118,12 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
 
   let stderr_path test = sprintf "_log/%s/stderr.txt" @@ unique_name test
 
-  let display_script t = function
-    | Exits {no_trap; name; args; returns; script} ->
+  let display_script _t = function
+    | Exits {script; _} ->
         Genspio.Compile.to_string_hum script
 
   let display_opti_script t = function
-    | Exits {no_trap; name; args; returns; script} ->
+    | Exits {script; _} ->
         List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
           | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev )
         |> Genspio.Compile.to_string_hum
@@ -131,7 +131,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
   let run_test_script t =
     let test_name = name t in
     function
-    | Exits {no_trap; name; args; returns; script} as test ->
+    | Exits {name; args; returns; _} as test ->
         let fill_result_file which =
           let echos =
             [ sprintf "- Returns $RRR (expected: %d)." returns
@@ -183,7 +183,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
           else "" )
 
   let script_content t = function
-    | Exits {no_trap; name; args; returns; script} -> (
+    | Exits {no_trap; script; _} -> (
         let script =
           List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
             | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev
@@ -198,7 +198,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
             |> Format.asprintf "%a\n"
                  Genspio.Compile.To_slow_flow.Script.pp_posix )
 
-  let make_report_path t = "script" // "make_report.sh"
+  let make_report_path _ = "script" // "make_report.sh"
 
   let make_report_content t testlist =
     (let open Genspio.EDSL_v0 in
@@ -369,7 +369,7 @@ module Example = struct
           let fence = String.make 50 '`' in
           ff fmt "%s%s@\n%s@\n%s@\n@\n" fence lang (String.strip code) fence
         in
-        let if_show s f = if List.mem s show then f () else () in
+        let if_show s f = if List.mem s ~set:show then f () else () in
         let try_url =
           let base =
             try Sys.getenv "genspio_demo_url" with _ -> default_demo_url

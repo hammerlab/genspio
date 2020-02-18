@@ -14,11 +14,11 @@ module Shell_script = struct
     let m =
       String.map n ~f:(function
         | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
-        | other -> '_' )
+        | _ -> '_' )
     in
     String.sub ~index:0 ~length:40 m |> Option.value ~default:m
 
-  let path {name; content} =
+  let path {name; content; _} =
     let hash =
       Marshal.to_string content [] |> Digest.string |> Digest.to_hex
     in
@@ -65,7 +65,6 @@ module Run_environment = struct
       List.map files ~f:(function Http (url, act) as t ->
           let base = local_file_name t in
           let wget =
-            let open Shell_script in
             let open Genspio.EDSL in
             check_sequence
               [ ("mkdir", exec ["mkdir"; "-p"; "_cache"])
@@ -161,7 +160,8 @@ module Run_environment = struct
 
   let start_qemu_vm : t -> Shell_script.t = function
     | { ssh_port
-      ; vm= Qemu_arm {kernel; machine; sd_card; root_device; initrd; _} } ->
+      ; vm= Qemu_arm {kernel; machine; sd_card; root_device; initrd; _}
+      ; _ } ->
         let open Shell_script in
         let open Genspio.EDSL in
         make "Start-qemu-arm"
@@ -187,7 +187,7 @@ module Run_environment = struct
                ; "-append"
                ; sprintf "console=ttyAMA0 verbose debug root=%s" root_device ]
              ))
-    | {ssh_port; vm= Qemu_amd46 {hda; ui}} ->
+    | {ssh_port; vm= Qemu_amd46 {hda; ui}; _} ->
         (* See https://wiki.qemu.org/Hosts/BSD
          qemu-system-x86_64 -m 2048 \
           -hda FreeBSD-11.0-RELEASE-amd64.qcow2 -enable-kvm \
@@ -214,8 +214,7 @@ module Run_environment = struct
                ; "e1000,netdev=mynet0" ] ))
 
   let kill_qemu_vm : t -> Shell_script.t = function
-    | {name} ->
-        let open Shell_script in
+    | {name; _} ->
         let open Genspio.EDSL in
         let pid = get_stdout (exec ["cat"; "qemu.pid"]) in
         Shell_script.(make (sprintf "kill-qemu-%s" name))
@@ -240,8 +239,7 @@ module Run_environment = struct
                    ~e:[printf (string "No PID file") []; exec ["false"]] ) ]
 
   let configure : t -> Shell_script.t = function
-    | {name; local_dependencies} ->
-        let open Shell_script in
+    | {name; local_dependencies; _} ->
         let open Genspio.EDSL in
         let report = tmp_file "configure-report.md" in
         let there_was_a_failure = tmp_file "bool-failure" in
@@ -268,14 +266,14 @@ module Run_environment = struct
              (List.mapi cmds ~f:(fun i c -> (sprintf "config-%s-%d" name i, c)))
 
   let make_dependencies = function
-    | {vm= Qemu_amd46 {hda}} -> File.make_files [hda]
-    | {vm= Qemu_arm {kernel; sd_card; initrd}} ->
+    | {vm= Qemu_amd46 {hda; _}; _} -> File.make_files [hda]
+    | {vm= Qemu_arm {kernel; sd_card; initrd; _}; _} ->
         File.make_files
           ( [kernel; sd_card]
           @ Option.value_map initrd ~default:[] ~f:(fun x -> [x]) )
 
   let setup_dir_content tvm =
-    let {name; root_password; setup; ssh_port; vm} = tvm in
+    let {root_password; setup; ssh_port; _} = tvm in
     let other_files = ref [] in
     let dependencies = make_dependencies tvm in
     let start_deps = List.map dependencies ~f:(fun (base, _, _) -> base) in
@@ -361,7 +359,7 @@ module Run_environment = struct
                 ; List.map
                     ( ("help", Some "Display this help message")
                     :: !help_entries ) ~f:(function
-                    | target, None -> ""
+                    | _, None -> ""
                     | target, Some doc ->
                         sprintf "* `make %s`: %s\n" target doc )
                   |> String.concat ~sep:""
@@ -491,7 +489,7 @@ let () =
   in
   let set_example arg =
     match !example with
-    | Some s -> fail "Too many arguments (%S)!" arg
+    | Some _ -> fail "Too many arguments (%S)!" arg
     | None ->
         example :=
           Some
@@ -535,7 +533,7 @@ let () =
   let usage = sprintf "vm-tester --vm <vm-name> <path>" in
   let anon arg =
     match !path with
-    | Some s -> fail "Too many arguments (%S)!" arg
+    | Some _ -> fail "Too many arguments (%S)!" arg
     | None -> path := Some arg
   in
   Arg.parse args anon usage ;

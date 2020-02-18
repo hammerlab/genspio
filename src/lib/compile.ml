@@ -1,7 +1,5 @@
 open Common
 
-type 'a t = 'a Language.t
-
 let default_max_argument_length = Some 100_000
 
 module To_posix = struct
@@ -38,7 +36,7 @@ module To_posix = struct
   let failure_to_stderr : death_function =
    fun ~comment_stack msg ->
     let summary s =
-      match String.sub s 0 65 with Some s -> s ^ " …" | None -> s
+      match String.sub s ~index:0 ~length:65 with Some s -> s ^ " …" | None -> s
     in
     let open Format in
     let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
@@ -74,8 +72,7 @@ module To_posix = struct
     let statement_separator =
       match options.style with `Multi_line -> "\n" | `One_liner -> " ; "
     in
-    let {max_argument_length; print_failure} = options in
-    let open Language in
+    let {max_argument_length; print_failure;_} = options in
     match options.fail_with with
     | `Nothing ->
         to_shell

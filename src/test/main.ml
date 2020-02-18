@@ -424,7 +424,7 @@ let () =
     exits
       ~name:(sprintf "parse-cli-only-anon-%s" name)
       ~args 0
-      (Command_line.parse spec (fun ~anon one two bone ->
+      (Command_line.parse spec (fun ~anon  _ _ _  ->
            assert_or_fail
              (sprintf "anon-is-anon-%s" name)
              (check_anon anon args) ))
@@ -807,7 +807,7 @@ let () =
 let () =
   add_tests
   @@ List.concat
-       [ exits 2 ~name:"no-trap" Genspio.EDSL.(return 2)
+       [ exits 2 ~name:"no-trap" (return 2)
        (* Dying with error messages does not work without `trap` any more
        (string-schism): *)
        (* exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.( *)
@@ -1101,7 +1101,7 @@ let () =
         ; return 5 ])
   in
   List.concat_mapi ~f:make_int_test
-    [[]; [1]; [3]; [1; 2; 3]; [1; 2; 3; 0]; List.init 42 (fun i -> i)]
+    [[]; [1]; [3]; [1; 2; 3]; [1; 2; 3; 0]; List.init 42 ~f:(fun i -> i)]
 
 let () =
   add_tests
@@ -1299,7 +1299,8 @@ let compilation_error_tests () =
       in
       printf "* %s: %s\n%s\n%!%!"
         (if succ then "SUCCESS" else "FAILURE")
-        (String.sub expr_str 0 60 |> Option.value ~default:expr_str)
+        (String.sub expr_str ~index:0 ~length:60
+         |> Option.value ~default:expr_str)
         res_str ) ;
   List.exists !results ~f:(fun (_, res, _) -> res = false)
 
@@ -1353,7 +1354,6 @@ let () =
     | moar -> failf "Too many arguments: %s" (String.concat ~sep:", " moar)
   in
   Option.iter path_opt ~f:(fun path ->
-      let open Test in
       let testlist =
         List.concat !tests
         |>
@@ -1363,11 +1363,9 @@ let () =
             let matches name = String.index_of_string name ~sub:s <> None in
             fun tests ->
               List.filter tests ~f:(function
-                | Tests.Test_lib.Test.Exits
-                    {no_trap; name; args; returns; script}
-                  when matches name ->
+                | Tests.Test_lib.Test.Exits { name; _} when matches name ->
                     true
-                | other -> false )
+                | _ -> false )
       in
       printf "Testlist: %d\n%!" (List.length testlist) ;
       let testdir =

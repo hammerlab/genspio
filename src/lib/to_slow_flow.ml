@@ -168,12 +168,12 @@ In that case, we compare the octal representations.
   let to_path_argument = function
     | Unit -> assert false
     | Raw_inline s -> s
-    | Literal_value s -> assert false
+    | Literal_value _ -> assert false
     | File f -> Filename.quote f
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
         sprintf "\"${%s}\"" f
-    | Octal_value_in_variable var -> assert false
+    | Octal_value_in_variable _ -> assert false
 
   (*md
 
@@ -297,7 +297,7 @@ In that case, we compare the octal representations.
     in
     {commands= commands @ morecmds; result= r}
 
-  let return_value_to_bool ~tmp {commands; result} v =
+  let return_value_to_bool ~tmp {commands; _} v =
     { tmp with
       commands=
         tmp.commands @ commands
@@ -391,7 +391,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
         | Unit -> assert false
         | Literal_value li when String.exists li ~f:(( = ) '\x00') ->
             fail_commands "Cannot convert literal %S to C-String"
-        | Literal_value li -> []
+        | Literal_value _ -> []
         | File f ->
             [ If_then_else
                 { condition=
@@ -410,7 +410,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     ksprintf fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
                 ; block_else= [] } ]
-        | Raw_inline ri -> []
+        | Raw_inline _ -> []
         | Octal_value_in_variable v ->
             [ If_then_else
                 { condition=
@@ -468,7 +468,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             match s.result with
             | Unit -> Script.commands s
             | Raw_inline cmd -> Script.(Raw cmd :: commands s)
-            | other -> assert false )
+            | _ -> assert false )
       in
       Script.unit cmds
   | Not t ->
@@ -610,8 +610,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                           as_arg tmparg ] ) )
           in
           List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
-  | List_to_string (l, f) -> continue l
-  | String_to_list (s, f) -> continue s
+  | List_to_string (l, _) -> continue l
+  | String_to_list (s, _) -> continue s
   | C_string_concat sl ->
       let sl_script = continue sl in
       concat_string_list sl_script
@@ -883,7 +883,7 @@ let test () =
         ]
     ; seq
         [ setenv
-            (C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
+            ~var:(C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
             (get_stdout (exec ["echo"; "HELLO WORLD"]) |> Byte_array.to_c)
         ; "Calling a sub-shell with `sh`,\nit should display HELLO WORLD"
           %%% exec ["sh"; "-c"; "echo \"$AAA\""] ]
@@ -896,10 +896,10 @@ let test () =
        let v1 = c_string "V1" in
        let v2 = c_string "V2" in
        seq
-         [ setenv var v1
+         [ setenv ~var v1
          ; loop_seq_while
              C_string.(getenv var =$= v1)
-             [printf (c_string "Iteration\\n") []; setenv var v2] ]) ]
+             [printf (c_string "Iteration\\n") []; setenv ~var v2] ]) ]
   in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in

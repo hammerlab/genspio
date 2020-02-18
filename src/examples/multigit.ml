@@ -282,7 +282,7 @@ Pretty cool, right:
           [ if_seq version
               ~t:[out (sprintf "%s: %s" name version_string) []]
               ~e:
-                [ setenv (str "PAGER") (str "cat")
+                [ setenv ~var:(str "PAGER") (str "cat")
                 ; Elist.iter anon ~f:(fun p -> do_section (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
@@ -593,7 +593,7 @@ module Meta_repository = struct
     in
     loop []
 
-  let readme_md ~path ~output =
+  let readme_md ~path:_ ~output =
     let o = open_out output in
     let open Format in
     let fmt = formatter_of_out_channel o in

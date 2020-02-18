@@ -101,7 +101,7 @@ let downloader () =
     let to_loop name_variable t_list =
       loop_while
         (string_matches_any name_variable#get
-           (List.map t_list (fun t -> sprintf "\\.%s$" t.extension)))
+           (List.map t_list ~f:(fun t -> sprintf "\\.%s$" t.extension)))
         ~body:(to_switch name_variable t_list)
 
     let all =
@@ -138,7 +138,7 @@ let downloader () =
         "Download archives and decrypt/unarchive them.\n\
          ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
   in
-  Command_line.parse cli_spec (fun ~anon url all_in_tmp filename_ov tmp_dir ->
+  Command_line.parse cli_spec (fun ~anon:_ url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         if_seq

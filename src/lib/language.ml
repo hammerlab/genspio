@@ -27,7 +27,7 @@ module Literal = struct
          |'/' | '#' | '@' | '!' | ' ' | '~' | '`' | '\\' | '|' | '?' | '>'
          |'<' | '.' | ',' | ':' | ';' | '{' | '}' | '(' | ')' | '[' | ']' ->
             true
-        | other -> false )
+        | _ -> false )
 
     let impossible_to_escape_for_variable = String.exists ~f:(( = ) '\x00')
   end
@@ -181,9 +181,9 @@ let rec pp : type a. Format.formatter -> a t -> unit =
     | String_to_int i -> pp_fun_call fmt "string-to-int" pp [i]
     | Bool_to_string b -> pp_fun_call fmt "bool-to-string" pp [b]
     | String_to_bool b -> pp_fun_call fmt "string-to-bool" pp [b]
-    | List_to_string (l, f) -> pp_fun_call fmt "list-to-string" pp [l]
+    | List_to_string (l, _) -> pp_fun_call fmt "list-to-string" pp [l]
     (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
-    | String_to_list (s, f) -> pp_fun_call fmt "string-to-list" pp [s]
+    | String_to_list (s, _) -> pp_fun_call fmt "string-to-list" pp [s]
     | List l -> pp_fun_call fmt "list" pp l
     | C_string_concat t -> pp_fun_call fmt "c-string-concat" pp [t]
     | Byte_array_concat t -> pp_fun_call fmt "byte-array-concat" pp [t]
@@ -277,7 +277,7 @@ module Construct = struct
 
     let ( %%% ) s u = comment s u
 
-    let make_switch : type a.
+    let make_switch :
         (bool t * unit t) list -> default:unit t -> unit t =
      fun conds ~default ->
       List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
