@@ -22,11 +22,11 @@ let string_to_octal ?(prefix = "") s =
   with_buffer (fun str ->
       String.iter s ~f:(fun c ->
           str prefix ;
-          Char.code c |> sprintf "%03o" |> str))
+          Char.to_int c |> Fmt.str "%03o" |> str))
   |> fst
 
 let expand_octal_command ~remove_l s =
-  sprintf
+  Fmt.str
     {sh| printf -- "$(printf -- '%%s\n' %s %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
     s
     (if remove_l then "| tr -d L" else "")
@@ -34,11 +34,12 @@ let expand_octal_command ~remove_l s =
 let m = ref 0
 
 let var_name ?expression ?script tag =
-  incr m ;
+  Caml.incr m ;
   let stag = String.map tag ~f:(function '-' -> '_' | a -> a) in
-  sprintf "genspio_%s_%d_%d_%s" stag (Random.int 100_000_000) !m
-    ( Marshal.to_string (expression, script) [Marshal.Closures]
-    |> Digest.string |> Digest.to_hex )
+  Fmt.str "genspio_%s_%d_%d_%s" stag (Random.int 100_000_000) !m
+    Caml.(
+      Marshal.to_string (expression, script) [Marshal.Closures]
+      |> Digest.string |> Digest.to_hex)
 
 module Tmp_db = struct
   type t =
@@ -49,7 +50,7 @@ module Tmp_db = struct
   let make ?(deletion_grouping = 20) how =
     let default_tmpdir =
       match how with
-      | `Fresh -> Filename.concat "/tmp" (var_name "tmpdir")
+      | `Fresh -> Caml.Filename.concat "/tmp" (var_name "tmpdir")
       | `Use p -> p in
     {default_tmpdir; tmp_file_db= []; deletion_grouping}
 
@@ -63,16 +64,17 @@ module Tmp_db = struct
       | [] -> []
       | l ->
           let tk, nxt = List.split_n l t.deletion_grouping in
-          sprintf "rm -f %s"
-            ( List.map tk ~f:(fun (v, _) -> sprintf "\"${%s}\"" v)
+          Fmt.str "rm -f %s"
+            ( List.map tk ~f:(fun (v, _) -> Fmt.str "\"${%s}\"" v)
             |> String.concat ~sep:" " )
           :: unroll nxt in
-    sprintf "%s () {\n: Deleting all the temporary files:\n%s\n}" delete_fname
-    @@ String.concat ~sep:"\n" (unroll (List.dedup t.tmp_file_db))
+    Fmt.str "%s () {\n: Deleting all the temporary files:\n%s\n}" delete_fname
+    @@ String.concat ~sep:"\n"
+         (unroll (List.dedup_and_sort t.tmp_file_db ~compare:Poly.compare))
 
   let tmp_vars t =
-    List.map (List.dedup t.tmp_file_db) ~f:(fun (v, dir) ->
-        (v, dir, sprintf "%s=%s/tmp-%s" v dir v))
+    List.map (List.dedup_and_sort t.tmp_file_db ~compare:Poly.compare)
+      ~f:(fun (v, dir) -> (v, dir, Fmt.str "%s=%s/tmp-%s" v dir v))
 end
 
 (*md
@@ -120,25 +122,25 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
   *)
   let to_argument ?(arithmetic = false) = function
     | Unit -> "\"$(exit 42)\""
-    | Literal_value s when String.exists s ~f:(( = ) '\x00') ->
+    | Literal_value s when String.exists s ~f:Char.(( = ) '\x00') ->
         let oct = string_to_octal s in
-        let v = sprintf "$(%s)" (expand_octal_command ~remove_l:false oct) in
-        if not arithmetic then sprintf "\"%s\"" v else v
+        let v = Fmt.str "$(%s)" (expand_octal_command ~remove_l:false oct) in
+        if not arithmetic then Fmt.str "\"%s\"" v else v
     | Literal_value s ->
-        let v = Filename.quote s in
-        if arithmetic then sprintf "$(printf -- %s)" v else v
+        let v = Caml.Filename.quote s in
+        if arithmetic then Fmt.str "$(printf -- %s)" v else v
     | File s ->
-        let v = sprintf "$(cat %s)" (Filename.quote s) in
-        if not arithmetic then sprintf "\"%s\"" v else v
+        let v = Fmt.str "$(cat %s)" (Caml.Filename.quote s) in
+        if not arithmetic then Fmt.str "\"%s\"" v else v
     | Tmp_file_in_variable s ->
         (* Parameters.(tmp_file_db := s :: !tmp_file_db) ; *)
-        let v = sprintf "$(cat ${%s})" s in
-        if not arithmetic then sprintf "\"%s\"" v else v
+        let v = Fmt.str "$(cat ${%s})" s in
+        if not arithmetic then Fmt.str "\"%s\"" v else v
     | Raw_inline s when not arithmetic -> s
-    | Raw_inline s -> sprintf "$(printf -- '%%s' %s)" s
+    | Raw_inline s -> Fmt.str "$(printf -- '%%s' %s)" s
     | Octal_value_in_variable var ->
-        (if arithmetic then sprintf "$(%s)" else sprintf "\"$(%s)\"")
-          (expand_octal_command ~remove_l:true (sprintf "${%s}" var))
+        (if arithmetic then Fmt.str "$(%s)" else Fmt.str "\"$(%s)\"")
+          (expand_octal_command ~remove_l:true (Fmt.str "${%s}" var))
 
   (*md
   
@@ -153,11 +155,12 @@ In that case, we compare the octal representations.
     | Raw_inline s -> s
     | Literal_value s -> string_to_octal s
     | File f ->
-        sprintf "$(cat %s | od -t o1 -An -v | tr -d ' \\n')" (Filename.quote f)
+        Fmt.str "$(cat %s | od -t o1 -An -v | tr -d ' \\n')"
+          (Caml.Filename.quote f)
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
-        sprintf "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
-    | Octal_value_in_variable var -> sprintf "${%s}" var
+        Fmt.str "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
+    | Octal_value_in_variable var -> Fmt.str "${%s}" var
 
   let commands s = s.commands
 
@@ -165,10 +168,10 @@ In that case, we compare the octal representations.
     | Unit -> assert false
     | Raw_inline s -> s
     | Literal_value _ -> assert false
-    | File f -> Filename.quote f
+    | File f -> Caml.Filename.quote f
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
-        sprintf "\"${%s}\"" f
+        Fmt.str "\"${%s}\"" f
     | Octal_value_in_variable _ -> assert false
 
   (*md
@@ -189,8 +192,8 @@ In that case, we compare the octal representations.
       | Raw s -> fprintf fmt "%s" s
       | Comment s ->
           fprintf fmt "%s"
-            ( String.split ~on:(`Character '\n') s
-            |> List.map ~f:(sprintf "##  %s")
+            ( String.split ~on:'\n' s
+            |> List.map ~f:(Fmt.str "##  %s")
             |> String.concat ~sep:"\n" )
       | Redirect {block; stdout} ->
           fprintf fmt ": redirect ; %a  > %s" pp_block block
@@ -207,7 +210,7 @@ In that case, we compare the octal representations.
           fprintf fmt "%a"
             (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt " | ") pp_block)
             blocks
-      | Make_directory f when List.mem ~set:!mkdir_done f -> ()
+      | Make_directory f when List.mem !mkdir_done f ~equal:Poly.equal -> ()
       | Make_directory f ->
           mkdir_done := f :: !mkdir_done ;
           fprintf fmt "mkdir -p %s" f
@@ -224,12 +227,12 @@ In that case, we compare the octal representations.
     fprintf fmt "%a\n# Result: %a\n" pp_command_list script.commands pp_result
       script.result
 
-  let rawf fmt = ksprintf (fun s -> Raw s) fmt
-  let cmtf fmt = ksprintf (fun s -> Comment s) fmt
+  let rawf fmt = Fmt.kstr (fun s -> Raw s) fmt
+  let cmtf fmt = Fmt.kstr (fun s -> Comment s) fmt
   let make commands result = {commands; result}
   let unit commands = make commands Unit
   let literal_value v = make [] (Literal_value v)
-  let assert_unit s = assert (s.result = Unit)
+  let assert_unit s = assert (Poly.(s.result = Unit))
 
   let redirect ~stdout block =
     { stdout with
@@ -237,7 +240,7 @@ In that case, we compare the octal representations.
 
   let mktmp ~tmpdb ?expression ?script tag =
     let v = var_name ?expression ?script tag in
-    let dir = sprintf "\"${TMPDIR:-%s}\"" (Tmp_db.default_tmpdir tmpdb) in
+    let dir = Fmt.str "\"${TMPDIR:-%s}\"" (Tmp_db.default_tmpdir tmpdb) in
     Tmp_db.register_file tmpdb ~variable:v ~directory:dir ;
     make [] (Tmp_file_in_variable v)
 
@@ -275,7 +278,7 @@ In that case, we compare the octal representations.
       | Literal_value "false" -> (Literal_value "true", [])
       | Literal_value s ->
           (Literal_value s, []) (* This should just be an error later *)
-      | Raw_inline s -> (Raw_inline (sprintf "! %s" s), [])
+      | Raw_inline s -> (Raw_inline (Fmt.str "! %s" s), [])
       | (Tmp_file_in_variable _ | File _ | Octal_value_in_variable _) as p ->
           ( tmp.result
           , tmp.commands
@@ -290,7 +293,7 @@ In that case, we compare the octal representations.
       commands=
         tmp.commands @ commands
         @ [ If_then_else
-              { condition= sprintf " [ $? -eq %d ]" v
+              { condition= Fmt.str " [ $? -eq %d ]" v
               ; block_then= bool_to_file true tmp.result
               ; block_else= bool_to_file false tmp.result } ] }
 
@@ -334,7 +337,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     let loop =
       [ rawf "rm -f %s ; touch %s ; for %s in $(cat %s) ; do %s >> %s\ndone"
           tmppatharg tmppatharg file_var list_file
-          (expand_octal_command ~remove_l:true (sprintf "${%s}" file_var))
+          (expand_octal_command ~remove_l:true (Fmt.str "${%s}" file_var))
           tmppatharg ] in
     make (tmp.commands @ sl_script.commands @ loop) tmp.result in
   let result_to_file s =
@@ -345,11 +348,11 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     let mk (cmd, res) = Script.make (res.commands @ [cmd]) res.result in
     match s.result with
     | Unit -> mk (rawf "echo '' > %s" tmparg, tmp)
-    | Literal_value v when String.exists v ~f:(( = ) '\x00') ->
+    | Literal_value v when String.exists v ~f:Char.(( = ) '\x00') ->
         let esc = string_to_octal v ~prefix:"\\" in
         mk (rawf "printf -- '%s' > %s" esc tmparg, tmp)
     | Literal_value v ->
-        mk (rawf "printf -- '%%s' %s > %s" (Filename.quote v) tmparg, tmp)
+        mk (rawf "printf -- '%%s' %s > %s" (Caml.Filename.quote v) tmparg, tmp)
     | File p -> mk (rawf ":", make [] (File p))
     | Tmp_file_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
     | Raw_inline s -> mk (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
@@ -373,34 +376,34 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let extra_check =
         match script.result with
         | Unit -> assert false
-        | Literal_value li when String.exists li ~f:(( = ) '\x00') ->
+        | Literal_value li when String.exists li ~f:Char.(( = ) '\x00') ->
             fail_commands "Cannot convert literal %S to C-String"
         | Literal_value _ -> []
         | File f ->
             [ If_then_else
                 { condition=
-                    sprintf
+                    Fmt.str
                       "od -t o1 -An -v %s | grep ' 000' > /dev/null 2>&1 " f
                 ; block_then=
-                    ksprintf fail_commands
+                    Fmt.kstr fail_commands
                       "Byte array in %s cannot be converted to a C-String" f
                 ; block_else= [] } ]
         | Tmp_file_in_variable v ->
             [ If_then_else
                 { condition=
-                    sprintf
+                    Fmt.str
                       "od -t o1 -An -v ${%s} | grep ' 000' > /dev/null 2>&1 " v
                 ; block_then=
-                    ksprintf fail_commands
+                    Fmt.kstr fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
                 ; block_else= [] } ]
         | Raw_inline _ -> []
         | Octal_value_in_variable v ->
             [ If_then_else
                 { condition=
-                    sprintf "echo ${%s} | grep ' 000' > /dev/null 2>&1 " v
+                    Fmt.str "echo ${%s} | grep ' 000' > /dev/null 2>&1 " v
                 ; block_then=
-                    ksprintf fail_commands
+                    Fmt.kstr fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
                 ; block_else= [] } ] in
       make (script.commands @ extra_check) script.result
@@ -415,7 +418,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let ops = match op with `And -> "&&" | `Or -> "||" in
       let open Script in
       let condition =
-        sprintf "{ %s %s %s ; }" (to_argument asc.result) ops
+        Fmt.str "{ %s %s %s ; }" (to_argument asc.result) ops
           (to_argument bsc.result) in
       let tmp = mktmp ~tmpdb ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
@@ -425,7 +428,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let ops = match op with `Eq -> "=" | `Neq -> "!=" in
       let open Script in
       let condition =
-        sprintf "[ \"%s\" %s \"%s\" ]" (to_ascii asc.result) ops
+        Fmt.str "[ \"%s\" %s \"%s\" ]" (to_ascii asc.result) ops
           (to_ascii bsc.result) in
       let tmp = mktmp ~tmpdb ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
@@ -466,7 +469,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               | `Fd c -> (continue c, "&")
               | `Path p -> (continue p, "") in
             let print_exec_command =
-              sprintf "printf 'exec %%s>%s%%s' %s %s" op
+              Fmt.str "printf 'exec %%s>%s%%s' %s %s" op
                 (to_argument take_script.result)
                 (to_argument redirect_to_script.result) in
             ( precmds @ take_script.commands @ redirect_to_script.commands
@@ -487,7 +490,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     ( "Writing return value"
                     , Raw_cmd
                         ( None
-                        , sprintf "printf -- \"$?\" > %s"
+                        , Fmt.str "printf -- \"$?\" > %s"
                             Script.(to_argument scr.result) ) ) ] ) in
       let redirections =
         let make fd =
@@ -502,9 +505,9 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       Script.literal_value
         Literal.(
           match lit with
-          | Int i -> string_of_int i
+          | Int i -> Int.to_string i
           | String s -> s
-          | Bool s -> string_of_bool s)
+          | Bool s -> Bool.to_string s)
   | Output_as_string e ->
       let open Script in
       let ir = continue e in
@@ -548,7 +551,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
         If
           ( Bool_operator (is "true", `Or, is "false")
           , No_op
-          , Fail (sprintf "String-to-Bool: %S" (Script.to_argument scr.result))
+          , Fail (Fmt.str "String-to-Bool: %S" (Script.to_argument scr.result))
           ) in
       let check = continue extra_check in
       Script.make (scr.commands @ check.commands) scr.result
@@ -731,7 +734,7 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
   let fail_commands s =
     match trap with
     | `Exit_with _ ->
-        [ rawf "printf '%%s\\n' %s > %s " (Filename.quote s) tmparg
+        [ rawf "printf '%%s\\n' %s > %s " (Caml.Filename.quote s) tmparg
         ; rawf "kill -s %s ${%s}" signal_name pid ]
     | `None ->
         failwith "You cannot use the `fail` construct with no `trap` strategy"
@@ -863,10 +866,10 @@ let test () =
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in
       fprintf std_formatter "==== TEST %d ====\n%a\n%!" idx Script.pp_posix ir ;
-      let script_file = sprintf "/tmp/script-%d.sh" idx in
-      let o = open_out script_file in
+      let script_file = Fmt.str "/tmp/script-%d.sh" idx in
+      let o = Caml.open_out script_file in
       fprintf (formatter_of_out_channel o) "\n%a\n%!" Script.pp_posix ir ;
-      flush o ;
-      close_out o ;
-      let res = ksprintf Sys.command "sh %s" script_file in
+      Caml.flush o ;
+      Caml.close_out o ;
+      let res = Fmt.kstr Caml.Sys.command "sh %s" script_file in
       fprintf std_formatter "\nRESULT: %d\n" res)

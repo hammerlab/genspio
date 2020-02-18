@@ -1,13 +1,13 @@
+open Common
+
 type 'a t = 'a Language.t
 type c_string = Language.c_string
 type byte_array = Language.byte_array
 type fd_redirection = Language.fd_redirection
 
-let ( // ) = Filename.concat
+let ( // ) = Caml.Filename.concat
 
 include Language.Construct
-open Nonstd
-module String = Sosa.Native_string
 
 let case condition body = `Case (condition, seq body)
 let default d = `Default (seq d)
@@ -16,7 +16,7 @@ let switch l =
   let default = ref None in
   let cases =
     List.filter_map l ~f:(function
-      | `Default _ when !default <> None ->
+      | `Default _ when Poly.(!default <> None) ->
           failwith "Cannot build switch with >1 defaults"
       | `Default d ->
           default := Some d ;
@@ -62,8 +62,8 @@ let tmp_file ?tmp_dir name : file =
     C_string.concat_list
       [ get_tmp_dir; c_string "/"
       ; c_string
-          (sprintf "genspio-tmp-file-%s-%s" clean
-             Digest.(string name |> to_hex)) ] in
+          (Fmt.str "genspio-tmp-file-%s-%s" clean
+             Caml.Digest.(string name |> to_hex)) ] in
   let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = get_stdout (call [string "cat"; path])
@@ -127,9 +127,9 @@ module Command_line = struct
       (action : anon:c_string list t -> 'a) : unit t =
     let prefix = Common.Unique_name.variable "getopts" in
     let variable {switches; _} =
-      sprintf "%s_%s" prefix
-        (String.concat ~sep:"" switches |> Digest.string |> Digest.to_hex)
-    in
+      Fmt.str "%s_%s" prefix
+        ( String.concat ~sep:"" switches
+        |> Caml.Digest.string |> Caml.Digest.to_hex ) in
     let inits = ref [] in
     let to_init s = inits := s :: !inits in
     let cases = ref [] in
@@ -140,8 +140,9 @@ module Command_line = struct
     let string_of_var var = getenv (string var) in
     let bool_of_var var = getenv (string var) |> Bool.of_string in
     let anon_tmp =
-      ksprintf tmp_file "parse-cli-%s"
-        (Marshal.to_string options [] |> Digest.string |> Digest.to_hex) in
+      Fmt.kstr tmp_file "parse-cli-%s"
+        Caml.(Marshal.to_string options [] |> Digest.string |> Digest.to_hex)
+    in
     let anon = anon_tmp#get |> Elist.deserialize_to_c_string_list in
     let applied_action =
       (* 
@@ -184,7 +185,7 @@ module Command_line = struct
                      ~e:[setenv ~var:(string var) (getenv (string "2"))]
                  ; exec ["shift"]
                  ; exec ["shift"] ]) ;
-            ksprintf to_help "* `%s <string>`: %s"
+            Fmt.kstr to_help "* `%s <string>`: %s"
               (String.concat ~sep:"," x.switches)
               x.doc ;
             loop (f (string_of_var var)) more
@@ -197,15 +198,15 @@ module Command_line = struct
                       p ||| C_string.equals (string s) (getenv (string "1"))))
                  [ setenv ~var:(string var) (Bool.to_string (bool true))
                  ; exec ["shift"] ]) ;
-            ksprintf to_help "* `%s`: %s"
+            Fmt.kstr to_help "* `%s`: %s"
               (String.concat ~sep:"," x.switches)
               x.doc ;
             loop (f (bool_of_var var)) more in
       loop (action ~anon) options in
     let help_msg =
-      sprintf "%s\n\nOptions:\n\n%s\n" !help_intro
+      Fmt.str "%s\n\nOptions:\n\n%s\n" !help_intro
         (String.concat ~sep:"\n" (List.rev !help)) in
-    let help_flag_var = ksprintf string "%s_help" prefix in
+    let help_flag_var = Fmt.kstr string "%s_help" prefix in
     let while_loop =
       let body =
         let append_anon_arg_to_list =
@@ -247,7 +248,7 @@ module Command_line = struct
       ; seq (List.rev !inits)
       ; while_loop
       ; if_then_else
-          (bool_of_var (sprintf "%s_help" prefix))
+          (bool_of_var (Fmt.str "%s_help" prefix))
           nop applied_action ]
 end
 
@@ -271,12 +272,12 @@ let loop_until_true ?(attempts = 20) ?(sleep = 2)
              ; intvar#set Integer.(intvar#get + int 1)
              ; if_then
                  Integer.(intvar#get <= int attempts)
-                 (exec ["sleep"; sprintf "%d" sleep]) ])
+                 (exec ["sleep"; Fmt.str "%d" sleep]) ])
     ; exec ["printf"; "\\n"]
     ; if_then_else
         Integer.(intvar#get > int attempts)
-        (seq [(* sprintf "Command failed %d times!" attempts; *) exec ["false"]])
-        (seq [(* sprintf "Command failed %d times!" attempts; *) exec ["true"]])
+        (seq [(* Fmt.str "Command failed %d times!" attempts; *) exec ["false"]])
+        (seq [(* Fmt.str "Command failed %d times!" attempts; *) exec ["true"]])
     ]
   |> returns ~value:0
 
@@ -289,9 +290,9 @@ let seq_and l = List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
 let output_markdown_code tag f =
   seq
-    [ exec ["printf"; sprintf "``````````%s\\n" tag]
+    [ exec ["printf"; Fmt.str "``````````%s\\n" tag]
     ; f
-    ; exec ["printf"; sprintf "\\n``````````\\n"] ]
+    ; exec ["printf"; Fmt.str "\\n``````````\\n"] ]
 
 let cat_markdown tag file =
   output_markdown_code tag @@ call [string "cat"; file]
@@ -301,7 +302,7 @@ let fresh_name suf =
     object
       method v = 42
     end in
-  sprintf "g-%d-%d-%s" (Oo.id x) (Random.int 100_000) suf
+  Fmt.str "g-%d-%d-%s" (Caml.Oo.id x) (Random.int 100_000) suf
 
 let sanitize_name n =
   String.map n ~f:(function
@@ -310,7 +311,7 @@ let sanitize_name n =
 
 let default_on_failure ~step:(i, _) ~stdout ~stderr =
   seq
-    [ printf (ksprintf c_string "Step '%s' FAILED:\\n" i) []
+    [ printf (Fmt.kstr c_string "Step '%s' FAILED:\\n" i) []
     ; cat_markdown "stdout" stdout
     ; cat_markdown "stderr" stderr
     ; exec ["false"] ]
@@ -323,7 +324,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
   let tmpout which id =
     c_string
       ( tmpdir
-      // sprintf "genspio-check-sequence-%s-%s-%s" tmp_prefix which
+      // Fmt.str "genspio-check-sequence-%s-%s-%s" tmp_prefix which
            (sanitize_name id) ) in
   let stdout id = tmpout "stdout" id in
   let stderr id = tmpout "stderr" id in
@@ -332,11 +333,11 @@ let check_sequence ?(verbosity = `Announce ">> ")
     | `Silent -> write_output ~stdout:(stdout id) ~stderr:(stderr id) u
     | `Announce prompt ->
         seq
-          [ printf (ksprintf c_string "%s %s\\n" prompt id) []
+          [ printf (Fmt.kstr c_string "%s %s\\n" prompt id) []
           ; write_output ~stdout:(stdout id) ~stderr:(stderr id) u ]
     | `Output_all -> u in
   let check idx (nam, u) next =
-    let id = sprintf "%d. %s" idx nam in
+    let id = Fmt.str "%d. %s" idx nam in
     if_seq
       (log id u |> succeeds)
       ~t:

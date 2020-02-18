@@ -24,7 +24,7 @@ module To_posix = struct
     ; comment_backtrace: string list }
 
   let pp_error = Standard_compiler.pp_error
-  let error_to_string = Format.asprintf "%a" pp_error
+  let error_to_string = Fmt.str "%a" pp_error
 
   type parameters =
     { style: [`One_liner | `Multi_line]
@@ -35,27 +35,27 @@ module To_posix = struct
   let failure_to_stderr : death_function =
    fun ~comment_stack msg ->
     let summary s =
-      match String.sub s ~index:0 ~length:65 with
-      | Some s -> s ^ " …"
-      | None -> s in
-    let open Format in
-    let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
+      match String.sub s ~pos:0 ~len:65 with
+      | s -> s ^ " …"
+      | exception _ -> s in
+    let open Fmt in
+    let big_string ppf s = pf ppf "@[%s@]" (summary s) in
     let msg_str =
-      Format.asprintf "@[Error:@ @[%a@]%a@]"
+      str "@[Error:@ @[%a@]%a@]"
         (Standard_compiler.pp_death_message ~style:`User ~big_string)
         msg
-        (fun fmt () ->
+        (fun ppf () ->
           match comment_stack with
-          | [] -> fprintf fmt ""
+          | [] -> pf ppf ""
           | more ->
-              fprintf fmt ";@ Comment-stack:@ @[[%a]@]"
-                (pp_print_list
-                   ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
-                   (fun fmt s -> fprintf fmt "@[`%s`@]" s))
+              pf ppf ";@ Comment-stack:@ @[[%a]@]"
+                (list
+                   ~sep:(fun ppf () -> pf ppf ",@ ")
+                   (fun ppf s -> pf ppf "@[`%s`@]" s))
                 more)
         ()
-      |> Filename.quote in
-    asprintf " printf -- '%%s\\n' %s >&2 " msg_str
+      |> Caml.Filename.quote in
+    str " printf -- '%%s\\n' %s >&2 " msg_str
 
   let one_liner =
     { style= `One_liner
@@ -117,16 +117,16 @@ let to_many_lines ?max_argument_length ?no_trap e =
   to_legacy `Multi_line ?max_argument_length ?no_trap e
 
 let quick_run_exn ?max_argument_length ?no_trap e =
-  match to_many_lines ?max_argument_length ?no_trap e |> Sys.command with
+  match to_many_lines ?max_argument_length ?no_trap e |> Caml.Sys.command with
   | 0 -> ()
-  | other -> ksprintf failwith "Command returned %d" other
+  | other -> Fmt.failwith "Command returned %d" other
 
 let pp_hum = Language.pp
-let to_string_hum e = Format.asprintf "%a" pp_hum e
+let to_string_hum e = Fmt.str "%a" pp_hum e
 
 let to_one_line_hum e =
   let buf = Buffer.create 42 in
-  let formatter = Format.formatter_of_buffer buf in
-  Format.pp_set_margin formatter 10_000_000 ;
-  Format.fprintf formatter "@[<h>%a@]@?" pp_hum e ;
+  let formatter = Caml.Format.formatter_of_buffer buf in
+  Caml.Format.pp_set_margin formatter 10_000_000 ;
+  Caml.Format.fprintf formatter "@[<h>%a@]@?" pp_hum e ;
   Buffer.contents buf

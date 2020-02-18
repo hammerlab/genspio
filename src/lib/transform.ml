@@ -225,8 +225,8 @@ side-effectful).
         | Literal (Literal.String sa), op, Literal (Literal.String sb) ->
             Literal
               ( match op with
-              | `Neq -> Literal.Bool (sa <> sb)
-              | `Eq -> Literal.Bool (sa = sb) )
+              | `Neq -> Literal.Bool String.(sa <> sb)
+              | `Eq -> Literal.Bool String.(sa = sb) )
         | _ -> String_operator (ga, op, gb)
 
       method! returns : type a. expr:a t -> _ =
@@ -259,7 +259,8 @@ side-effectful).
 
       method! seq l =
         let transformed =
-          List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op) in
+          List.map ~f:self#expression l |> List.filter ~f:Poly.(( <> ) No_op)
+        in
         match transformed with [] -> No_op | [one] -> one | l -> Seq l
 
       method! pipe l =
@@ -373,8 +374,8 @@ side-effectful).
     let count = ref 0 in
     let check ?trace name e res =
       let p = process ?trace e in
-      incr count ;
-      match p = res with
+      Caml.incr count ;
+      match Poly.(p = res) with
       | true -> ()
       | false ->
           failures :=
@@ -453,7 +454,7 @@ side-effectful).
                %!"
               nth name pp e pp res pp p) ;
         let nb = List.length more in
-        ksprintf failwith "There %s %d test failure%s"
+        Fmt.failwith "There %s %d test failure%s"
           (if nb > 1 then "were" else "was")
           nb
           (if nb > 1 then "s" else "")

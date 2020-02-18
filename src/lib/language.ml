@@ -1,5 +1,8 @@
 open Common
 
+(* Here we use the legacy module (too much code to change at once): *)
+module Format = Caml.Format
+
 type c_string = C_string
 type byte_array = Byte_Array
 
@@ -10,11 +13,11 @@ module Literal = struct
     | Bool : bool -> bool t
 
   let pp : type a. _ -> a t -> unit =
-    let open Format in
+    let open Fmt in
     fun fmt -> function
-      | Int i -> fprintf fmt "@[(int@ %d)@]" i
-      | String s -> fprintf fmt "@[(string@ %S)@]" s
-      | Bool b -> fprintf fmt "@[(bool@ %b)@]" b
+      | Int i -> pf fmt "@[(int@ %d)@]" i
+      | String s -> pf fmt "@[(string@ %S)@]" s
+      | Bool b -> pf fmt "@[(bool@ %b)@]" b
 
   module Str = struct
     let easy_to_escape s =
@@ -28,7 +31,8 @@ module Literal = struct
             true
         | _ -> false)
 
-    let impossible_to_escape_for_variable = String.exists ~f:(( = ) '\x00')
+    let impossible_to_escape_for_variable =
+      String.exists ~f:Char.(( = ) '\x00')
   end
 end
 

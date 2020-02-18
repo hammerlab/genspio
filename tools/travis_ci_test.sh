@@ -88,7 +88,7 @@ eval `opam config env`
 opam update
 
 # Extra dependency for the tests:
-opam install --yes uri
+opam install --yes uri nonstd sosa
 
 opam pin add genspio .
 opam install genspio
