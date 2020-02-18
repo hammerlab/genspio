@@ -103,15 +103,14 @@ genspio_service_composer=_build/default/src/examples/service_composer.exe
 genspio_multigit=_build/default/src/examples/multigit.exe
 
 echo "================== BUILD ALL ==================================================="
-ocaml please.mlt configure
-jbuilder build @install
+dune build @install
 
-jbuilder build $genspio_test
-jbuilder build $genspio_downloader_maker
-jbuilder build $genspio_small_examples
-jbuilder build $genspio_vm_tester
-jbuilder build $genspio_service_composer
-jbuilder build $genspio_multigit
+dune build $genspio_test
+dune build $genspio_downloader_maker
+dune build $genspio_small_examples
+dune build $genspio_vm_tester
+dune build $genspio_service_composer
+dune build $genspio_multigit
 
 echo "================== TESTS ======================================================="
 

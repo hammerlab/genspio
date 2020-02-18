@@ -3,7 +3,7 @@
 A simple way to generate and install the scripts is:
 
     genspio_multigit=_build/default/src/examples/multigit.exe
-    jbuilder build $genspio_multigit
+    dune build $genspio_multigit
     $genspio_multigit $BINNPATH
 
 *)

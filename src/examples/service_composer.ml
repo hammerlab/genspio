@@ -5,7 +5,7 @@ modules.
 A simple way to generate and install the scripts is:
 
     genspio_service_composer=_build/default/src/examples/service_composer.exe
-    jbuilder build $genspio_service_composer
+    dune build $genspio_service_composer
     $genspio_service_composer --name cosc --output-path $BINNPATH
   
 The `cosc*` scripts will be installed and ready to use in `$BINPATH`

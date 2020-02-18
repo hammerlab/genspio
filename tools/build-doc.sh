@@ -4,10 +4,9 @@ set -e
 
 genspio_small_examples=_build/default/src/examples/small_examples.exe
 
-ocaml please.mlt configure
-jbuilder build @install
-jbuilder build @doc
-jbuilder build $genspio_small_examples
+dune build @install
+dune build @doc
+dune build $genspio_small_examples
 
 export output_path=_build/doc/html/
 rm -fr $output_path

@@ -36,10 +36,9 @@ You can also build locally:
 You need OCaml ≥ 4.03.0 together with
 [`nonstd`](http://www.hammerlab.org/docs/nonstd/master/index.html),
 [`sosa`](http://www.hammerlab.org/docs/sosa/master/index.html), and
-[`jbuilder`](https://github.com/janestreet/jbuilder):
+[`dune`](https://github.com/janestreet/dune):
 
-    ocaml please.mlt configure
-    jbuilder build @install
+    dune build @install
 
 Getting Started
 ---------------
@@ -148,7 +147,7 @@ To run the tests you also need `make` and there is an additional dependency on
 the `uri` library, see:
 
     genspio_test=_build/default/src/test/main.exe
-    jbuilder build $genspio_test
+    dune build $genspio_test
     $genspio_test --help
 
 
