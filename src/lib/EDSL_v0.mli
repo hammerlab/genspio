@@ -7,19 +7,19 @@ while the functions in the {!EDSL} module {i “hide”} the conversions
 
 *)
 
-(** The type of a Genspio expression. *)
 type 'a t = 'a Language.t
+(** The type of a Genspio expression. *)
 
+type byte_array = Language.byte_array
 (** Type to encode arbitrary byte-arrays in the EDSL as
     [byte_array t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays. *)
-type byte_array = Language.byte_array
 
+type c_string = Language.c_string
 (** Type to encode NUL-terminated strings in the EDSL as
     [c_string t] values. C-strings cannot contain the ['\x00'] character.
     The command line arguments of commands as well as the contents of
     environment variables must be C-strings. *)
-type c_string = Language.c_string
 
 (** {3 Literals } *)
 
@@ -33,7 +33,6 @@ val byte_array : string -> byte_array t
 (** Create a {!type:byte_array} literal. *)
 
 val int : int -> int t
-
 val bool : bool -> bool t
 
 (** {3 Comments} *)
@@ -82,9 +81,7 @@ val setenv : var:c_string t -> c_string t -> unit t
 (** {3 Boolean Expressions} *)
 
 val ( &&& ) : bool t -> bool t -> bool t
-
 val ( ||| ) : bool t -> bool t -> bool t
-
 val not : bool t -> bool t
 
 val returns : 'a t -> value:int -> bool t
@@ -100,7 +97,6 @@ val file_exists : c_string t -> bool t
 (** Conversions of the [bool t] type. *)
 module Bool : sig
   val to_string : bool t -> c_string t
-
   val of_string : c_string t -> bool t
 end
 
@@ -109,60 +105,35 @@ end
 (** Functions on [int t] values (arithmetic, comparisons, conversions, etc.). *)
 module Integer : sig
   val to_string : int t -> c_string t
-
   val to_byte_array : int t -> byte_array t
-
   val of_string : c_string t -> int t
-
   val of_byte_array : byte_array t -> int t
 
   val bin_op :
     int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
 
   val add : int t -> int t -> int t
-
   val ( + ) : int t -> int t -> int t
-
   val sub : int t -> int t -> int t
-
   val ( - ) : int t -> int t -> int t
-
   val mul : int t -> int t -> int t
-
   val ( * ) : int t -> int t -> int t
-
   val div : int t -> int t -> int t
-
   val ( / ) : int t -> int t -> int t
-
   val modulo : int t -> int t -> int t
-
   val ( mod ) : int t -> int t -> int t
-
   val cmp : [`Eq | `Ge | `Gt | `Le | `Lt | `Ne] -> int t -> int t -> bool t
-
   val eq : int t -> int t -> bool t
-
   val ne : int t -> int t -> bool t
-
   val lt : int t -> int t -> bool t
-
   val le : int t -> int t -> bool t
-
   val ge : int t -> int t -> bool t
-
   val gt : int t -> int t -> bool t
-
   val ( = ) : int t -> int t -> bool t
-
   val ( <> ) : int t -> int t -> bool t
-
   val ( < ) : int t -> int t -> bool t
-
   val ( <= ) : int t -> int t -> bool t
-
   val ( >= ) : int t -> int t -> bool t
-
   val ( > ) : int t -> int t -> bool t
 end
 
@@ -181,15 +152,10 @@ module Elist : sig
       function that returns the current eletment at the EDSL level. *)
 
   val serialize_byte_array_list : byte_array list t -> byte_array t
-
   val deserialize_to_byte_array_list : byte_array t -> byte_array list t
-
   val serialize_c_string_list : c_string list t -> byte_array t
-
   val deserialize_to_c_string_list : byte_array t -> c_string list t
-
   val serialize_int_list : int list t -> byte_array t
-
   val deserialize_to_int_list : byte_array t -> int list t
 end
 
@@ -197,23 +163,16 @@ end
 
 module Byte_array : sig
   val ( =$= ) : byte_array t -> byte_array t -> bool t
-
   val ( <$> ) : byte_array t -> byte_array t -> bool t
-
   val to_c_string : byte_array t -> c_string t
-
   val to_c : byte_array t -> c_string t
 end
 
 module C_string : sig
   val equals : c_string t -> c_string t -> bool t
-
   val ( =$= ) : c_string t -> c_string t -> bool t
-
   val ( <$> ) : c_string t -> c_string t -> bool t
-
   val to_byte_array : c_string t -> byte_array t
-
   val to_bytes : c_string t -> byte_array t
 
   val concat_list : c_string t list -> c_string t
@@ -229,7 +188,6 @@ val nop : unit t
 (** The silent “no-operation.” *)
 
 val if_then_else : bool t -> unit t -> unit t -> unit t
-
 val if_then : bool t -> unit t -> unit t
 
 val seq : unit t list -> unit t
@@ -271,8 +229,8 @@ val make_switch :
 
 (** {3 Redirections and File Descriptors } *)
 
-(** Abstract type of file-descriptor redirections. *)
 type fd_redirection
+(** Abstract type of file-descriptor redirections. *)
 
 val to_fd : int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
@@ -343,7 +301,6 @@ val fail : string -> unit t
 
 (** {3 Temporary Files} *)
 
-(** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
   < get: byte_array t  (** Get the current contents of the file *)
   ; get_c: c_string t
@@ -352,6 +309,7 @@ type file =
   ; append: byte_array t -> unit t
   ; delete: unit t
   ; path: c_string t >
+(** Abstraction of a file, cf. {!tmp_file}. *)
 
 val tmp_file : ?tmp_dir:c_string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be

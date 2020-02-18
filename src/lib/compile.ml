@@ -24,7 +24,6 @@ module To_posix = struct
     ; comment_backtrace: string list }
 
   let pp_error = Standard_compiler.pp_error
-
   let error_to_string = Format.asprintf "%a" pp_error
 
   type parameters =
@@ -36,8 +35,9 @@ module To_posix = struct
   let failure_to_stderr : death_function =
    fun ~comment_stack msg ->
     let summary s =
-      match String.sub s ~index:0 ~length:65 with Some s -> s ^ " …" | None -> s
-    in
+      match String.sub s ~index:0 ~length:65 with
+      | Some s -> s ^ " …"
+      | None -> s in
     let open Format in
     let big_string fmt s = Format.fprintf fmt "@[%s@]" (summary s) in
     let msg_str =
@@ -52,10 +52,9 @@ module To_posix = struct
                 (pp_print_list
                    ~pp_sep:(fun fmt () -> fprintf fmt ",@ ")
                    (fun fmt s -> fprintf fmt "@[`%s`@]" s))
-                more )
+                more)
         ()
-      |> Filename.quote
-    in
+      |> Filename.quote in
     asprintf " printf -- '%%s\\n' %s >&2 " msg_str
 
   let one_liner =
@@ -65,14 +64,12 @@ module To_posix = struct
     ; print_failure= failure_to_stderr }
 
   let multi_line = {one_liner with style= `Multi_line}
-
   let default_options = one_liner
 
   let string_exn ?(options = default_options) term =
     let statement_separator =
-      match options.style with `Multi_line -> "\n" | `One_liner -> " ; "
-    in
-    let {max_argument_length; print_failure;_} = options in
+      match options.style with `Multi_line -> "\n" | `One_liner -> " ; " in
+    let {max_argument_length; print_failure; _} = options in
     match options.fail_with with
     | `Nothing ->
         to_shell
@@ -83,13 +80,13 @@ module To_posix = struct
           (fun ~die ->
             to_shell
               {statement_separator; die_command= Some die; max_argument_length}
-              term )
+              term)
     | `Trap_and_kill (ret, signal) ->
         with_die_function ~print_failure ~statement_separator
           ~signal_name:signal ~trap:(`Exit_with ret) (fun ~die ->
             to_shell
               {statement_separator; die_command= Some die; max_argument_length}
-              term )
+              term)
 
   let string ?options term =
     match string_exn ?options term with
@@ -125,7 +122,6 @@ let quick_run_exn ?max_argument_length ?no_trap e =
   | other -> ksprintf failwith "Command returned %d" other
 
 let pp_hum = Language.pp
-
 let to_string_hum e = Format.asprintf "%a" pp_hum e
 
 let to_one_line_hum e =

@@ -117,8 +117,7 @@ module Visitor = struct
           =
         fun (l, f) ->
           let newf (* : type a. (unit -> a t) -> unit t *) item =
-            self#expression (f item)
-          in
+            self#expression (f item) in
           List_iter (self#expression l, newf)
 
       method byte_array_to_c_string : byte_array t -> c_string t =
@@ -148,7 +147,7 @@ module Visitor = struct
       method expression : type a. a Language.t -> a Language.t =
         fun e ->
           Option.iter trace ~f:(fun formatter ->
-              Format.fprintf formatter "-> %a\n" pp e ) ;
+              Format.fprintf formatter "-> %a\n" pp e) ;
           match e with
           | Exec l -> self#exec (List.map l ~f:self#expression)
           | Raw_cmd (x, y) -> self#raw_cmd (x, y)
@@ -260,8 +259,7 @@ side-effectful).
 
       method! seq l =
         let transformed =
-          List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op)
-        in
+          List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op) in
         match transformed with [] -> No_op | [one] -> one | l -> Seq l
 
       method! pipe l =
@@ -286,9 +284,8 @@ side-effectful).
                       Byte_array_to_c_string
                         (Literal (Literal.String (pstring ^ sitem)))
                       :: more
-                  | _, _ -> item :: prev )
-              |> List.rev
-            in
+                  | _, _ -> item :: prev)
+              |> List.rev in
             match build with
             | [one] -> one
             | more -> C_string_concat (List more) )
@@ -307,9 +304,8 @@ side-effectful).
                   | ( Literal (Literal.String pstring) :: more
                     , Literal (Literal.String sitem) ) ->
                       Literal (Literal.String (pstring ^ sitem)) :: more
-                  | _, _ -> item :: prev )
-              |> List.rev
-            in
+                  | _, _ -> item :: prev)
+              |> List.rev in
             match build with
             | [one] -> one
             | more -> Byte_array_concat (List more) )
@@ -382,8 +378,7 @@ side-effectful).
       | true -> ()
       | false ->
           failures :=
-            (!count, name, Forget e, Forget res, Forget p) :: !failures
-    in
+            (!count, name, Forget e, Forget res, Forget p) :: !failures in
     check "no-op" No_op No_op ;
     check "some bool"
       Construct.(bool true &&& bool false)
@@ -412,17 +407,11 @@ side-effectful).
       Construct.(C_string.concat_list [string "one"; string "-"; string "two"])
       Construct.(string "one-two") ;
     let s n =
-      Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c)
-    in
+      Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
     check "concat one-two"
       Construct.(
         C_string.concat_list
-          [ string "before"
-          ; s 0
-          ; string "one"
-          ; string "-"
-          ; string "two"
-          ; s 1
+          [ string "before"; s 0; string "one"; string "-"; string "two"; s 1
           ; string "" ])
       Construct.(
         C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
@@ -438,9 +427,9 @@ side-effectful).
           [ e 42
           ; loop_seq_while
               ("Comment on the success" %%% succeeds (s 0))
-              [e 1; "Comment on the `setenv`" %%% setenv ~var:(string "bouh") expr]
-          ])
-    in
+              [ e 1
+              ; "Comment on the `setenv`" %%% setenv ~var:(string "bouh") expr
+              ] ]) in
     check "deep1"
       Construct.(make_deep Integer.(to_string (int 1 + int 0)))
       Construct.(make_deep Integer.(to_string (int 1))) ;
@@ -462,7 +451,7 @@ side-effectful).
                Result:\n\
                %a\n\
                %!"
-              nth name pp e pp res pp p ) ;
+              nth name pp e pp res pp p) ;
         let nb = List.length more in
         ksprintf failwith "There %s %d test failure%s"
           (if nb > 1 then "were" else "was")

@@ -6,15 +6,13 @@ let downloader () =
   let say strings =
     let sayone ?(prompt = false) s =
       let prompt = if prompt then "downloader: " else "" in
-      call [string "printf"; string (prompt ^ "%s"); s]
-    in
+      call [string "printf"; string (prompt ^ "%s"); s] in
     match strings with
     | [] -> nop
     | s :: more ->
         seq
           ( (sayone ~prompt:true s :: List.map more ~f:sayone)
-          @ [sayone (string "\n")] )
-  in
+          @ [sayone (string "\n")] ) in
   let sayf fmt = ksprintf (fun s -> say [string s]) fmt in
   let fail l = seq [say (string "ERROR: " :: l); fail "fail-list"] in
   let failf fmt = ksprintf (fun s -> fail [string s]) fmt in
@@ -36,20 +34,16 @@ let downloader () =
             [ sayf "Expression %s failed!" name
             ; call [string "cat"; self#stderr]
             ; failf "Fatal failure of %s" name ]
-    end
-  in
+    end in
   let silence ~name unit =
     let s = silent ~name [unit] in
-    s#exec
-  in
+    s#exec in
   let succeed_in_silence_or_fail ~name units =
     let s = silent ~name units in
-    s#succeed_or_fail
-  in
+    s#succeed_or_fail in
   let download ~url ~output =
     let try_help ?(opt = "--help") cmd =
-      exec [cmd; opt] |> silence ~name:(cmd ^ opt) |> succeeds
-    in
+      exec [cmd; opt] |> silence ~name:(cmd ^ opt) |> succeeds in
     let do_call exec args =
       [ sayf "Using `%s`." exec
       ; succeed_in_silence_or_fail ~name:exec [call (string exec :: args)] ]
@@ -59,22 +53,18 @@ let downloader () =
           (do_call "wget" [url; string "--output-document"; output])
       ; case (try_help "curl")
           (do_call "curl" [string "-L"; string "-o"; output; url])
-      ; default [failf "Can't find a downloading application"] ]
-  in
+      ; default [failf "Can't find a downloading application"] ] in
   let string_matches_any string regexp_list =
     (* Cf. http://pubs.opengroup.org/onlinepubs/009695399/utilities/grep.html *)
     let options = List.concat_map regexp_list ~f:(fun r -> ["-e"; r]) in
-    string >> exec (["grep"; "-q"] @ options) |> succeeds
-  in
+    string >> exec (["grep"; "-q"] @ options) |> succeeds in
   let no_newline_sed ~input expr =
     let with_potential_newline =
       Str.concat_list [input; string "\n"] >> exec ["sed"; expr] |> get_stdout
     in
-    with_potential_newline >> exec ["tr"; "-d"; "\\n"] |> get_stdout
-  in
+    with_potential_newline >> exec ["tr"; "-d"; "\\n"] |> get_stdout in
   let module Unwrapper = struct
     type cmd = unit t
-
     type t = {extension: string; verb: string; commands: file -> cmd list}
 
     let make ~ext ~verb commands = {extension= ext; verb; commands}
@@ -92,8 +82,7 @@ let downloader () =
               (t.commands name_variable)
           ; name_variable#set
               (remove_suffix name_variable#get (sprintf "\\.%s" t.extension))
-          ]
-      in
+          ] in
       seq
         [ say [string "Extract loop: "; name_variable#get]
         ; switch (List.map t_list ~f:make_case) ]
@@ -106,24 +95,22 @@ let downloader () =
 
     let all =
       [ make ~ext:"gz" ~verb:"Gunzipping" (fun current_name ->
-            [call [string "gunzip"; string "-f"; current_name#get]] )
+            [call [string "gunzip"; string "-f"; current_name#get]])
       ; make ~ext:"bz2" ~verb:"Bunzip2-ing" (fun current_name ->
-            [call [string "bunzip2"; string "-f"; current_name#get]] )
+            [call [string "bunzip2"; string "-f"; current_name#get]])
       ; make ~ext:"zip" ~verb:"Unzipping" (fun current_name ->
-            [call [string "unzip"; current_name#get]] )
+            [call [string "unzip"; current_name#get]])
       ; make ~ext:"tar" ~verb:"Untarring" (fun current_name ->
-            [call [string "tar"; string "xf"; current_name#get]] )
+            [call [string "tar"; string "xf"; current_name#get]])
       ; make ~ext:"tgz" ~verb:"Untar-gzip-ing" (fun name ->
-            [call [string "tar"; string "zxf"; name#get]] )
+            [call [string "tar"; string "zxf"; name#get]])
       ; make ~ext:"tbz2" ~verb:"Untar-bzip2-ing" (fun name ->
-            [call [string "tar"; string "xfj"; name#get]] )
+            [call [string "tar"; string "xfj"; name#get]])
       ; make ~ext:"gpg" ~verb:"Decyphering" (fun name ->
             [ call
-                [ string "gpg"
-                ; string "--output"
+                [ string "gpg"; string "--output"
                 ; remove_suffix name#get "\\.gpg"
-                ; string "-d"
-                ; name#get ] ] ) ]
+                ; string "-d"; name#get ] ]) ]
   end in
   let no_value = sprintf "none_%x" (Random.int 100_000) |> string in
   let cli_spec =
@@ -136,27 +123,23 @@ let downloader () =
         ~default:(str "/tmp/genspio-downloader-tmpdir")
     & usage
         "Download archives and decrypt/unarchive them.\n\
-         ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]"
-  in
-  Command_line.parse cli_spec (fun ~anon:_ url all_in_tmp filename_ov tmp_dir ->
+         ./downloader -u URL [-c] [-f <file>] [-t <tmpdir>]" in
+  Command_line.parse cli_spec
+    (fun ~anon:_ url all_in_tmp filename_ov tmp_dir ->
       let current_name = tmp_file ~tmp_dir "current-name" in
       let set_output_of_download () =
         if_seq
           Str.(filename_ov =$= no_value)
           ~t:
             (let filename =
-               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/"
-             in
+               no_newline_sed ~input:url "s/.*\\/\\([^?\\/]*\\).*/\\1/" in
              let output_path =
-               Str.concat_list [tmp_dir; string "/"; filename]
-             in
+               Str.concat_list [tmp_dir; string "/"; filename] in
              [current_name#set output_path])
           ~e:
             (let output_path =
-               Str.concat_list [tmp_dir; string "/"; filename_ov]
-             in
-             [current_name#set output_path])
-      in
+               Str.concat_list [tmp_dir; string "/"; filename_ov] in
+             [current_name#set output_path]) in
       seq
         [ call [string "mkdir"; string "-p"; tmp_dir]
         ; if_then all_in_tmp
@@ -171,9 +154,8 @@ let downloader () =
                ; Unwrapper.to_loop current_name Unwrapper.all ])
             (seq
                [ fail
-                   [ string "URL: "
-                   ; url
-                   ; string " -> not HTTP(s) or FTP: NOT IMPLEMENTED" ] ]) ] )
+                   [ string "URL: "; url
+                   ; string " -> not HTTP(s) or FTP: NOT IMPLEMENTED" ] ]) ])
 
 let () =
   match Sys.argv |> Array.to_list |> List.tl_exn with
@@ -181,8 +163,7 @@ let () =
       let script = Genspio.Compile.to_many_lines (downloader ()) in
       let content =
         sprintf "#!/bin/sh\n\n# Generated by Genspio Example Tests\n\n%s\n%!"
-          script
-      in
+          script in
       match path with
       | "-" -> printf "\n`````\n%s`````\n%!" content
       | other ->
@@ -191,6 +172,6 @@ let () =
   | other ->
       eprintf "Wrong command line: [%s]\n"
         (List.map ~f:(sprintf "%S") other |> String.concat ~sep:"; ") ;
-      eprintf "Usage:\n%s make <path>\n\   Create the downloader script.\n%!"
+      eprintf "Usage:\n%s make <path>\n   Create the downloader script.\n%!"
         Sys.argv.(0) ;
       exit 1

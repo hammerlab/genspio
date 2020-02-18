@@ -1,9 +1,6 @@
 type 'a t = 'a Language.t
-
 type c_string = Language.c_string
-
 type byte_array = Language.byte_array
-
 type fd_redirection = Language.fd_redirection
 
 let ( // ) = Filename.concat
@@ -13,7 +10,6 @@ open Nonstd
 module String = Sosa.Native_string
 
 let case condition body = `Case (condition, seq body)
-
 let default d = `Default (seq d)
 
 let switch l =
@@ -25,8 +21,7 @@ let switch l =
       | `Default d ->
           default := Some d ;
           None
-      | `Case t -> Some t )
-  in
+      | `Case t -> Some t) in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 (*
@@ -58,21 +53,17 @@ let tmp_file ?tmp_dir name : file =
                (call
                   [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
                (exec ["printf"; "%s"; default_tmp_dir]))
-        |> to_c_string )
-  in
+        |> to_c_string ) in
   let path =
     let clean =
       String.map name ~f:(function
         | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-') as c -> c
-        | _ -> '_' )
-    in
+        | _ -> '_') in
     C_string.concat_list
-      [ get_tmp_dir
-      ; c_string "/"
+      [ get_tmp_dir; c_string "/"
       ; c_string
           (sprintf "genspio-tmp-file-%s-%s" clean
-             Digest.(string name |> to_hex)) ]
-  in
+             Digest.(string name |> to_hex)) ] in
   let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = get_stdout (call [string "cat"; path])
@@ -106,7 +97,6 @@ let if_seq ~t ?e c =
   | Some f -> if_then_else c (seq t) (seq f)
 
 let printf fmt l = call (string "printf" :: string "--" :: fmt :: l)
-
 let eprintf fmt l = with_redirections (printf fmt l) [to_fd (int 1) (int 2)]
 
 module Command_line = struct
@@ -130,7 +120,6 @@ module Command_line = struct
       Opt_flag {switches; doc; default}
 
     let ( & ) x y = Opt_cons (x, y)
-
     let usage s = Opt_end s
   end
 
@@ -152,8 +141,7 @@ module Command_line = struct
     let bool_of_var var = getenv (string var) |> Bool.of_string in
     let anon_tmp =
       ksprintf tmp_file "parse-cli-%s"
-        (Marshal.to_string options [] |> Digest.string |> Digest.to_hex)
-    in
+        (Marshal.to_string options [] |> Digest.string |> Digest.to_hex) in
     let anon = anon_tmp#get |> Elist.deserialize_to_c_string_list in
     let applied_action =
       (* 
@@ -185,7 +173,7 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
+                      p ||| C_string.(c_string s =$= getenv (c_string "1"))))
                  [ if_seq
                      C_string.(getenv (string "2") =$= string "")
                      ~t:
@@ -206,20 +194,17 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| C_string.equals (string s) (getenv (string "1")) ))
+                      p ||| C_string.equals (string s) (getenv (string "1"))))
                  [ setenv ~var:(string var) (Bool.to_string (bool true))
                  ; exec ["shift"] ]) ;
             ksprintf to_help "* `%s`: %s"
               (String.concat ~sep:"," x.switches)
               x.doc ;
-            loop (f (bool_of_var var)) more
-      in
-      loop (action ~anon) options
-    in
+            loop (f (bool_of_var var)) more in
+      loop (action ~anon) options in
     let help_msg =
       sprintf "%s\n\nOptions:\n\n%s\n" !help_intro
-        (String.concat ~sep:"\n" (List.rev !help))
-    in
+        (String.concat ~sep:"\n" (List.rev !help)) in
     let help_flag_var = ksprintf string "%s_help" prefix in
     let while_loop =
       let body =
@@ -229,17 +214,15 @@ module Command_line = struct
                 ( Elist.append
                     (anon_tmp#get |> Elist.deserialize_to_byte_array_list)
                     (Elist.make [getenv (string "1") |> C_string.to_byte_array])
-                |> Elist.serialize_byte_array_list ) ]
-        in
+                |> Elist.serialize_byte_array_list ) ] in
         let help_case =
           let help_switches = ["-h"; "-help"; "--help"] in
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
-                 p ||| C_string.(c_string s =$= getenv (c_string "1")) ))
+                 p ||| C_string.(c_string s =$= getenv (c_string "1"))))
             [ setenv ~var:help_flag_var (Bool.to_string (bool true))
             ; byte_array help_msg >> exec ["cat"]
-            ; exec ["break"] ]
-        in
+            ; exec ["break"] ] in
         let dash_dash_case =
           case
             C_string.(getenv (c_string "1") =$= c_string "--")
@@ -247,22 +230,17 @@ module Command_line = struct
             ; loop_while
                 C_string.(getenv (c_string "#") <$> c_string "0")
                 ~body:(seq [append_anon_arg_to_list; exec ["shift"]])
-            ; exec ["break"] ]
-        in
+            ; exec ["break"] ] in
         let anon_case =
           case
             C_string.(getenv (c_string "#") <$> c_string "0")
-            [append_anon_arg_to_list; exec ["shift"]]
-        in
+            [append_anon_arg_to_list; exec ["shift"]] in
         let default_case = default [exec ["break"]] in
         let cases =
           (help_case :: List.rev !cases)
-          @ [dash_dash_case; anon_case; default_case]
-        in
-        seq [switch cases]
-      in
-      loop_while (bool true) ~body
-    in
+          @ [dash_dash_case; anon_case; default_case] in
+        seq [switch cases] in
+      loop_while (bool true) ~body in
     seq
       [ setenv ~var:help_flag_var (Bool.to_string (bool false))
       ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
@@ -282,8 +260,7 @@ let loop_until_true ?(attempts = 20) ?(sleep = 2)
       method set v = setenv ~var:varname (Integer.to_string v)
 
       method get = getenv varname |> Integer.of_string
-    end
-  in
+    end in
   seq
     [ intvar#set (int 1)
     ; loop_while
@@ -308,7 +285,6 @@ let silently u =
   write_output ~stdout:dev_null ~stderr:dev_null u
 
 let succeeds_silently u = silently u |> succeeds
-
 let seq_and l = List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
 let output_markdown_code tag f =
@@ -324,14 +300,13 @@ let fresh_name suf =
   let x =
     object
       method v = 42
-    end
-  in
+    end in
   sprintf "g-%d-%d-%s" (Oo.id x) (Random.int 100_000) suf
 
 let sanitize_name n =
   String.map n ~f:(function
     | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
-    | _ -> '_' )
+    | _ -> '_')
 
 let default_on_failure ~step:(i, _) ~stdout ~stderr =
   seq
@@ -342,14 +317,14 @@ let default_on_failure ~step:(i, _) ~stdout ~stderr =
 
 let check_sequence ?(verbosity = `Announce ">> ")
     ?(on_failure = default_on_failure)
-    ?(on_success = fun ~step:_ ~stdout:_ ~stderr:_ -> nop) ?(tmpdir = "/tmp") cmds =
+    ?(on_success = fun ~step:_ ~stdout:_ ~stderr:_ -> nop) ?(tmpdir = "/tmp")
+    cmds =
   let tmp_prefix = fresh_name "-cmd" in
   let tmpout which id =
     c_string
       ( tmpdir
       // sprintf "genspio-check-sequence-%s-%s-%s" tmp_prefix which
-           (sanitize_name id) )
-  in
+           (sanitize_name id) ) in
   let stdout id = tmpout "stdout" id in
   let stderr id = tmpout "stderr" id in
   let log id u =
@@ -359,8 +334,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
         seq
           [ printf (ksprintf c_string "%s %s\\n" prompt id) []
           ; write_output ~stdout:(stdout id) ~stderr:(stderr id) u ]
-    | `Output_all -> u
-  in
+    | `Output_all -> u in
   let check idx (nam, u) next =
     let id = sprintf "%d. %s" idx nam in
     if_seq
@@ -371,8 +345,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
   in
   let rec loop i = function
     | one :: more -> check i one (loop (i + 1) more)
-    | [] -> exec ["true"]
-  in
+    | [] -> exec ["true"] in
   loop 1 cmds
 
 let on_stdin_lines body =

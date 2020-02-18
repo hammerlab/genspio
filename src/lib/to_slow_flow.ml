@@ -22,7 +22,7 @@ let string_to_octal ?(prefix = "") s =
   with_buffer (fun str ->
       String.iter s ~f:(fun c ->
           str prefix ;
-          Char.code c |> sprintf "%03o" |> str ) )
+          Char.code c |> sprintf "%03o" |> str))
   |> fst
 
 let expand_octal_command ~remove_l s =
@@ -50,8 +50,7 @@ module Tmp_db = struct
     let default_tmpdir =
       match how with
       | `Fresh -> Filename.concat "/tmp" (var_name "tmpdir")
-      | `Use p -> p
-    in
+      | `Use p -> p in
     {default_tmpdir; tmp_file_db= []; deletion_grouping}
 
   let register_file t ~variable ~directory =
@@ -67,14 +66,13 @@ module Tmp_db = struct
           sprintf "rm -f %s"
             ( List.map tk ~f:(fun (v, _) -> sprintf "\"${%s}\"" v)
             |> String.concat ~sep:" " )
-          :: unroll nxt
-    in
+          :: unroll nxt in
     sprintf "%s () {\n: Deleting all the temporary files:\n%s\n}" delete_fname
     @@ String.concat ~sep:"\n" (unroll (List.dedup t.tmp_file_db))
 
   let tmp_vars t =
     List.map (List.dedup t.tmp_file_db) ~f:(fun (v, dir) ->
-        (v, dir, sprintf "%s=%s/tmp-%s" v dir v) )
+        (v, dir, sprintf "%s=%s/tmp-%s" v dir v))
 end
 
 (*md
@@ -92,9 +90,7 @@ module Script = struct
     | Comment of string
     | Redirect of {block: command list; stdout: compiled_value}
     | If_then_else of
-        { condition: string
-        ; block_then: command list
-        ; block_else: command list }
+        {condition: string; block_then: command list; block_else: command list}
     | While of {condition: string; block: command list}
     | Sub_shell of command list
     (* As is in `( ... ; )` in POSIX shells. *)
@@ -224,21 +220,15 @@ In that case, we compare the octal representations.
       | File s -> fprintf fmt "File: %S" s
       | Tmp_file_in_variable s -> fprintf fmt "File: ${%s}" s
       | Raw_inline s -> fprintf fmt "Raw: %S" s
-      | Octal_value_in_variable var -> fprintf fmt "Octal in $%s" var
-    in
+      | Octal_value_in_variable var -> fprintf fmt "Octal in $%s" var in
     fprintf fmt "%a\n# Result: %a\n" pp_command_list script.commands pp_result
       script.result
 
   let rawf fmt = ksprintf (fun s -> Raw s) fmt
-
   let cmtf fmt = ksprintf (fun s -> Comment s) fmt
-
   let make commands result = {commands; result}
-
   let unit commands = make commands Unit
-
   let literal_value v = make [] (Literal_value v)
-
   let assert_unit s = assert (s.result = Unit)
 
   let redirect ~stdout block =
@@ -263,8 +253,7 @@ In that case, we compare the octal representations.
     let commands =
       cond.commands
       @ [ If_then_else
-            {condition; block_then= t.commands; block_else= e.commands} ]
-    in
+            {condition; block_then= t.commands; block_else= e.commands} ] in
     make commands Unit
 
   let if_then cond t =
@@ -293,8 +282,7 @@ In that case, we compare the octal representations.
             @ [ If_then_else
                   { condition= to_argument p
                   ; block_then= bool_to_file false tmp.result
-                  ; block_else= bool_to_file true tmp.result } ] )
-    in
+                  ; block_else= bool_to_file true tmp.result } ] ) in
     {commands= commands @ morecmds; result= r}
 
   let return_value_to_bool ~tmp {commands; _} v =
@@ -347,10 +335,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       [ rawf "rm -f %s ; touch %s ; for %s in $(cat %s) ; do %s >> %s\ndone"
           tmppatharg tmppatharg file_var list_file
           (expand_octal_command ~remove_l:true (sprintf "${%s}" file_var))
-          tmppatharg ]
-    in
-    make (tmp.commands @ sl_script.commands @ loop) tmp.result
-  in
+          tmppatharg ] in
+    make (tmp.commands @ sl_script.commands @ loop) tmp.result in
   let result_to_file s =
     let open Script in
     (* let tmp = tmp_path ~tmpdb ~expression:e ~script:s "result-to-file" in *)
@@ -368,15 +354,13 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
     | Tmp_file_in_variable p -> mk (rawf "cp \"${%s}\" %s" p tmparg, tmp)
     | Raw_inline s -> mk (rawf "printf -- '%%s' %s > %s" s tmparg, tmp)
     | Octal_value_in_variable _ as v ->
-        mk (rawf "printf -- '%%s' %s > %s" (to_argument v) tmparg, tmp)
-  in
+        mk (rawf "printf -- '%%s' %s > %s" (to_argument v) tmparg, tmp) in
   match e with
   | Exec l ->
       let irs = List.map ~f:continue l in
       let cmd =
         String.concat ~sep:" "
-          (List.map ~f:(fun c -> Script.to_argument c.result) irs)
-      in
+          (List.map ~f:(fun c -> Script.to_argument c.result) irs) in
       let commands = List.concat_map ~f:Script.commands irs in
       Script.unit (commands @ [Raw cmd])
   | Raw_cmd (Some Magic_unit, s) -> Script.unit [Script.rawf "%s" s]
@@ -418,8 +402,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 ; block_then=
                     ksprintf fail_commands
                       "Byte array in $%s cannot be converted to a C-String" v
-                ; block_else= [] } ]
-      in
+                ; block_else= [] } ] in
       make (script.commands @ extra_check) script.result
   | C_string_to_byte_array c -> continue c
   | Returns {expr; value} ->
@@ -433,8 +416,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let open Script in
       let condition =
         sprintf "{ %s %s %s ; }" (to_argument asc.result) ops
-          (to_argument bsc.result)
-      in
+          (to_argument bsc.result) in
       let tmp = mktmp ~tmpdb ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
   | String_operator (a, op, b) ->
@@ -444,8 +426,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let open Script in
       let condition =
         sprintf "[ \"%s\" %s \"%s\" ]" (to_ascii asc.result) ops
-          (to_ascii bsc.result)
-      in
+          (to_ascii bsc.result) in
       let tmp = mktmp ~tmpdb ~expression:e "boolop" in
       make_bool ~tmp ~condition (asc.commands @ bsc.commands)
   | No_op -> Script.unit [Raw ":"]
@@ -468,8 +449,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             match s.result with
             | Unit -> Script.commands s
             | Raw_inline cmd -> Script.(Raw cmd :: commands s)
-            | _ -> assert false )
-      in
+            | _ -> assert false) in
       Script.unit cmds
   | Not t ->
       Script.bool_not
@@ -484,16 +464,13 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             let redirect_to_script, op =
               match redirect_to with
               | `Fd c -> (continue c, "&")
-              | `Path p -> (continue p, "")
-            in
+              | `Path p -> (continue p, "") in
             let print_exec_command =
               sprintf "printf 'exec %%s>%s%%s' %s %s" op
                 (to_argument take_script.result)
-                (to_argument redirect_to_script.result)
-            in
+                (to_argument redirect_to_script.result) in
             ( precmds @ take_script.commands @ redirect_to_script.commands
-            , evals @ [rawf "eval $(%s)" print_exec_command] ) )
-      in
+            , evals @ [rawf "eval $(%s)" print_exec_command] )) in
       let uscript = continue unit_t in
       Script.assert_unit uscript ;
       Script.sub_shell ~pre:pre_commands (sub_shell_commands @ uscript.commands)
@@ -511,18 +488,14 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     , Raw_cmd
                         ( None
                         , sprintf "printf -- \"$?\" > %s"
-                            Script.(to_argument scr.result) ) ) ] )
-      in
+                            Script.(to_argument scr.result) ) ) ] ) in
       let redirections =
         let make fd =
-          Option.map ~f:(fun p -> {take= Construct.int fd; redirect_to= `Path p}
-          )
-        in
-        [make 1 stdout; make 2 stderr] |> List.filter_opt
-      in
+          Option.map ~f:(fun p ->
+              {take= Construct.int fd; redirect_to= `Path p}) in
+        [make 1 stdout; make 2 stderr] |> List.filter_opt in
       let redscript =
-        continue (Redirect_output (with_potential_return, redirections))
-      in
+        continue (Redirect_output (with_potential_return, redirections)) in
       Script.assert_unit redscript ;
       Script.unit (pre_ret_value @ redscript.commands)
   | Literal lit ->
@@ -551,8 +524,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                  , `Eq
                  , Raw_cmd (None, to_argument string_script.result) )
              , No_op
-             , Fail "string-to-int" ))
-      in
+             , Fail "string-to-int" )) in
       make (string_script.commands @ check.commands) string_script.result
   | Bool_to_string b ->
       let open Script in
@@ -563,9 +535,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             If_then_else
               { condition= to_argument bs.result
               ; block_then= [rawf "printf true > %s" tmparg]
-              ; block_else= [rawf "printf false > %s" tmparg] }
-          in
-          bs.commands @ [extra] )
+              ; block_else= [rawf "printf false > %s" tmparg] } in
+          bs.commands @ [extra])
   | String_to_bool s ->
       let scr = continue s in
       let extra_check =
@@ -573,14 +544,12 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
           String_operator
             ( Raw_cmd (None, Script.to_ascii scr.result)
             , `Eq
-            , Literal Literal.(String v) )
-        in
+            , Literal Literal.(String v) ) in
         If
           ( Bool_operator (is "true", `Or, is "false")
           , No_op
           , Fail (sprintf "String-to-Bool: %S" (Script.to_argument scr.result))
-          )
-      in
+          ) in
       let check = continue extra_check in
       Script.make (scr.commands @ check.commands) scr.result
   | List l ->
@@ -607,9 +576,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     @ [ rawf
                           "printf ' L%%s\\n' \"$(cat %s  | od -t o1 -An -v | \
                            tr -d ' \\n')\" >> %s"
-                          as_arg tmparg ] ) )
-          in
-          List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
+                          as_arg tmparg ]) ) in
+          List.concat_map scripts ~f:(fun c -> c.commands) @ echos)
   | List_to_string (l, _) -> continue l
   | String_to_list (s, _) -> continue s
   | C_string_concat sl ->
@@ -627,9 +595,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             rawf "cat %s %s > %s"
               (to_path_argument a_script.result)
               (to_path_argument b_script.result)
-              (to_path_argument tmp.result)
-          in
-          a_script.commands @ b_script.commands @ [cat] )
+              (to_path_argument tmp.result) in
+          a_script.commands @ b_script.commands @ [cat])
   | List_iter (l, f) ->
       let open Script in
       let l_script = continue l in
@@ -643,13 +610,11 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
           (f (fun () ->
                Raw_cmd
                  ( Some (Octal_in_variable file_var)
-                 , "=== This should never be used ===" ) ))
-      in
+                 , "=== This should never be used ===" ))) in
       let loop =
         [ Script.rawf ": list_iter ; for %s in $(cat %s) ; do\n{\n%s\n}\ndone"
             file_var list_file
-            (Format.asprintf "%a" Script.pp_posix convert_script) ]
-      in
+            (Format.asprintf "%a" Script.pp_posix convert_script) ] in
       unit (l_script.commands @ loop)
   | Int_bin_op (ia, op, ib) ->
       let open Script in
@@ -666,9 +631,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               | `Plus -> "+"
               | `Mod -> "%" )
               (to_argument ~arithmetic:true b_script.result)
-              (to_path_argument tmp.result)
-          in
-          a_script.commands @ b_script.commands @ [compute] )
+              (to_path_argument tmp.result) in
+          a_script.commands @ b_script.commands @ [compute])
   | Int_bin_comparison (ia, op, ib) ->
       let open Script in
       let a_script = continue ia in
@@ -687,9 +651,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               | `Lt -> "-lt"
               | `Ne -> "-ne" )
               (to_argument b_script.result)
-              (to_path_argument tmp.result)
-          in
-          a_script.commands @ b_script.commands @ [compute] )
+              (to_path_argument tmp.result) in
+          a_script.commands @ b_script.commands @ [compute])
   | Feed (string, u) ->
       let open Script in
       let string_script = continue string in
@@ -712,7 +675,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
           string_script.commands
           @ [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
                 (to_argument ~arithmetic:false string_script.result)
-                (to_path_argument tmp.result) ] )
+                (to_path_argument tmp.result) ])
   | Setenv (variable, value) ->
       let open Script in
       let var_script = continue variable in
@@ -722,8 +685,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let cmd =
         rawf "eval 'export '%s'=\"$(cat %s)\"'"
           (to_argument ~arithmetic:false var_script.result)
-          (to_path_argument val_as_file.result)
-      in
+          (to_path_argument val_as_file.result) in
       make
         ( var_script.commands @ val_script.commands @ val_as_file.commands
         @ [cmd] )
@@ -765,8 +727,7 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
       | `None -> rawf ": No TRAP"
       | `Exit_with v ->
           rawf "trap 'cat %s >&2 ; %s ; exit %d' %s" tmparg delete_fname v
-            signal_name ) ]
-  in
+            signal_name ) ] in
   let fail_commands s =
     match trap with
     | `Exit_with _ ->
@@ -780,8 +741,7 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
   let make_tmp_vars =
     Tmp_db.tmp_vars tmpdb
     |> List.concat_map ~f:(fun (v, dir, cmd) ->
-           [cmtf "Making file %s" v; Make_directory dir; rawf "%s" cmd] )
-  in
+           [cmtf "Making file %s" v; Make_directory dir; rawf "%s" cmd]) in
   let last_call = rawf "ret=$?\n%s\nexit $ret\n" delete_fname in
   make
     ( [delete_tmps] @ make_tmp_vars @ tmp.commands @ before @ s.commands
@@ -857,12 +817,11 @@ let test () =
     ; Elist.(
         iter
           (make
-             [ int 1
-             ; int 2
+             [ int 1; int 2
              ; Integer.(int 1 + int 2)
              ; Integer.(int 1 + int 1 + of_string (c_string "2")) ])
           ~f:(fun item ->
-            printf (c_string "> %d\\n") [Integer.to_string (item ())] ))
+            printf (c_string "> %d\\n") [Integer.to_string (item ())]))
     ; if_then_else
         Integer.(
           int 1 + int 1 + of_string (c_string "2")
@@ -883,7 +842,8 @@ let test () =
         ]
     ; seq
         [ setenv
-            ~var:(C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
+            ~var:
+              (C_string.concat_list [c_string "A"; c_string "A"; c_string "A"])
             (get_stdout (exec ["echo"; "HELLO WORLD"]) |> Byte_array.to_c)
         ; "Calling a sub-shell with `sh`,\nit should display HELLO WORLD"
           %%% exec ["sh"; "-c"; "echo \"$AAA\""] ]
@@ -899,8 +859,7 @@ let test () =
          [ setenv ~var v1
          ; loop_seq_while
              C_string.(getenv var =$= v1)
-             [printf (c_string "Iteration\\n") []; setenv ~var v2] ]) ]
-  in
+             [printf (c_string "Iteration\\n") []; setenv ~var v2] ]) ] in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in
       fprintf std_formatter "==== TEST %d ====\n%a\n%!" idx Script.pp_posix ir ;
@@ -910,4 +869,4 @@ let test () =
       flush o ;
       close_out o ;
       let res = ksprintf Sys.command "sh %s" script_file in
-      fprintf std_formatter "\nRESULT: %d\n" res )
+      fprintf std_formatter "\nRESULT: %d\n" res)

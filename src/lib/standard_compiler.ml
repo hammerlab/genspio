@@ -55,15 +55,10 @@ type internal_representation =
   | Death of string
 
 let ir_unit s = Unit s
-
 let ir_octostring s = Octostring s
-
 let ir_int s = Int s
-
 let ir_bool s = Bool s
-
 let ir_death s = Death s
-
 let ir_list s = List s
 
 let ir_to_shell = function
@@ -90,8 +85,9 @@ let error ?code ~comment_backtrace error =
 let pp_error fmt {code; comment_backtrace; error} =
   let open Format in
   let summary s =
-    match String.sub s ~index:0 ~length:70 with Some s -> s ^ " …" | None -> s
-  in
+    match String.sub s ~index:0 ~length:70 with
+    | Some s -> s ^ " …"
+    | None -> s in
   let big_string fmt s = fprintf fmt "@[%s@]" (summary s) in
   fprintf fmt "@[<hov 2>" ;
   fprintf fmt "Error:@ @[%a@];@ "
@@ -106,7 +102,7 @@ let pp_error fmt {code; comment_backtrace; error} =
           fprintf fmt
             "Call to `fail %a`@ while no “die” command is configured."
             (pp_death_message ~style:`Lispy ~big_string)
-            msg )
+            msg)
     error ;
   fprintf fmt "Code:@ @[%s@];@ "
     (match code with None -> "NONE" | Some c -> summary c) ;
@@ -123,25 +119,20 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
   let open Language in
   let continue_match ?add_comment e =
     let cmts =
-      match add_comment with Some c -> c :: comments | None -> comments
-    in
-    to_ir cmts params e
-  in
+      match add_comment with Some c -> c :: comments | None -> comments in
+    to_ir cmts params e in
   let continue e = continue_match e |> ir_to_shell in
   let seq = function
     | [] -> ":"
-    | l -> String.concat ~sep:params.statement_separator l
-  in
+    | l -> String.concat ~sep:params.statement_separator l in
   let die s =
     match params.die_command with
     | Some f -> f ~comment_stack:comments s
-    | None -> error ~comment_backtrace:comments (`No_fail_configured s)
-  in
+    | None -> error ~comment_backtrace:comments (`No_fail_configured s) in
   let expand_octal s =
     sprintf
       {sh| printf -- "$(printf -- '%%s\n' %s | sed -e 's/\(.\{3\}\)/\\\1/g')" |sh}
-      s
-  in
+      s in
   let to_argument ~error_loc varprefix =
     let argument ?declaration ?variable_name argument =
       object
@@ -152,16 +143,14 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
         method variable_name = variable_name
 
         method argument = argument
-      end
-    in
+      end in
     let check_length s =
       match params.max_argument_length with
       | None -> s
       | Some m when String.length s > m ->
           error ~comment_backtrace:comments (`Max_argument_length s)
             ~code:(Format.asprintf "%a" pp error_loc)
-      | Some _ -> s
-    in
+      | Some _ -> s in
     function
     | `C_string (c_str : c_string t) -> (
       match c_str with
@@ -176,19 +165,16 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
           let variable_name = Unique_name.variable varprefix in
           let declaration =
             sprintf "%s=$(%s; printf 'x')" variable_name
-              (continue other |> expand_octal |> check_length)
-          in
+              (continue other |> expand_octal |> check_length) in
           argument ~variable_name ~declaration
             (sprintf "\"${%s%%?}\"" variable_name) )
     | `Int (Literal (Literal.Int s)) -> argument (Int.to_string s)
     | `Int other ->
         let variable_name = Unique_name.variable varprefix in
         let declaration =
-          sprintf "%s=%s" variable_name (continue other |> check_length)
-        in
+          sprintf "%s=%s" variable_name (continue other |> check_length) in
         argument ~variable_name ~declaration
-          (sprintf "\"${%s%%?}\"" variable_name)
-  in
+          (sprintf "\"${%s%%?}\"" variable_name) in
   match e with
   | Exec l ->
       let variables = ref [] in
@@ -200,8 +186,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
             | None -> arg#argument
             | Some vardef ->
                 variables := sprintf "%s ; " vardef :: !variables ;
-                arg#argument )
-      in
+                arg#argument) in
       List.rev !variables @ args
       |> String.concat ~sep:" " |> sprintf " { %s ; } " |> ir_unit
   | Raw_cmd (_, s) -> s |> ir_unit
@@ -231,8 +216,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
                      ; content= bac
                      ; code= Format.asprintf "%a" pp ba }))
            ; (* (sprintf "Byte_array_to_c_string: error, $%s is not a C string" *)
-             (*      var)); *)
-             "fi" ]
+             (*      var)); *) "fi" ]
       |> ir_octostring
   | C_string_to_byte_array c -> continue c |> ir_octostring
   | Returns {expr; value} ->
@@ -271,9 +255,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
          (  exec 3>/tmp/output-of-ls ; exec 2>&3 ; exec 1>&2 ; ls ; ) ;
       *)
       let make_redirection {take; redirect_to} =
-        let takearg =
-          to_argument ~error_loc:e "redirection_take" (`Int take)
-        in
+        let takearg = to_argument ~error_loc:e "redirection_take" (`Int take) in
         let retoarg =
           to_argument ~error_loc:e "redirection_to"
             (match redirect_to with `Fd i -> `Int i | `Path p -> `C_string p)
@@ -282,13 +264,11 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
         let exec =
           sprintf "\"exec %%s>%s%%s\" %s %s"
             (match redirect_to with `Fd _ -> "&" | `Path _ -> "")
-            takearg#argument retoarg#argument
-        in
+            takearg#argument retoarg#argument in
         sprintf
           "%s eval \"$(printf -- %s)\" || { echo 'Exec %s failed' >&2 ; } "
           (String.concat variables ~sep:"")
-          exec exec
-      in
+          exec exec in
       ( match redirections with
       | [] -> continue unit_t
       | one :: more ->
@@ -296,30 +276,25 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
             (Seq
                ( Raw_cmd (None, sprintf "( %s" (make_redirection one))
                  :: List.map more ~f:(fun r ->
-                        Raw_cmd (None, make_redirection r) )
+                        Raw_cmd (None, make_redirection r))
                @ [unit_t]
                @ [Raw_cmd (None, ")")] )) )
       |> ir_unit
   | Write_output {expr; stdout; stderr; return_value} ->
       let ret_arg =
         Option.map return_value ~f:(fun v ->
-            to_argument ~error_loc:e "retval" (`C_string v) )
-      in
+            to_argument ~error_loc:e "retval" (`C_string v)) in
       let var =
-        Option.(ret_arg >>= (fun ra -> ra#export) |> value ~default:"")
-      in
+        Option.(ret_arg >>= (fun ra -> ra#export) |> value ~default:"") in
       let with_potential_return =
         sprintf "%s { %s %s ; }" var (continue expr)
           (Option.value_map ret_arg ~default:"" ~f:(fun r ->
-               sprintf "; printf -- \"$?\" > %s" r#argument ))
-      in
+               sprintf "; printf -- \"$?\" > %s" r#argument)) in
       let redirections =
         let make fd =
-          Option.map ~f:(fun p -> {take= Construct.int fd; redirect_to= `Path p}
-          )
-        in
-        [make 1 stdout; make 2 stderr] |> List.filter_opt
-      in
+          Option.map ~f:(fun p ->
+              {take= Construct.int fd; redirect_to= `Path p}) in
+        [make 1 stdout; make 2 stderr] |> List.filter_opt in
       continue
         (Redirect_output (Raw_cmd (None, with_potential_return), redirections))
       |> ir_unit
@@ -329,8 +304,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
       | Int i -> sprintf "%d" i |> ir_int
       | String s ->
           with_buffer (fun str ->
-              String.iter s ~f:(fun c -> Char.code c |> sprintf "%03o" |> str)
-          )
+              String.iter s ~f:(fun c -> Char.code c |> sprintf "%03o" |> str))
           |> fst |> ir_octostring
       | Bool true -> ir_bool "true"
       | Bool false -> ir_bool "false" )
@@ -388,8 +362,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
       let rec build = function
         | [] -> []
         | [one] -> [one]
-        | one :: two :: t -> one :: "printf -- ' '" :: build (two :: t)
-      in
+        | one :: two :: t -> one :: "printf -- ' '" :: build (two :: t) in
       seq (build outputs) |> ir_list
   | List_to_string (l, _) ->
       continue (Output_as_string (Raw_cmd (None, continue l))) |> ir_octostring
@@ -415,7 +388,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
           continue
             (f (fun () ->
                  (* Here we remove the `G` from the internal represetation: *)
-                 Raw_cmd (None, sprintf "${%s#G}" variter) ))
+                 Raw_cmd (None, sprintf "${%s#G}" variter)))
         ; "done" ]
       |> ir_unit
   | Int_bin_op (ia, op, ib) ->
@@ -465,8 +438,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
            \"printf -- '%%s' %s\" ; } "
           var
           (continue s |> expand_octal)
-          value
-      in
+          value in
       continue (Output_as_string (Raw_cmd (None, cmd_outputs_value)))
       |> ir_octostring
   | Setenv (variable, value) ->
@@ -494,8 +466,7 @@ let with_die_function ~print_failure ~statement_separator ~signal_name
   let variable_name = Unique_name.variable "genspio_trap" in
   let die ~comment_stack s =
     let pr = print_failure ~comment_stack s in
-    sprintf " { %s ; kill -s %s ${%s} ; } " pr signal_name variable_name
-  in
+    sprintf " { %s ; kill -s %s ${%s} ; } " pr signal_name variable_name in
   String.concat ~sep:statement_separator
     [ sprintf "export %s=$$" variable_name
     ; ( match trap with

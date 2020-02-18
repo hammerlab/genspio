@@ -9,8 +9,7 @@ let example ?show name description code =
       "let () = examples := Example.make ~ocaml:%S %s %S %S %s :: !examples\n"
       code
       (match show with None -> "" | Some s -> sprintf "~show:%s" s)
-      name description code
-  in
+      name description code in
   examples := f :: !examples
 
 let intro_blob =
@@ -55,7 +54,8 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Call a command with Shell-Strings" ~show:"[`Stdout; `Pretty_printed]"
+  example "Call a command with Shell-Strings"
+    ~show:"[`Stdout; `Pretty_printed]"
     "The `call` construct is a more general version of `exec` that can take \
      any EDSL string. As with `exec` the string will be checked for C-String \
      compatibilty, hence the calls to `byte-array-to-c-string` in the \

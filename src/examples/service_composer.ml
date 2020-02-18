@@ -41,7 +41,6 @@ open Nonstd
 module String = Sosa.Native_string
 
 let ( // ) = Filename.concat
-
 let msg fmt = ksprintf (eprintf "%s\n%!") fmt
 
 module Gedsl = Genspio.EDSL
@@ -51,7 +50,7 @@ let cmdf fmt =
     (fun s ->
       match Sys.command s with
       | 0 -> ()
-      | other -> ksprintf failwith "CMD: %S failed with %d" s other )
+      | other -> ksprintf failwith "CMD: %S failed with %d" s other)
     fmt
 
 module Version = struct
@@ -59,18 +58,11 @@ module Version = struct
     lazy
       Unix.(
         gettimeofday () |> gmtime
-        |> fun { tm_sec
-               ; tm_min
-               ; tm_hour
-               ; tm_mday
-               ; tm_mon
-               ; tm_year
-               ; _ } ->
+        |> fun {tm_sec; tm_min; tm_hour; tm_mday; tm_mon; tm_year; _} ->
         sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
           tm_mday tm_hour tm_min tm_sec)
 
   let get () = Lazy.force version
-
   let str () = Gedsl.str (get ())
 end
 
@@ -103,8 +95,7 @@ The function `write` is the only real I/O of this whole OCaml program.
  *)
   let write ?(compiler = `Slow_flow) t ~output_path ~root =
     let path =
-      output_path // String.concat ~sep:"-" (root :: t.relative_path)
-    in
+      output_path // String.concat ~sep:"-" (root :: t.relative_path) in
     let o = open_out path in
     msg "Outputting “%s” to %s\n%!" t.description path ;
     ( match compiler with
@@ -217,8 +208,7 @@ to output a stronger hash.
     let open Gedsl in
     let env_var v default =
       say " * `%s`, value: '%s' (default: %s)"
-        [str (v t); getenv (str (v t)); str default]
-    in
+        [str (v t); getenv (str (v t)); str default] in
     seq
       [ say "Environment variables: " []
         (* ; env_var var_screen_name t.default_screen_name *)
@@ -239,19 +229,12 @@ module Manual = struct
     | Extended of {yes: item list; no: item list}
 
   let _global_ : item list ref = ref []
-
   let add l = _global_ := !_global_ @ l
-
   let raw s = Raw s
-
   let from f = [Root_env f]
-
   let extended ?(no = []) yes = [Extended {yes; no}]
-
   let raws l = List.map l ~f:raw
-
   let title s = raws [s; String.make (String.length s) '='; ""]
-
   let section s = raws [s; String.make (String.length s) '-'; ""]
 
   let wrap ?(indent = 0) ?(columns = 72) s =
@@ -266,17 +249,14 @@ module Manual = struct
             assemble (String.length one) more )
           else (
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
-            assemble potential more )
-    in
+            assemble potential more ) in
     let words =
       String.split s ~on:(`Character ' ')
       |> List.map ~f:String.strip
-      |> List.filter ~f:(( <> ) "")
-    in
+      |> List.filter ~f:(( <> ) "") in
     assemble 0 words ; Buffer.contents buf
 
   let par s = raws [wrap s; ""]
-
   let code_block s = raws (["```"] @ s @ ["```"; ""])
 
   let list l =
@@ -295,8 +275,7 @@ module Manual = struct
   let () =
     add
     @@ from (fun ~root _ ->
-           ksprintf title "%s: Compose Processes With Screen" (pre_title root)
-       )
+           ksprintf title "%s: Compose Processes With Screen" (pre_title root))
     @ from (fun ~root env ->
           ksprintf par
             "The `%s*` scripts are a family of POSIX shell executables that \
@@ -324,7 +303,7 @@ module Manual = struct
                of the configuration path (`%s`). This can be useful to build \
                custom/project-specific scripts that can remain independent \
                from each other without setting an environment variable."
-              root env.Environment.default_configuration_path )
+              root env.Environment.default_configuration_path)
     @ extended
         ( section "Installation"
         @ from (fun ~root _ ->
@@ -335,7 +314,7 @@ module Manual = struct
                 root
               @ ksprintf par
                   "If you are using the code-generator, you can just point \
-                   the `--output-path` option at the right directory." ) )
+                   the `--output-path` option at the right directory.") )
     @ section "Usage"
     @ from (fun ~root _ ->
           let intro fmt =
@@ -343,8 +322,7 @@ module Manual = struct
               (ksprintf par
                  "The basic manual is obtained from the `%s man` command.%s"
                  root)
-              fmt
-          in
+              fmt in
           extended
             (intro
                " The, present, “`README.md`” version is the result of \
@@ -354,7 +332,7 @@ module Manual = struct
           @ ksprintf par
               "Then, see `%s --help` first, or for any sub-command try \
                `%s <command> --help`."
-              root root )
+              root root)
     @ section "Screen Session Isolation"
     @ from (fun ~root _ ->
           ksprintf par
@@ -374,7 +352,7 @@ module Manual = struct
                will generate a name, which is function of the root path and \
                generation parameters and tries to ensure that the session is \
                unique on the host."
-              root )
+              root)
     @ extended
         ( section "Docker Image For the Generator"
         @ from (fun ~root:_ _ ->
@@ -387,7 +365,7 @@ module Manual = struct
                 image
               @ code_block
                   [ sprintf "docker run -it %s genspio-service-composer --help"
-                      image ] ) )
+                      image ]) )
 
   let output ~root ~env extended =
     let open Gedsl in
@@ -460,9 +438,7 @@ module Job = struct
     call [str "cat"; pid] |> get_stdout_one_line
 
   let ps env name ~o = call [str "ps"; str "-q"; get_pid env name; str "-o"; o]
-
   let ps_stat_exec env name = ps env name ~o:(str "stat=")
-
   let ps_stat env name = ps_stat_exec env name |> get_stdout_one_line
 
   let ps_stat_or_fail env name =
@@ -473,7 +449,6 @@ module Job = struct
       (seq [printf (str "None") []; exit 2])
 
   let ps_cpu env name = ps ~o:(str "cpu=") env name |> get_stdout_one_line
-
   let is_running env name = succeeds_silently (ps_stat_or_fail env name)
 
   let run_script env name =
@@ -493,19 +468,15 @@ module Job = struct
                    ~e:
                      [ printf
                          (str "{ sh %s 2>&1 ; } | tee -a %s\\n")
-                         [job_path env name; log_path env name] ] ]) ]
-    in
+                         [job_path env name; log_path env name] ] ]) ] in
     (mk, runner)
 
   let delete env name =
     let rm p = verbose_call ~prefix:"  -> " [str "rm"; str "-f"; p] in
     seq
       (List.map ~f:rm
-         [ job_path env name
-         ; log_path env name
-         ; pid_path env name
-         ; run_path env name
-         ; Options.path env name ])
+         [ job_path env name; log_path env name; pid_path env name
+         ; run_path env name; Options.path env name ])
 end
 
 (*md The `Screen` module contains Genspio expressions to manipulate a
@@ -519,7 +490,6 @@ module Screen = struct
   open Gedsl
 
   let ls env = call [str "screen"; str "-ls"; Environment.screen_name env]
-
   let is_on env = ls env |> succeeds_silently
 
   let call ?verbose env l =
@@ -544,7 +514,6 @@ All the `*_script` modules define one actual script to be generated.
 *)
 module Configuration_script = struct
   let description = "Manage the configuration."
-
   let name = "configuration"
 
   let make () =
@@ -556,14 +525,12 @@ module Configuration_script = struct
               ; (str "rmjob", str "removejob")
               ; (str "init", str "initialize") ]
           ~name:(sprintf "%s-%s" root name)
-          ~description () )
+          ~description ())
 end
 
 module Manual_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "manual"
-
-    let description = "Show the manual."
+    let name = "manual" let description = "Show the manual."
   end)
 
   let make ~env () =
@@ -574,19 +541,15 @@ module Manual_script = struct
           let open Arg in
           flag ["--extended"; "-X"] ~doc:"Provide extra information."
           & flag ["--no-pager"] ~doc:"Do not use a pager."
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         parse opts (fun ~anon:_ extended no_pager describe ->
             deal_with_describe describe
-              [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()]
-        ) )
+              [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()]))
 end
 
 module Version_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "version"
-
-    let description = "Show the version information."
+    let name = "version" let description = "Show the version information."
   end)
 
   let make ~env:_ () =
@@ -596,22 +559,19 @@ module Version_script = struct
         let opts =
           let open Arg in
           flag ["--extended"; "-X"] ~doc:"Provide extra information"
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         parse opts (fun ~anon:_ extended describe ->
             deal_with_describe describe
               [ if_seq extended
                   ~t:
                     [ say "%s %s (Genspio %s)"
                         [str root; Version.str (); str Genspio.Meta.version] ]
-                  ~e:[say "%s" [Version.str ()]] ] ) )
+                  ~e:[say "%s" [Version.str ()]] ]))
 end
 
 module Init_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "initialize"
-
-    let description = "Initialize the configuration."
+    let name = "initialize" let description = "Initialize the configuration."
   end)
 
   let make ~env () =
@@ -627,18 +587,15 @@ module Init_script = struct
                  "Set the screen session name (the default is a function of \
                   the root path and other constants of the script)")
             ~default:(Environment.make_default_screen_name env)
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         parse opts (fun ~anon:_ screen_name describe ->
             deal_with_describe describe
-              [Environment.init ~screen_name env; say "Done." []] ) )
+              [Environment.init ~screen_name env; say "Done." []]))
 end
 
 module Add_job_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "addjob"
-
-    let description = "Add a job to the configuration."
+    let name = "addjob" let description = "Add a job to the configuration."
   end)
 
   let make ~env () =
@@ -656,9 +613,9 @@ module Add_job_script = struct
               ~doc:
                 "Don't save logs (useful for commands that grab the terminal \
                  like `top`)"
-          & describe_option_and_usage ()
-        in
-        parse opts (fun ~anon:_ name shell_command interpreter no_log describe ->
+          & describe_option_and_usage () in
+        parse opts
+          (fun ~anon:_ name shell_command interpreter no_log describe ->
             let jpath = Job.job_path env name in
             deal_with_describe describe
               [ if_then
@@ -676,13 +633,12 @@ module Add_job_script = struct
                      ; str " '" >> exec ["cat"]
                      ; shell_command >> exec ["sed"; "s/'/'\\\\''/g"]
                      ; str "'\n" >> exec ["cat"] ])
-              ; say "Done." [] ] ) )
+              ; say "Done." [] ]))
 end
 
 module Remove_job_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "removejob"
-
     let description = "Remove one or more jobs from the configuration."
   end)
 
@@ -701,15 +657,13 @@ module Remove_job_script = struct
                              [ say "Removing %s..." [name ()]
                              ; Job.delete env (name ()) ]
                            ~e:[say "Job %s does not seem to exist..." [name ()]])
-                      ] )
-              ; say "Done." [] ] ) )
+                      ])
+              ; say "Done." [] ]))
 end
 
 module Start_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "start"
-
-    let description = "Start all or a given list of jobs."
+    let name = "start" let description = "Start all or a given list of jobs."
   end)
 
   let make ~env () =
@@ -738,14 +692,9 @@ module Start_script = struct
                      [ say "* Starting '%s' in Screen window: '%s'"
                          [name; Screen.window_name name]
                      ; Screen.call env
-                         [ str "-X"
-                         ; str "screen"
-                         ; str "-t"
-                         ; Screen.window_name name
-                         ; str "sh"
-                         ; runpath ] ]
-                   ~e:[say "* Job '%s' is not configured!" [name]] ])
-        in
+                         [ str "-X"; str "screen"; str "-t"
+                         ; Screen.window_name name; str "sh"; runpath ] ]
+                   ~e:[say "* Job '%s' is not configured!" [name]] ]) in
         parse opts (fun ~anon all describe ->
             deal_with_describe describe
               [ Screen.ensure_running env
@@ -755,20 +704,18 @@ module Start_script = struct
                         [Environment.configuration_path env]
                     ; Environment.on_jobs env (fun path ->
                           let name = Job.name path in
-                          start_one name ) ]
+                          start_one name) ]
                   ~e:
                     [ Elist.iter anon ~f:(fun item ->
                           let name = item () in
-                          seq [say "Starting job '%s':" [name]; start_one name]
-                      ) ]
-              ; say "Done." [] ] ) )
+                          seq [say "Starting job '%s':" [name]; start_one name])
+                    ]
+              ; say "Done." [] ]))
 end
 
 module Configuration_display_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "display"
-
-    let description = "Show the configuration."
+    let name = "display" let description = "Show the configuration."
   end)
 
   let make ~env () =
@@ -788,22 +735,19 @@ module Configuration_display_script = struct
                             (str
                                "Job: '%s'\\n |-> Command: [%s]\\n |-> \
                                 Options: %s\\n")
-                            [ Job.name path
-                            ; Job.command path
+                            [ Job.name path; Job.command path
                             ; call
                                 [ str "cat"
                                 ; Job.Options.path env (Job.name path) ]
                               ||> exec ["tr"; "\\n"; ","]
-                              |> get_stdout ] ) ]
+                              |> get_stdout ]) ]
                   ~e:[say "Configuration is empty (not even a directory)" []]
-              ] ) )
+              ]))
 end
 
 module Configuration_destroy_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "destroy"
-
-    let description = "Destroy the configuration."
+    let name = "destroy" let description = "Destroy the configuration."
   end)
 
   let make ~env () =
@@ -819,14 +763,12 @@ module Configuration_destroy_script = struct
                   ~t:[verbose_call [str "rm"; str "-fr"; path]]
                   ~e:
                     [ say "Configuration is not even a directory: %s" [path]
-                    ; fail "FAILURE" ] ] ) )
+                    ; fail "FAILURE" ] ]))
 end
 
 module Attach_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "attach"
-
-    let description = "Attach to the Screen being managed."
+    let name = "attach" let description = "Attach to the Screen being managed."
   end)
 
   let go env create =
@@ -852,16 +794,14 @@ module Attach_script = struct
         let opts =
           let open Arg in
           flag ["--create"] ~doc:"Create if it doesn't exist."
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         parse opts (fun ~anon:_ create describe ->
-            deal_with_describe describe [go env create] ) )
+            deal_with_describe describe [go env create]))
 end
 
 module Kill_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "kill"
-
     let description = "Kill Jobs or the whole Screen session (-a)."
   end)
 
@@ -872,8 +812,7 @@ module Kill_script = struct
         let opts =
           let open Arg in
           flag ["--all"; "-a"] ~doc:"Kill everything, incl. the Screen session"
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         let kills = tmp_file "kill-list" in
         parse opts (fun ~anon kill_em_all describe ->
             deal_with_describe describe
@@ -886,33 +825,28 @@ module Kill_script = struct
                             [ say "## Processing %s" [item ()]
                             ; if_seq
                                 ( Screen.call env
-                                    [ str "-Q"
-                                    ; str "-p"
+                                    [ str "-Q"; str "-p"
                                     ; Screen.window_name (item ())
-                                    ; str "-X"
-                                    ; str "info" ]
+                                    ; str "-X"; str "info" ]
                                 |> succeeds_silently )
                                 ~t:
                                   [ say "-> Window found, killing now." []
                                   ; Screen.call env
                                       [ str "-p"
                                       ; Screen.window_name (item ())
-                                      ; str "-X"
-                                      ; str "kill" ]
+                                      ; str "-X"; str "kill" ]
                                   ; kills#set (str "yes") ]
                                 ~e:
                                   [ say "-> Window for job '%s' not found!"
-                                      [item ()] ] ] )
+                                      [item ()] ] ])
                     ; if_seq
                         Str.(kills#get =$= str "")
-                        ~t:[say "Nothing was killed …" []] ] ] ) )
+                        ~t:[say "Nothing was killed …" []] ] ]))
 end
 
 module Logs_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "logs"
-
-    let description = "Show logs for one or more jobs."
+    let name = "logs" let description = "Show logs for one or more jobs."
   end)
 
   let make ~env () =
@@ -925,27 +859,20 @@ module Logs_script = struct
           & flag ["--screen"]
               ~doc:
                 "Get the screen window dump instead of the (potential) log file"
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         let cat_file job lp =
           if_seq (file_exists lp)
             ~t:[call [str "cat"; lp]]
-            ~e:[say "No logs available for %s" [job]]
-        in
+            ~e:[say "No logs available for %s" [job]] in
         let screen_file job show_path =
           let tmp = tmp_file "screen-dump" in
           seq
             [ Screen.call env
-                [ str "-p"
-                ; Screen.window_name job
-                ; str "-X"
-                ; str "hardcopy"
-                ; str "-h"
-                ; tmp#path ]
+                [ str "-p"; Screen.window_name job; str "-X"; str "hardcopy"
+                ; str "-h"; tmp#path ]
             ; if_seq show_path
                 ~t:[printf (str "%s\\n") [tmp#path]]
-                ~e:[cat_file job tmp#path] ]
-        in
+                ~e:[cat_file job tmp#path] ] in
         parse opts (fun ~anon just_path screen describe ->
             deal_with_describe describe
               [ Elist.iter anon ~f:(fun name ->
@@ -964,13 +891,12 @@ module Logs_script = struct
                                         "Job %s is configured to have no \
                                          logs, try --screen"
                                         [job] ]
-                                  ~e:[cat_file job lp] ] ] ) ] ) )
+                                  ~e:[cat_file job lp] ] ]) ]))
 end
 
 module Status_script = struct
   include Gedsl.Script_with_describe (struct
     let name = "status"
-
     let description = "Get the status(es) of the processes."
   end)
 
@@ -981,8 +907,7 @@ module Status_script = struct
         let opts =
           let open Arg in
           flag ["--short"; "-s"] ~doc:"Don't output a ton of info"
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         parse opts (fun ~anon:_ short describe ->
             let prefix_output = exec ["sed"; "s/^/    |    /"] in
             deal_with_describe describe
@@ -1002,22 +927,18 @@ module Status_script = struct
                     if_seq (Job.is_running env job)
                       ~t:
                         [ say "Job `%s`: PID: %s, CPU: %s, STAT: %s"
-                            [ job
-                            ; Job.get_pid env job
-                            ; Job.ps_cpu env job
+                            [ job; Job.get_pid env job; Job.ps_cpu env job
                             ; Job.ps_stat env job ]
                         ; if_then (not short)
                             ( call
-                                [ str "ps"
-                                ; str "f"
-                                ; str "-g"
+                                [ str "ps"; str "f"; str "-g"
                                 ; Job.get_pid env job ]
                             ||> prefix_output ) ]
                       ~e:
                         [ say "Job `%s` is not running (stat: %s)"
                             [ job
                             ; Job.ps_stat_or_fail env job
-                              |> get_stdout_one_line ] ] ) ] ) )
+                              |> get_stdout_one_line ] ]) ]))
 end
 
 module Example_script = struct
@@ -1042,13 +963,9 @@ module Example_script = struct
       ; cmt "Show the updated configuration:"
       ; call "config show"
       ; cmt "Show the current status:"
-      ; call "status"
-      ; cmt "Start everything:"
-      ; call "start --all"
+      ; call "status"; cmt "Start everything:"; call "start --all"
       ; cmt "Show the updated status:"
-      ; call "status"
-      ; cmt "Stop everything:"
-      ; call "kill --all"
+      ; call "status"; cmt "Stop everything:"; call "kill --all"
       ; cmt "Show the updated (short) status:"
       ; call "status --short"
       ; cmt "Destroy the configuration:"
@@ -1058,8 +975,7 @@ module Example_script = struct
     let prefix = "#####" in
     let add_prefix pre s =
       String.split ~on:(`Character '\n') s
-      |> String.concat ~sep:(sprintf "\n%s" pre)
-    in
+      |> String.concat ~sep:(sprintf "\n%s" pre) in
     let prefix_indent = prefix ^ "  " in
     List.concat_map l ~f:(function
       | s when String.strip s |> String.is_prefix ~prefix:"#" ->
@@ -1070,13 +986,11 @@ module Example_script = struct
       | s ->
           [ sprintf "printf '%s >> %%s\\n' %s" prefix
               (Filename.quote (add_prefix prefix_indent s))
-          ; s ] )
+          ; s ])
     |> String.concat ~sep:"\n"
 
   include Gedsl.Script_with_describe (struct
-    let name = "example"
-
-    let description = "Show or run a full example."
+    let name = "example" let description = "Show or run a full example."
   end)
 
   let make ~env () =
@@ -1091,37 +1005,33 @@ module Example_script = struct
               ~doc:
                 (sprintf "Choose the example (default: %S)." default_example)
               ~default:(str default_example)
-          & describe_option_and_usage ()
-        in
+          & describe_option_and_usage () in
         let run_or_show run example =
           let do_run () =
             let tmp = tmp_file "example-script" in
             seq
               [ tmp#set (to_script example |> str)
               ; say "Running as %s" [tmp#path]
-              ; call [str "sh"; tmp#path] ]
-          in
+              ; call [str "sh"; tmp#path] ] in
           if_seq run ~t:[do_run ()]
             ~e:
               [ printf (str "Example:\\n\\n") []
               ; seq
                   (List.map example ~f:(fun s ->
-                       printf (str "    %s\\n") [str s] )) ]
-        in
+                       printf (str "    %s\\n") [str s])) ] in
         parse opts (fun ~anon:_ run example describe ->
             deal_with_describe describe
               [ switch
                   ( List.map [basic env root] ~f:(fun (n, cl) ->
-                        case Str.(example =$= str n) [run_or_show run cl] )
+                        case Str.(example =$= str n) [run_or_show run cl])
                   @ [ default
                         [say "Unknown example: %s" [example]; fail "Stopping"]
-                    ] ) ] ) )
+                    ] ) ]))
 
   let () =
     let first_sentence =
       "The distribution comes with runnable examples, try \
-       `cosc example --help`."
-    in
+       `cosc example --help`." in
     Manual.(
       add
         ( section "Examples"
@@ -1141,7 +1051,7 @@ module Base_script = struct
           ~aliases:
             Gedsl.
               [(str "config", str "configuration"); (str "man", str "manual")]
-          ~name:root ~description () )
+          ~name:root ~description ())
 end
 
 let () =
@@ -1175,15 +1085,12 @@ let make ?default_configuration_path ?default_screen_name ~name ~output_path ()
     ; Add_job_script.make ~env ()
     ; Init_script.make ~env ()
     ; Remove_job_script.make ~env ()
-    ; Start_script.make ~env ()
-    ; Logs_script.make ~env ()
-    ; Attach_script.make ~env ()
-    ; Kill_script.make ~env ()
+    ; Start_script.make ~env (); Logs_script.make ~env ()
+    ; Attach_script.make ~env (); Kill_script.make ~env ()
     ; Manual_script.make ~env ()
     ; Version_script.make ~env ()
     ; Example_script.make ~env ()
-    ; Status_script.make ~env () ]
-  in
+    ; Status_script.make ~env () ] in
   cmdf "mkdir -p %s" output_path ;
   List.iter scripts ~f:(Script.write ~output_path ~root:name) ;
   msg "Done."
@@ -1215,8 +1122,7 @@ let () =
         , sprintf " Output the manual to a `README.md`." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
-        , sprintf "<script-name> Where to write the scripts." ) ]
-  in
+        , sprintf "<script-name> Where to write the scripts." ) ] in
   Arg.parse args anon_fun usage ;
   List.iter !anon ~f:(msg "Ignoring %s") ;
   let die () = exit 2 in
@@ -1224,12 +1130,12 @@ let () =
     | Some o -> o
     | None ->
         msg "Option `%s` is mandatory" opt ;
-        die ()
-  in
+        die () in
   let output_path = need "--output-path" !output_path in
   let name = need "--name" !name in
   make ~name ?default_configuration_path:!config_path
     ?default_screen_name:!screen_name ~output_path () ;
   if !output_readme then (
     msg "Outputting manual to %s/README.md" output_path ;
-    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path )
+    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path
+    )

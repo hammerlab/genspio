@@ -16,13 +16,13 @@ val to_one_line_hum : 'a EDSL.t -> string
 (** Compiler from {!EDSL.t} to POSIX shell scripts (one-liners or
     multiline scripts). *)
 module To_posix : sig
-  (** When a compiled script runs into an error, these details are
-      accessible to the user.  *)
   type internal_error_details = Standard_compiler.internal_error_details =
     { variable: string
           (** The incriminated issue was stored in a shell variable. *)
     ; content: string  (** The shell-code that produced the [variable]. *)
     ; code: string  (** Pretty-printed version of the above EDSL code. *) }
+  (** When a compiled script runs into an error, these details are
+      accessible to the user.  *)
 
   (** The kinds of messages that can be output or stored before
       exiting a script. *)
@@ -35,12 +35,11 @@ module To_posix : sig
     | String_to_int_failure of internal_error_details
         (** {!string_to_int} can obviously fail.*)
 
+  type death_function = comment_stack:string list -> death_message -> string
   (** When failing (either with {!EDSL.fail} or because of internal
       reasons) the compiler uses a customizable function to output the “error”
       message and then quiting the process. *)
-  type death_function = comment_stack:string list -> death_message -> string
 
-  (** The potential compilation error. *)
   type compilation_error = Standard_compiler.compilation_error =
     { error:
         [ `No_fail_configured of death_message
@@ -52,6 +51,7 @@ module To_posix : sig
     ; code: string option  (** Chunk of relevant, pretty-printed EDSL code. *)
     ; comment_backtrace: string list
           (** Stack of `Comment` constructs at the point of the error. *) }
+  (** The potential compilation error. *)
 
   val pp_error : Format.formatter -> compilation_error -> unit
   (** Printer for error values. *)
@@ -59,7 +59,6 @@ module To_posix : sig
   val error_to_string : compilation_error -> string
   (** Convenience display of error values. *)
 
-  (** Configuration of the compilation to POSIX shell scripts. *)
   type parameters =
     { style: [`Multi_line | `One_liner]
           (** The kind of script to output: in one-liners sequences are
@@ -93,6 +92,7 @@ module To_posix : sig
         compiling a [unit EDSL.t] expression or what {!Sys.command}
         can work with. *)
     }
+  (** Configuration of the compilation to POSIX shell scripts. *)
 
   val failure_to_stderr : death_function
   (** The default {!death_function} just prints to [stderr]. *)
