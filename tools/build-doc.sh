@@ -2,11 +2,12 @@
 
 set -e
 
-genspio_small_examples=_build/default/src/examples/small_examples.exe
+genspio_small_examples_name=src/examples/small_examples.exe
+genspio_small_examples=_build/default/$genspio_small_examples_name
 
 dune build @install
 dune build @doc
-dune build $genspio_small_examples
+dune build $genspio_small_examples_name
 
 export output_path=_build/doc/html/
 rm -fr $output_path
