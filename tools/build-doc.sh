@@ -2,17 +2,22 @@
 
 set -e
 
-genspio_small_examples=_build/default/src/examples/small_examples.exe
+genspio_small_examples_name=src/examples/small_examples.exe
+genspio_small_examples=_build/default/$genspio_small_examples_name
 
-ocaml please.mlt configure
-jbuilder build @install
-jbuilder build @doc
-jbuilder build $genspio_small_examples
+dune build @install
+dune build @doc
+dune build $genspio_small_examples_name
 
 export output_path=_build/doc/html/
 rm -fr $output_path
 mkdir -p $output_path
-cp -r _build/default/_doc/_html/* $output_path/
+odoc_result=_build/default/_doc/_html/
+cp -r $odoc_result/* $output_path/ || {
+    find _build/default/ | sed 's/^/    /'
+    echo "Copying '$odoc_result/' failed :("
+    exit 2
+    }
 
 css_file=ssc.css
 css_path=$output_path/$css_file

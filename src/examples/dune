@@ -1,0 +1,8 @@
+(executable (name downloader)  (libraries genspio nonstd sosa)(modules downloader))
+(executable (name vm_tester)  (libraries genspio nonstd sosa)(modules vm_tester))
+(executable (name service_composer)  (libraries unix genspio nonstd sosa)(modules service_composer))
+(executable (name multigit)  (libraries unix genspio nonstd sosa)(modules multigit))
+(executable (name small)  (libraries genspio nonstd sosa)(modules small))
+(rule (targets small_examples.ml)(deps small.exe)(action (progn
+(run ./small.exe small_examples.ml))))
+(executable (name small_examples)  (libraries genspio tests nonstd sosa)(modules small_examples))

@@ -1,7 +1,9 @@
 open Common
 
-type c_string = C_string
+(* Here we use the legacy module (too much code to change at once): *)
+module Format = Caml.Format
 
+type c_string = C_string
 type byte_array = Byte_Array
 
 module Literal = struct
@@ -11,11 +13,11 @@ module Literal = struct
     | Bool : bool -> bool t
 
   let pp : type a. _ -> a t -> unit =
-    let open Format in
+    let open Fmt in
     fun fmt -> function
-      | Int i -> fprintf fmt "@[(int@ %d)@]" i
-      | String s -> fprintf fmt "@[(string@ %S)@]" s
-      | Bool b -> fprintf fmt "@[(bool@ %b)@]" b
+      | Int i -> pf fmt "@[(int@ %d)@]" i
+      | String s -> pf fmt "@[(string@ %S)@]" s
+      | Bool b -> pf fmt "@[(bool@ %b)@]" b
 
   module Str = struct
     let easy_to_escape s =
@@ -27,14 +29,14 @@ module Literal = struct
          |'/' | '#' | '@' | '!' | ' ' | '~' | '`' | '\\' | '|' | '?' | '>'
          |'<' | '.' | ',' | ':' | ';' | '{' | '}' | '(' | ')' | '[' | ']' ->
             true
-        | other -> false )
+        | _ -> false)
 
-    let impossible_to_escape_for_variable = String.exists ~f:(( = ) '\x00')
+    let impossible_to_escape_for_variable =
+      String.exists ~f:Char.(( = ) '\x00')
   end
 end
 
 type raw_command_annotation = ..
-
 type raw_command_annotation += Magic_unit
 
 type fd_redirection =
@@ -122,8 +124,7 @@ let rec pp : type a. Format.formatter -> a t -> unit =
           | `Gt -> "gt"
           | `Ge -> "ge"
           | `Lt -> "lt"
-          | `Le -> "le"
-        in
+          | `Le -> "le" in
         pp_fun_call fmt sop pp [a; b]
     | Int_bin_op (a, op, b) ->
         let sop =
@@ -132,11 +133,10 @@ let rec pp : type a. Format.formatter -> a t -> unit =
           | `Minus -> "-"
           | `Mult -> "×"
           | `Div -> "÷"
-          | `Mod -> "%"
-        in
+          | `Mod -> "%" in
         pp_fun_call fmt sop pp [a; b]
     | Not b -> pp_fun_call fmt "not" pp [b]
-    | Returns {expr; value : int} ->
+    | Returns {expr; value: int} ->
         pp_fun_call fmt (sprintf "returns-{%d}" value) pp [expr]
     | No_op -> fprintf fmt "(noop)"
     | If (c, t, e) ->
@@ -150,40 +150,38 @@ let rec pp : type a. Format.formatter -> a t -> unit =
         let redirs fmt {take; redirect_to} =
           fprintf fmt "@[(%a@ >@ %a)@]" pp take
             (fun fmt -> function `Fd f -> fprintf fmt "%a" pp f
-              | `Path f -> fprintf fmt "%a" pp f )
-            redirect_to
-        in
+              | `Path f -> fprintf fmt "%a" pp f)
+            redirect_to in
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "redirect@ %a@ %a" pp u
               (pp_print_list ~pp_sep:pp_print_space redirs)
-              l )
+              l)
     | Write_output {expr; stdout; stderr; return_value} ->
         let o name fmt opt =
           match opt with
           | None -> ()
-          | Some c -> fprintf fmt "@ @[<hov 2>(%s → %a)@]" name pp c
-        in
+          | Some c -> fprintf fmt "@ @[<hov 2>(%s → %a)@]" name pp c in
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "write-output@ %a%a%a%a" pp expr (o "stdout") stdout
-              (o "stderr") stderr (o "return-value") return_value )
+              (o "stderr") stderr (o "return-value") return_value)
     | Feed (s, u) ->
         pp_in_expr fmt (fun fmt () -> fprintf fmt "%a@ >>@ %a" pp s pp u)
     | Pipe l ->
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "pipe:@ %a"
               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ") pp)
-              l )
+              l)
     | While {condition; body} ->
         pp_in_expr fmt (fun fmt () ->
-            fprintf fmt "while@ %a@ do:@ %a" pp condition pp body )
+            fprintf fmt "while@ %a@ do:@ %a" pp condition pp body)
     | Fail s -> pp_in_expr fmt (fun fmt () -> fprintf fmt "FAIL@ %S" s)
     | Int_to_string i -> pp_fun_call fmt "int-to-string" pp [i]
     | String_to_int i -> pp_fun_call fmt "string-to-int" pp [i]
     | Bool_to_string b -> pp_fun_call fmt "bool-to-string" pp [b]
     | String_to_bool b -> pp_fun_call fmt "string-to-bool" pp [b]
-    | List_to_string (l, f) -> pp_fun_call fmt "list-to-string" pp [l]
+    | List_to_string (l, _) -> pp_fun_call fmt "list-to-string" pp [l]
     (* : 'a list t * ('a t -> byte_array t) -> byte_array t *)
-    | String_to_list (s, f) -> pp_fun_call fmt "string-to-list" pp [s]
+    | String_to_list (s, _) -> pp_fun_call fmt "string-to-list" pp [s]
     | List l -> pp_fun_call fmt "list" pp l
     | C_string_concat t -> pp_fun_call fmt "c-string-concat" pp [t]
     | Byte_array_concat t -> pp_fun_call fmt "byte-array-concat" pp [t]
@@ -207,195 +205,116 @@ let rec pp : type a. Format.formatter -> a t -> unit =
 
 module Construct = struct
   let to_c_string ba = Byte_array_to_c_string ba
-
   let to_byte_array c = C_string_to_byte_array c
 
   module C_string = struct
     let equals a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-
     let ( =$= ) a b = String_operator (to_byte_array a, `Eq, to_byte_array b)
-
     let ( <$> ) a b = String_operator (to_byte_array a, `Neq, to_byte_array b)
-
     let to_byte_array c = C_string_to_byte_array c
-
     let to_bytes c = C_string_to_byte_array c
-
     let concat_elist l = C_string_concat l
-
     let concat_list sl = concat_elist (List sl)
   end
 
   module Byte_array = struct
     let ( =$= ) a b = String_operator (a, `Eq, b)
-
     let ( <$> ) a b = String_operator (a, `Neq, b)
-
     let to_c_string ba = Byte_array_to_c_string ba
-
     let to_c ba = Byte_array_to_c_string ba
   end
 
   module Base = struct
     let literal l = Literal l
-
     let byte_array s = Literal.String s |> literal
-
     let int s = Literal.Int s |> literal
-
     let bool t = Literal.Bool t |> literal
-
     let c_string s = byte_array s |> to_c_string
-
     let string = c_string
-
     let exec l = Exec (List.map l ~f:(fun s -> string s))
-
     let call l = Exec l
-
     let ( &&& ) a b = Bool_operator (a, `And, b)
-
     let ( ||| ) a b = Bool_operator (a, `Or, b)
-
     let returns expr ~value = Returns {expr; value}
-
     let succeeds expr = returns expr ~value:0
-
     let nop = No_op
-
     let if_then_else a b c = If (a, b, c)
-
     let if_then a b = if_then_else a b nop
-
     let seq l = Seq l
-
     let not t = Not t
-
     let fail s = Fail s
-
     let comment s u = Comment (s, u)
-
     let ( %%% ) s u = comment s u
 
-    let make_switch : type a.
-        (bool t * unit t) list -> default:unit t -> unit t =
+    let make_switch : (bool t * unit t) list -> default:unit t -> unit t =
      fun conds ~default ->
       List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
-          if_then_else x body prev )
+          if_then_else x body prev)
 
     let write_output ?stdout ?stderr ?return_value expr =
       Write_output {expr; stdout; stderr; return_value}
 
     let write_stdout ~path expr = write_output expr ~stdout:path
-
     let to_fd take fd = {take; redirect_to= `Fd fd}
-
     let to_file take file = {take; redirect_to= `Path file}
-
     let with_redirections cmd l = Redirect_output (cmd, l)
-
     let file_exists p = call [c_string "test"; c_string "-f"; p] |> succeeds
-
     let getenv v = Getenv v
-
     let setenv ~var v = Setenv (var, v)
-
     let get_stdout e = Output_as_string e
-
     let feed ~string e = Feed (string, e)
-
     let ( >> ) string e = feed ~string e
-
     let pipe l = Pipe l
-
     let ( ||> ) a b = Pipe [a; b]
-
     let loop_while condition ~body = While {condition; body}
-
     let loop_seq_while condition body = While {condition; body= Seq body}
-
     let byte_array_concat_list l = Byte_array_concat l
   end
 
   include Base
 
   module Bool = struct
-    let of_string s = String_to_bool s
-
-    let to_string b = Bool_to_string b
+    let of_string s = String_to_bool s let to_string b = Bool_to_string b
   end
 
   module Integer = struct
     let to_string i = Int_to_string i
-
     let to_byte_array i = C_string_to_byte_array (Int_to_string i)
-
     let of_string s = String_to_int s
-
     let of_byte_array s = String_to_int (Byte_array_to_c_string s)
-
     let bin_op a o b = Int_bin_op (a, o, b)
-
     let add a b = bin_op a `Plus b
-
     let ( + ) = add
-
     let sub a b = bin_op a `Minus b
-
     let ( - ) = sub
-
     let mul a b = bin_op a `Mult b
-
     let ( * ) = mul
-
     let div a b = bin_op a `Div b
-
     let ( / ) = div
-
     let modulo a b = bin_op a `Mod b
-
     let ( mod ) = modulo
-
     let cmp op a b = Int_bin_comparison (a, op, b)
-
     let eq = cmp `Eq
-
     let ne = cmp `Ne
-
     let lt = cmp `Lt
-
     let le = cmp `Le
-
     let ge = cmp `Ge
-
     let gt = cmp `Gt
-
     let ( = ) = eq
-
     let ( <> ) = ne
-
     let ( < ) = lt
-
     let ( <= ) = le
-
     let ( >= ) = ge
-
     let ( > ) = gt
   end
 
-  module Magic = struct
-    let unit s : unit t = Raw_cmd (Some Magic_unit, s)
-  end
+  module Magic = struct let unit s : unit t = Raw_cmd (Some Magic_unit, s) end
 
   module Elist = struct
     let make l = List l
-
     let append la lb = List_append (la, lb)
-
     let iter l ~f = List_iter (l, f)
-
     let to_string f l = List_to_string (l, f)
-
     let of_string f l = String_to_list (l, f)
 
     let serialize_byte_array_list : byte_array list t -> byte_array t =
@@ -417,7 +336,6 @@ module Construct = struct
       of_string Integer.of_byte_array
 
     let to_string _ = `Do_not_use
-
     let of_string _ = `Do_not_use
   end
 end

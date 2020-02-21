@@ -89,7 +89,7 @@ provides a command line tool to generate “Qemu” environments.
 You can build it with:
 
     export genspio_vm_tester=_build/default/src/examples/vm_tester.exe
-    jbuilder build $genspio_vm_tester
+    dune build $genspio_vm_tester
 
 A version is also available in the genspio-doc docker-images (note that the 
 [build](https://hub.docker.com/r/smondet/genspio-doc-dockerfiles/builds/)

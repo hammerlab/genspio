@@ -1,12 +1,11 @@
-include Nonstd
-module String = Sosa.Native_string
+include Base
 
 module Unique_name = struct
   let x = ref 0
 
   let create prefix =
-    incr x ;
-    sprintf "%s_%d_%d" prefix !x (Random.int 100_000)
+    Caml.incr x ;
+    Fmt.str "%s_%d_%d" prefix !x (Random.int 100_000)
 
   let variable = create
 end

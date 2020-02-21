@@ -117,8 +117,7 @@ module Visitor = struct
           =
         fun (l, f) ->
           let newf (* : type a. (unit -> a t) -> unit t *) item =
-            self#expression (f item)
-          in
+            self#expression (f item) in
           List_iter (self#expression l, newf)
 
       method byte_array_to_c_string : byte_array t -> c_string t =
@@ -148,7 +147,7 @@ module Visitor = struct
       method expression : type a. a Language.t -> a Language.t =
         fun e ->
           Option.iter trace ~f:(fun formatter ->
-              Format.fprintf formatter "-> %a\n" pp e ) ;
+              Format.fprintf formatter "-> %a\n" pp e) ;
           match e with
           | Exec l -> self#exec (List.map l ~f:self#expression)
           | Raw_cmd (x, y) -> self#raw_cmd (x, y)
@@ -199,13 +198,13 @@ The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only 
  *)
   class propagator ?trace () =
     object (self)
-      inherit Visitor.nothing_doer ?trace () as super
+      inherit Visitor.nothing_doer ?trace () as _super
 
       (*md
 Boolean operators are not commutative, the left side has to be
 evaluated first and may break the execution flow (e.g. with `fail`).
 *)
-      method bool_operator (a, op, b) =
+      method! bool_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         match (ga, op, gb) with
@@ -219,18 +218,18 @@ literals (all non-literals can be non-deterministic and
 side-effectful).
 
  *)
-      method string_operator (a, op, b) =
+      method! string_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         match (ga, op, gb) with
         | Literal (Literal.String sa), op, Literal (Literal.String sb) ->
             Literal
               ( match op with
-              | `Neq -> Literal.Bool (sa <> sb)
-              | `Eq -> Literal.Bool (sa = sb) )
+              | `Neq -> Literal.Bool String.(sa <> sb)
+              | `Eq -> Literal.Bool String.(sa = sb) )
         | _ -> String_operator (ga, op, gb)
 
-      method returns : type a. expr:a t -> _ =
+      method! returns : type a. expr:a t -> _ =
         fun ~expr ~value ->
           let e = self#expression expr in
           match (e, value) with
@@ -238,7 +237,7 @@ side-effectful).
           | No_op, _ -> Construct.bool false
           | _ -> Returns {expr; value}
 
-      method if_ (c, t, e) =
+      method! if_ (c, t, e) =
         let gc = self#expression c in
         let gt = self#expression t in
         let ge = self#expression e in
@@ -247,28 +246,28 @@ side-effectful).
         | Literal (Literal.Bool false) -> ge
         | _ -> If (gc, gt, ge)
 
-      method while_ ~condition ~body =
+      method! while_ ~condition ~body =
         match self#expression condition with
         | Literal (Literal.Bool false) -> No_op
         | cond -> While {condition= cond; body= self#expression body}
 
-      method not b =
+      method! not b =
         let gb = self#expression b in
         match gb with
         | Literal (Literal.Bool b) -> Literal (Literal.Bool (not b))
         | other -> Not other
 
-      method seq l =
+      method! seq l =
         let transformed =
-          List.map ~f:self#expression l |> List.filter ~f:(( <> ) No_op)
+          List.map ~f:self#expression l |> List.filter ~f:Poly.(( <> ) No_op)
         in
         match transformed with [] -> No_op | [one] -> one | l -> Seq l
 
-      method pipe l =
+      method! pipe l =
         let tr = List.map ~f:self#expression l in
         match tr with Pipe l :: more -> Pipe (l @ more) | other -> Pipe other
 
-      method c_string_concat l =
+      method! c_string_concat l =
         let gl = self#expression l in
         match gl with
         | List [] -> Construct.c_string ""
@@ -286,15 +285,14 @@ side-effectful).
                       Byte_array_to_c_string
                         (Literal (Literal.String (pstring ^ sitem)))
                       :: more
-                  | _, _ -> item :: prev )
-              |> List.rev
-            in
+                  | _, _ -> item :: prev)
+              |> List.rev in
             match build with
             | [one] -> one
             | more -> C_string_concat (List more) )
         | default -> C_string_concat default
 
-      method byte_array_concat l =
+      method! byte_array_concat l =
         let gl = self#expression l in
         match gl with
         | List [] -> Construct.byte_array ""
@@ -307,15 +305,14 @@ side-effectful).
                   | ( Literal (Literal.String pstring) :: more
                     , Literal (Literal.String sitem) ) ->
                       Literal (Literal.String (pstring ^ sitem)) :: more
-                  | _, _ -> item :: prev )
-              |> List.rev
-            in
+                  | _, _ -> item :: prev)
+              |> List.rev in
             match build with
             | [one] -> one
             | more -> Byte_array_concat (List more) )
         | default -> Byte_array_concat default
 
-      method list_append (a, b) =
+      method! list_append (a, b) =
         let la = self#expression a in
         let lb = self#expression b in
         match (la, lb) with
@@ -324,11 +321,11 @@ side-effectful).
         | List lla, List llb -> List (lla @ llb)
         | _, _ -> List_append (la, lb)
 
-      method list_iter (l, f) =
+      method! list_iter (l, f) =
         let gl = self#expression l in
         match gl with List [] -> No_op | _ -> List_iter (gl, f)
 
-      method int_bin_op (a, op, b) =
+      method! int_bin_op (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         let default = Int_bin_op (ga, op, gb) in
@@ -347,7 +344,7 @@ side-effectful).
           | _ -> default )
         | _ -> default
 
-      method int_bin_comparison (a, op, b) =
+      method! int_bin_comparison (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
         let default = Int_bin_comparison (ga, op, gb) in
@@ -377,13 +374,12 @@ side-effectful).
     let count = ref 0 in
     let check ?trace name e res =
       let p = process ?trace e in
-      incr count ;
-      match p = res with
+      Caml.incr count ;
+      match Poly.(p = res) with
       | true -> ()
       | false ->
           failures :=
-            (!count, name, Forget e, Forget res, Forget p) :: !failures
-    in
+            (!count, name, Forget e, Forget res, Forget p) :: !failures in
     check "no-op" No_op No_op ;
     check "some bool"
       Construct.(bool true &&& bool false)
@@ -412,17 +408,11 @@ side-effectful).
       Construct.(C_string.concat_list [string "one"; string "-"; string "two"])
       Construct.(string "one-two") ;
     let s n =
-      Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c)
-    in
+      Construct.(get_stdout (exec [Int.to_string n]) |> Byte_array.to_c) in
     check "concat one-two"
       Construct.(
         C_string.concat_list
-          [ string "before"
-          ; s 0
-          ; string "one"
-          ; string "-"
-          ; string "two"
-          ; s 1
+          [ string "before"; s 0; string "one"; string "-"; string "two"; s 1
           ; string "" ])
       Construct.(
         C_string.concat_list [string "before"; s 0; string "one-two"; s 1]) ;
@@ -438,9 +428,9 @@ side-effectful).
           [ e 42
           ; loop_seq_while
               ("Comment on the success" %%% succeeds (s 0))
-              [e 1; "Comment on the `setenv`" %%% setenv (string "bouh") expr]
-          ])
-    in
+              [ e 1
+              ; "Comment on the `setenv`" %%% setenv ~var:(string "bouh") expr
+              ] ]) in
     check "deep1"
       Construct.(make_deep Integer.(to_string (int 1 + int 0)))
       Construct.(make_deep Integer.(to_string (int 1))) ;
@@ -462,9 +452,9 @@ side-effectful).
                Result:\n\
                %a\n\
                %!"
-              nth name pp e pp res pp p ) ;
+              nth name pp e pp res pp p) ;
         let nb = List.length more in
-        ksprintf failwith "There %s %d test failure%s"
+        Fmt.failwith "There %s %d test failure%s"
           (if nb > 1 then "were" else "was")
           nb
           (if nb > 1 then "s" else "")

@@ -1,8 +1,9 @@
 (** The Embedded Domain Specific Lanaguage to create “shell-expressions.” *)
 
-(** The type of a Genspio expression. *)
 type 'a t = 'a Language.t
+(** The type of a Genspio expression. *)
 
+type str = Language.byte_array
 (** Type to encode arbitrary byte-arrays in the EDSL as
     [str t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays.
@@ -13,18 +14,19 @@ type 'a t = 'a Language.t
     environment variables must be C-strings. Genspio treats them
     properly by failing when a wrong byte-array needs to be converted
     to a C-string. *)
-type str = Language.byte_array
+
+type byte_array = Language.byte_array
+type c_string = Language.c_string
 
 (** {3 Literals } *)
 
 val str : string -> str t
-(** Create a {!type:c_string} literal. *)
+(** Create a {!type:byte_array} literal. *)
 
 val string : string -> str t
 (** [string] is an alias for {!function:str}. *)
 
 val int : int -> int t
-
 val bool : bool -> bool t
 
 (** {3 Comments} *)
@@ -60,7 +62,7 @@ val setenv : var:str t -> str t -> unit t
 
     If the [~var] argument is not a valid variable name or if the value does
     not fit in a shell variable (e.g. newlines), behavior is undefined.
-    
+
     Also, the total environment of a UNIX process counts towards the
     total size of the arguments passed on to a sub-process (see
     usually the result of ["getconf ARG_MAX"]). Genspio does not check
@@ -73,9 +75,7 @@ val setenv : var:str t -> str t -> unit t
 (** {3 Boolean Expressions} *)
 
 val ( &&& ) : bool t -> bool t -> bool t
-
 val ( ||| ) : bool t -> bool t -> bool t
-
 val not : bool t -> bool t
 
 val returns : 'a t -> value:int -> bool t
@@ -91,7 +91,6 @@ val file_exists : str t -> bool t
 (** Conversions of the [bool t] type. *)
 module Bool : sig
   val to_string : bool t -> str t
-
   val of_string : str t -> bool t
 end
 
@@ -100,56 +99,33 @@ end
 (** Functions on [int t] values (arithmetic, comparisons, conversions, etc.). *)
 module Integer : sig
   val to_str : int t -> str t
-
   val of_str : str t -> int t
 
   val bin_op :
     int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
 
   val add : int t -> int t -> int t
-
   val ( + ) : int t -> int t -> int t
-
   val sub : int t -> int t -> int t
-
   val ( - ) : int t -> int t -> int t
-
   val mul : int t -> int t -> int t
-
   val ( * ) : int t -> int t -> int t
-
   val div : int t -> int t -> int t
-
   val ( / ) : int t -> int t -> int t
-
   val modulo : int t -> int t -> int t
-
   val ( mod ) : int t -> int t -> int t
-
   val cmp : [`Eq | `Ge | `Gt | `Le | `Lt | `Ne] -> int t -> int t -> bool t
-
   val eq : int t -> int t -> bool t
-
   val ne : int t -> int t -> bool t
-
   val lt : int t -> int t -> bool t
-
   val le : int t -> int t -> bool t
-
   val ge : int t -> int t -> bool t
-
   val gt : int t -> int t -> bool t
-
   val ( = ) : int t -> int t -> bool t
-
   val ( <> ) : int t -> int t -> bool t
-
   val ( < ) : int t -> int t -> bool t
-
   val ( <= ) : int t -> int t -> bool t
-
   val ( >= ) : int t -> int t -> bool t
-
   val ( > ) : int t -> int t -> bool t
 end
 
@@ -168,15 +144,10 @@ module Elist : sig
       function that returns the current eletment at the EDSL level. *)
 
   val serialize_byte_array_list : str list t -> str t
-
   val deserialize_to_byte_array_list : str t -> str list t
-
   val serialize_str_list : str list t -> str t
-
   val deserialize_to_str_list : str t -> str list t
-
   val serialize_int_list : int list t -> str t
-
   val deserialize_to_int_list : str t -> int list t
 end
 
@@ -184,9 +155,7 @@ end
 
 module Str : sig
   val equals : str t -> str t -> bool t
-
   val ( =$= ) : str t -> str t -> bool t
-
   val ( <$> ) : str t -> str t -> bool t
 
   val concat_list : str t list -> str t
@@ -202,7 +171,6 @@ val nop : unit t
 (** The silent “no-operation.” *)
 
 val if_then_else : bool t -> unit t -> unit t -> unit t
-
 val if_then : bool t -> unit t -> unit t
 
 val seq : unit t list -> unit t
@@ -244,8 +212,8 @@ val make_switch :
 
 (** {3 Redirections and File Descriptors } *)
 
-(** Abstract type of file-descriptor redirections. *)
 type fd_redirection
+(** Abstract type of file-descriptor redirections. *)
 
 val to_fd : int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
@@ -254,7 +222,7 @@ val to_file : int t -> str t -> fd_redirection
 (** Create a file-descriptor to file redirection. *)
 
 val with_redirections : unit t -> fd_redirection list -> unit t
-(** 
+(**
    Run a [unit t] expression after applying a list of file-descriptor
    redirections.
 
@@ -312,18 +280,18 @@ val fail : string -> unit t
 
 (** {3 Temporary Files} *)
 
-(** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
   < get: str t  (** Get the current contents of the file *)
   ; set: str t -> unit t
   ; append: str t -> unit t
   ; delete: unit t
   ; path: str t >
+(** Abstraction of a file, cf. {!tmp_file}. *)
 
 val tmp_file : ?tmp_dir:str t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
     used as variable containing [string t] values).
-    
+
     [tmp_file "foo"] points to a path that is a {b function}
     of the string ["foo"]; it does not try to make temporary-files
     unique, on the contrary: two calls to [tmp_file "foo"] ensure that
@@ -334,7 +302,7 @@ val tmp_file : ?tmp_dir:str t -> string -> file
 
 (** Typed command-line parsing for your shell scripts, à la {!Printf.scanf}. *)
 module Command_line : sig
-  (** 
+  (**
 
      Use this module like OCaml's {!Printf.scanf} function.
 
@@ -369,7 +337,7 @@ module Command_line : sig
             string Genspio.EDSL.t -> string Genspio.EDSL.t -> unit Genspio.EDSL.t,
             unit Genspio.EDSL.t)
            Genspio.EDSL.Command_line.cli_options
-          
+
            so the action function (the second argument to parse) must have type:
 
            anon:string list Genspio.EDSL.t ->
@@ -565,7 +533,7 @@ val ensure : string -> condition:bool t -> how:(string * unit t) list -> unit t
 - If [true] do nothing, succeed
 - If [false], run [~how] with {!check_sequence}.
 - Test the condition again, if [true] succeed, if [false] fail.
-    
+
 Failures happen thanks to the !{fail} call.
  *)
 
@@ -615,11 +583,9 @@ Composer Example} which is where the above snippet comes from.
  *)
 module Script_with_describe (P : sig
   val name : string
-
   val description : string
 end) : sig
   val name : string
-
   val description : string
 
   val describe_option_and_usage :
@@ -641,18 +607,18 @@ module Dispatcher_script : sig
     -> description:string
     -> unit
     -> unit Genspio__Language.t
-  (** 
+  (**
      Make a “toplevel” script that behaves a bit like ["git"] by
      calling [name ^ "-${1}"]. The search for the argument can be
      “hijacked” with the list of [~aliases]; with [~name:"hello"] and
      [~aliases:[str "W", str "wolrd"]], when ["hello W"] is called,
      the generated script with lool for ["hello-world"] in the
      ["$PATH"].
-     
+
      Just like scripts made with {!Script_with_describe}, the
      [~description] argument is used to answer the ["--describe"]
      command line option.
-     
+
      When called without arguments, with ["-h"], ["-help"], or with
      ["--help"], the script lists all the commands it can find and the
      aliases. E.g.:

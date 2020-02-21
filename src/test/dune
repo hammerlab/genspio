@@ -1,0 +1,2 @@
+(executable (name main)  (libraries genspio tests nonstd sosa))
+
