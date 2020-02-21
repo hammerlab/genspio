@@ -4,7 +4,7 @@
 
 travis_install_on_linux () {
     # Install OCaml and OPAM PPAs
-    export ppa=avsm/ocaml42+opam12
+    export ppa=avsm/ppa
 
     echo "yes" | sudo add-apt-repository ppa:$ppa
     sudo apt-get update -qq
@@ -79,7 +79,7 @@ echo "$(xargs --show-limits & { sleep 1 ; exit 0 ; } )"
 echo ">>> ULimits:"
 ulimit -a
 
-bash ./tools/env-var-tst.sh
+# bash ./tools/env-var-tst.sh
 
 # install OCaml packages
 opam init $opam_init_options
@@ -95,12 +95,12 @@ opam install genspio
 
 export OCAMLPARAM='warn-error=Ad-58,_'
 
-genspio_test=_build/default/src/test/main.exe
-genspio_downloader_maker=_build/default/src/examples/downloader.exe
-genspio_small_examples=_build/default/src/examples/small_examples.exe
-genspio_vm_tester=_build/default/src/examples/vm_tester.exe
-genspio_service_composer=_build/default/src/examples/service_composer.exe
-genspio_multigit=_build/default/src/examples/multigit.exe
+genspio_test=src/test/main.exe
+genspio_downloader_maker=src/examples/downloader.exe
+genspio_small_examples=src/examples/small_examples.exe
+genspio_vm_tester=src/examples/vm_tester.exe
+genspio_service_composer=src/examples/service_composer.exe
+genspio_multigit=src/examples/multigit.exe
 
 echo "================== BUILD ALL ==================================================="
 dune build @install
@@ -114,8 +114,8 @@ dune build $genspio_multigit
 
 echo "================== TESTS ======================================================="
 
-$genspio_test --run-constant-propagation-tests \
-              --important-shells $important_shells _test/
+dune exec $genspio_test -- --run-constant-propagation-tests \
+     --important-shells $important_shells _test/
 (
     cd _test
     case $TRAVIS_OS_NAME in
@@ -144,7 +144,7 @@ $genspio_test --run-constant-propagation-tests \
 
 echo "================== EXAMPLES: TEST 1 ============================================"
 genspio_downloader=/tmp/genspio-downloader
-$genspio_downloader_maker make $genspio_downloader
+dune exec $genspio_downloader_maker -- make $genspio_downloader
 
 $main_shell $genspio_downloader -h
 
@@ -171,22 +171,22 @@ echo "================== EXAMPLES: TEST 3 ======================================
 
 echo "================== EXAMPLES: SMALL ONES ============================================"
 
-$genspio_small_examples
+dune exec $genspio_small_examples
 
 echo "================== EXAMPLES: vm_tester ============================================"
 
-$genspio_vm_tester --vm arm-owrt /tmp/vmt/arm-owrt/  ; ( cd /tmp/vmt/arm-owrt/ ; make help ; )
-$genspio_vm_tester --vm arm-dw /tmp/vmt/arm-dw/      ; ( cd /tmp/vmt/arm-dw/ ; make help ; )
-$genspio_vm_tester --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; make help ; )
+dune exec $genspio_vm_tester -- --vm arm-owrt /tmp/vmt/arm-owrt/  ; ( cd /tmp/vmt/arm-owrt/ ; make help ; )
+dune exec $genspio_vm_tester -- --vm arm-dw /tmp/vmt/arm-dw/      ; ( cd /tmp/vmt/arm-dw/ ; make help ; )
+dune exec $genspio_vm_tester -- --vm amd64-fb /tmp/vmt/amd64-fb/  ; ( cd /tmp/vmt/amd64-fb ; make help ; )
 
 
 echo "================== EXAMPLES: Service-composer======================================="
 
-$genspio_service_composer --name cosc --output-path $HOME/bin
+dune exec $genspio_service_composer -- --name cosc --output-path $HOME/bin
 
 echo "================== EXAMPLES: Multigit ======================================="
 
-$genspio_multigit $HOME/bin
+dune exec $genspio_multigit -- $HOME/bin
 export PATH=$HOME/bin:$PATH
 ./tools/multigit-test.sh
 

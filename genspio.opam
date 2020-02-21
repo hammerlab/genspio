@@ -15,6 +15,7 @@ depends: [
   "ocaml" { >= "4.03.0" }
   "dune"
   "base"
+  "fmt"
 ]
 synopsis: "Typed EDSL to generate POSIX Shell scripts"
 description: """
