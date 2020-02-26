@@ -25,6 +25,7 @@ css_path=$output_path/$css_file
 cat >> $output_path/odoc.css <<EOF
 body {
   max-width: 72em; /* A bit larger than odoc's output */
+  margin-left: 4em;
 }
 EOF
 cat $output_path/odoc.css > $css_path
