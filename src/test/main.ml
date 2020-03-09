@@ -1188,6 +1188,32 @@ let () =
             ; return 12 ]) ] in
   add_tests (List.concat tests)
 
+let () =
+  add_tests
+  @@ exits 13 ~name:"new-elist-tests"
+       (* This test is a reproduction of
+          https://github.com/hammerlab/genspio/issues/102 *)
+       (let open Genspio.EDSL in
+       let original = List.init 10 ~f:(fun x -> Fmt.kstr str "s%03d" x) in
+       let one_list = Elist.make original in
+       let thens = tmp_file "thens" in
+       let elses = tmp_file "elses" in
+       seq
+         [ Elist.iter one_list ~f:(fun item ->
+               if_seq
+                 Str.(item () =$= str "s003")
+                 ~t:
+                   [ printf (str "then: %s\\n") [item ()]
+                   ; thens#append (item ()) ]
+                 ~e:
+                   [ printf (str "else: %s\\n") [item ()]
+                   ; elses#append (item ()) ])
+         ; if_seq
+             ( Str.(thens#get =$= str "s003")
+             &&& greps_to (str "s002s004s005") (call [str "echo"; elses#get])
+             )
+             ~t:[return 13] ~e:[return 12] ])
+
 let compilation_error_tests () =
   let results = ref [] in
   let test ?options e expect =
