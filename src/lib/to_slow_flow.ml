@@ -160,7 +160,7 @@ In that case, we compare the octal representations.
     | Tmp_file_in_variable f ->
         (* Parameters.(tmp_file_db := f :: !tmp_file_db) ; *)
         Fmt.str "$(cat \"${%s}\" | od -t o1 -An -v | tr -d ' \\n')" f
-    | Octal_value_in_variable var -> Fmt.str "${%s}" var
+    | Octal_value_in_variable var -> Fmt.str "$(printf ${%s} | tr -d L)" var
 
   let commands s = s.commands
 
