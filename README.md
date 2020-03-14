@@ -33,9 +33,7 @@ Or get the development version with `opam pin`:
 
 You can also build locally:
 
-You need OCaml ≥ 4.03.0 together with
-[`nonstd`](http://www.hammerlab.org/docs/nonstd/master/index.html),
-[`sosa`](http://www.hammerlab.org/docs/sosa/master/index.html), and
+You need OCaml ≥ 4.03.0 together with `base`, `fmt`, and
 [`dune`](https://github.com/janestreet/dune):
 
     dune build @install

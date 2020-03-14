@@ -1,14 +1,13 @@
-open Nonstd
-module String = Sosa.Native_string
+open! Base
 
-let examples = ref ([] : (out_channel -> unit) list)
+let examples = ref ([] : (Caml.out_channel -> unit) list)
 
 let example ?show name description code =
   let f o =
-    fprintf o
+    Caml.Printf.fprintf o
       "let () = examples := Example.make ~ocaml:%S %s %S %S %s :: !examples\n"
       code
-      (match show with None -> "" | Some s -> sprintf "~show:%s" s)
+      (match show with None -> "" | Some s -> Fmt.str "~show:%s" s)
       name description code in
   examples := f :: !examples
 
@@ -305,21 +304,22 @@ Genspio.EDSL.(
 (******************************************************************************)
 
 let () =
+  let open Caml in
+  let open Printf in
   let o = open_out Sys.argv.(1) in
   fprintf o "%s"
     {ocaml|
-open Nonstd
-module String = Sosa.Native_string
+open! Base
 open Tests.Test_lib
 
 let examples = ref []
 |ocaml} ;
-  fprintf o "let () = printf \"%%s\" %S\n" intro_blob ;
-  List.iter (List.rev !examples) ~f:(fun f -> f o) ;
+  fprintf o "let () = Fmt.pr \"%%s\" %S\n" intro_blob ;
+  Base.List.iter (List.rev !examples) ~f:(fun f -> f o) ;
   fprintf o "%s"
     {ocaml|
 let () =
-    List.iter (List.rev !examples) ~f:(Example.run Format.std_formatter)
+    List.iter (List.rev !examples) ~f:(Example.run Caml.Format.std_formatter)
 |ocaml} ;
   close_out o ;
   printf "%s: Done.\n%!" Sys.argv.(0)

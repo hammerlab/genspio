@@ -1,1 +1,1 @@
-(library (name tests)  (libraries genspio uri nonstd sosa) )
+(library (name tests)  (libraries genspio uri base fmt) )

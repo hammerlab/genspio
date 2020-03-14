@@ -1,14 +1,14 @@
-open Nonstd
-module String = Sosa.Native_string
+open! Base
+module Filename = Caml.Filename
 open Tests.Test_lib
 module Compile = Genspio.Language
 module Construct = Genspio.EDSL_v0
 
 let exits = Test.exits
 let shexit n = Construct.exec ["exit"; Int.to_string n]
-let return n = Construct.exec ["sh"; "-c"; sprintf "exit %d" n]
-let tprintf fmt = ksprintf (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
-let comment fmt = ksprintf (fun s -> Construct.exec [":"; s]) fmt
+let return n = Construct.exec ["sh"; "-c"; Fmt.str "exit %d" n]
+let tprintf fmt = Fmt.kstr (fun s -> Construct.exec ["printf"; "%s"; s]) fmt
+let comment fmt = Fmt.kstr (fun s -> Construct.exec [":"; s]) fmt
 
 let assert_or_fail name cond =
   let open Genspio.EDSL in
@@ -138,7 +138,7 @@ let () =
                 (if_then_else
                    Byte_array.(
                      get_stdout (call [string "cat"; return_value_path])
-                     =$= ksprintf byte_array "%d" return_value_value)
+                     =$= Fmt.kstr byte_array "%d" return_value_value)
                    (return 11) (return 22))
                 (return 23))
              (return 24) ]) ;
@@ -215,7 +215,7 @@ let () =
          ; loop_while
              Byte_array.(
                cat_potentially_empty |> get_stdout <$> byte_array "nnnn")
-             ~body:(exec ["sh"; "-c"; sprintf "printf n >> %s" tmp])
+             ~body:(exec ["sh"; "-c"; Fmt.str "printf n >> %s" tmp])
          ; return 13 ]) ;
   ()
 
@@ -229,7 +229,7 @@ let () =
     (* let anon3 = "annon deid \t dlsij" in *)
     (* let anon3 = "======== \t =====" in *)
     exits ret
-      ~name:(sprintf "legacy-parse-cli-%d" count)
+      ~name:(Fmt.str "legacy-parse-cli-%d" count)
       ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3]
       (let open Genspio.EDSL_v0 in
       let open Command_line in
@@ -262,7 +262,7 @@ let () =
                        String.concat ~sep:""
                          [anon1; "-g"; minus_g; anon2; anon3] in
                      [ printf
-                         (ksprintf string
+                         (Fmt.kstr string
                             "######### In dash-dash case: #########\\n=== \
                              length-of-all: %d\\nbone: '%%s'\\n=== anon3: \
                              '%%s'\\n=== concat_elist anon: '%%s'\\n=== \
@@ -336,7 +336,7 @@ let () =
             (Elist.iter anon ~f:(fun item ->
                  printf (string "^^^%s@@@") [item ()]))
           (* |> Byte_array.to_c *)
-          =$= ( List.map ~f:(sprintf "^^^%s@@@") anons_expected
+          =$= ( List.map ~f:(Fmt.str "^^^%s@@@") anons_expected
               |> String.concat ~sep:"" |> str )) in
   let spec =
     let open Command_line in
@@ -351,7 +351,7 @@ let () =
     (* let anon3 = "annon deid \t dlsij" in *)
     (* let anon3 = "======== \t =====" in *)
     exits ret
-      ~name:(sprintf "parse-cli-%d" count)
+      ~name:(Fmt.str "parse-cli-%d" count)
       ~args:["-f"; minus_f; single; anon1; "-g"; minus_g; anon2; anon3]
       (Command_line.parse spec (fun ~anon one two bone ->
            seq
@@ -371,7 +371,7 @@ let () =
                         String.concat ~sep:""
                           [anon1; "-g"; minus_g; anon2; anon3] in
                       [ printf
-                          (ksprintf string
+                          (Fmt.kstr string
                              "######### In dash-dash case: #########\\n=== \
                               length-of-all: %d\\nbone: '%%s'\\n=== anon3: \
                               '%%s'\\n=== concat_elist anon: '%%s'\\n=== \
@@ -400,15 +400,15 @@ let () =
                     (return 44)) ])) in
   let only_anon args name =
     exits
-      ~name:(sprintf "parse-cli-only-anon-%s" name)
+      ~name:(Fmt.str "parse-cli-only-anon-%s" name)
       ~args 0
       (Command_line.parse spec (fun ~anon _ _ _ ->
            assert_or_fail
-             (sprintf "anon-is-anon-%s" name)
+             (Fmt.str "anon-is-anon-%s" name)
              (check_anon anon args))) in
   [ only_anon [] "nothing"
   ; only_anon ["one"] "one"
-  ; only_anon (List.init 4 ~f:(sprintf "a%d")) "fouras" ]
+  ; only_anon (List.init 4 ~f:(Fmt.str "a%d")) "fouras" ]
   @ List.mapi
       ~f:(fun i f -> f i)
       [ make 11 minus_f ""; make 12 "not-one" ""
@@ -473,7 +473,7 @@ let () =
   let does_not_give = 12 in
   let t cmd yn value =
     let name =
-      sprintf "%s %s %d" cmd
+      Fmt.str "%s %s %d" cmd
         (if yn = gives then "returns" else "does not return")
         value in
     exits ~name yn
@@ -659,7 +659,7 @@ let () =
        let alternate_get_env v =
          (* We cannot use OCaml's Sys.getenv because the compilation output may
          be run on a different host/system (through SSH or alike). *)
-         exec ["sh"; "-c"; sprintf "echo ${%s} | tr -d '\\n'" v]
+         exec ["sh"; "-c"; Fmt.str "echo ${%s} | tr -d '\\n'" v]
          |> get_stdout |> Byte_array.to_c in
        if_then_else
          C_string.(
@@ -726,14 +726,14 @@ let () =
                ~t:[]
                ~e:
                  [ printf
-                     (ksprintf string
+                     (Fmt.kstr string
                         "\\n====\\nvarname: %s\\nvalue: %S\\ngetenv: \
                          {%%s}\\nshell: {%%s}\\n"
                         varname value)
                      [ getenv var
-                     ; exec ["sh"; "-c"; sprintf "echo \"ECHO: $%s\"" varname]
+                     ; exec ["sh"; "-c"; Fmt.str "echo \"ECHO: $%s\"" varname]
                        |> get_stdout |> Byte_array.to_c ]
-                 ; ksprintf fail "fail: %s" value ] ] in
+                 ; Fmt.kstr fail "fail: %s" value ] ] in
        seq
          [ assert_or_return 27 C_string.(getenv var =$= string "")
          ; set_and_test "bouh"; set_and_test "bouh\nbah"
@@ -968,12 +968,12 @@ let () =
   (* We make a bunch of separate tests to avoid the command line
        argument size limit: *)
   let make_list_iter_strings_test i l =
-    let name = sprintf "list-iter-strings-%d-%d-strings" i (List.length l) in
+    let name = Fmt.str "list-iter-strings-%d-%d-strings" i (List.length l) in
     exits 5 ~name
       (let open Genspio.EDSL_v0 in
       let slist = List.map l ~f:byte_array |> Elist.make in
-      let tmp = ksprintf tmp_file "listitertest%d" i in
-      let tmp2 = ksprintf tmp_file "listserializationtest%d" i in
+      let tmp = Fmt.kstr tmp_file "listitertest%d" i in
+      let tmp2 = Fmt.kstr tmp_file "listserializationtest%d" i in
       seq
         [ tmp#set (byte_array "")
         ; (* We serialize the list to `tmp2`: *)
@@ -999,7 +999,7 @@ let () =
             C_string.(
               tmp#get_c
               =$= string
-                    (String.concat (List.map l ~f:(sprintf ":%s")) ~sep:""))
+                    (String.concat (List.map l ~f:(Fmt.str ":%s")) ~sep:""))
         ; return 5 ]) in
   List.concat_mapi ~f:make_list_iter_strings_test
     [ ["zero"]; ["one"; "two"; "three"]; ["four"]; []; [""]; [""; ""]
@@ -1013,7 +1013,7 @@ let () =
   @@
   let make_int_test i l =
     let name =
-      sprintf "list-iter-ints-%d-%s" i
+      Fmt.str "list-iter-ints-%d-%s" i
         (List.map l ~f:Int.to_string |> String.concat ~sep:"-") in
     exits 5 ~name
       (let open Genspio.EDSL_v0 in
@@ -1116,7 +1116,7 @@ let () =
     ; exits 12 ~name:"edsl-ng-getout-1line"
         Genspio.EDSL.(
           let make_test f input output =
-            assert_or_fail (sprintf "%S" output)
+            assert_or_fail (Fmt.str "%S" output)
               Str.(f (printf (str input) []) =$= str output) in
           seq
             [ make_test get_stdout_one_line "one two\\nthree\\nfo ur"
@@ -1168,7 +1168,7 @@ let () =
         Genspio.EDSL.(
           let tst extended_re re pre does =
             assert_or_fail
-              (sprintf "%s does %smatch %s (E: %b)" re
+              (Fmt.str "%s does %smatch %s (E: %b)" re
                  (if does then "" else "not")
                  pre extended_re)
               ( greps_to ~extended_re (str re) (printf (str pre) [])
@@ -1238,7 +1238,7 @@ let compilation_error_tests () =
           { Genspio.Compile.To_posix.error= `Max_argument_length that_one
           ; code= Some _
           ; comment_backtrace= ["comment 0"] }
-        when that_one = Filename.quote too_big ->
+        when String.(that_one = Filename.quote too_big) ->
           true
       | _ -> false) ;
   let options =
@@ -1253,41 +1253,40 @@ let compilation_error_tests () =
           ; comment_backtrace= ["cmt2"; "comment 0"] } ->
           true
       | _ -> false) ;
-  printf "Compilation-error tests:\n%!" ;
+  Fmt.pr "Compilation-error tests:\n%!" ;
   List.iter (List.rev !results) ~f:(fun (expr, succ, res) ->
       let expr_str = Genspio.Compile.to_string_hum expr in
       let res_str =
         match res with
         | Ok s -> s
         | Error e -> Genspio.Compile.To_posix.error_to_string e in
-      printf "* %s: %s\n%s\n%!%!"
+      Fmt.pr "* %s: %s\n%s\n%!%!"
         (if succ then "SUCCESS" else "FAILURE")
-        ( String.sub expr_str ~index:0 ~length:60
-        |> Option.value ~default:expr_str )
+        (try String.sub expr_str ~pos:0 ~len:60 with _ -> expr_str)
         res_str) ;
-  List.exists !results ~f:(fun (_, res, _) -> res = false)
+  List.exists !results ~f:(fun (_, res, _) -> Bool.(res = false))
 
 let () =
   let anon = ref [] in
   let usage = "$0 [-help] <path>" in
   let important_shells = ref ["bash"; "dash"; "busybox"] in
   let failf fmt =
-    ksprintf
+    Fmt.kstr
       (fun s ->
-        eprintf "Error: %s\nUsage: %s\n%!" s usage ;
-        exit 1)
+        Fmt.epr "Error: %s\nUsage: %s\n%!" s usage ;
+        Caml.exit 1)
       fmt in
   let anon_fun p = anon := p :: !anon in
   let no_compilation_tests = ref false in
   let extra_slow_flow_tests = ref false in
   let extra_transform_cp_tests = ref false in
   let filter_tests = ref None in
+  let module Arg = Caml.Arg in
   let args =
     Arg.align
       [ ( "--important-shells"
-        , Arg.String
-            (fun s -> important_shells := String.split ~on:(`Character ',') s)
-        , sprintf
+        , Arg.String (fun s -> important_shells := String.split ~on:',' s)
+        , Fmt.str
             "<comma-sep-list> Set the shells that are considered \
              “important”\n\
              \t(default: '%s')."
@@ -1322,12 +1321,13 @@ let () =
         match !filter_tests with
         | None -> fun e -> e
         | Some s ->
-            let matches name = String.index_of_string name ~sub:s <> None in
+            let matches name =
+              Poly.(String.substr_index name ~pattern:s <> None) in
             fun tests ->
               List.filter tests ~f:(function
                 | Tests.Test_lib.Test.Exits {name; _} when matches name -> true
                 | _ -> false) in
-      printf "Testlist: %d\n%!" (List.length testlist) ;
+      Fmt.pr "Testlist: %d\n%!" (List.length testlist) ;
       let testdir =
         let tests =
           List.concat_map
@@ -1348,12 +1348,13 @@ let () =
       let todo = Test_directory.contents testdir ~path testlist in
       List.iter todo ~f:(function
         | `File (p, v) ->
-            let mo = open_out p in
-            fprintf mo "%s\n" v ; close_out mo
-        | `Directory v -> ksprintf Sys.command "mkdir -p '%s'" v |> ignore)) ;
+            let mo = Caml.open_out p in
+            Caml.Printf.fprintf mo "%s\n" v ;
+            Caml.close_out mo
+        | `Directory v -> Fmt.kstr Sys.command "mkdir -p '%s'" v |> ignore)) ;
   let errors =
     if !no_compilation_tests then false else compilation_error_tests () in
   if !extra_slow_flow_tests then Genspio.To_slow_flow.test () ;
   if !extra_transform_cp_tests then
     Genspio.Transform.Constant_propagation.test () ;
-  exit (if errors then 23 else 0)
+  Caml.exit (if errors then 23 else 0)
