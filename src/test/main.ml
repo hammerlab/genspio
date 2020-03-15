@@ -336,7 +336,7 @@ let () =
             (Elist.iter anon ~f:(fun item ->
                  printf (string "^^^%s@@@") [item ()]))
           (* |> Byte_array.to_c *)
-          =$= ( List.map ~f:(Fmt.str "^^^%s@@@") anons_expected
+          =$= ( List.map ~f:(Fmt.str "^^^%s@@@@@@") anons_expected
               |> String.concat ~sep:"" |> str )) in
   let spec =
     let open Command_line in
