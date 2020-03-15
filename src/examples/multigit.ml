@@ -7,11 +7,11 @@ A simple way to generate and install the scripts is:
     $genspio_multigit $BINNPATH
 
 *)
-open Nonstd
-module String = Sosa.Native_string
+open! Base
+module Filename = Caml.Filename
 
 let ( // ) = Filename.concat
-let msg fmt = ksprintf (eprintf "%s\n%!") fmt
+let msg fmt = Fmt.kstr (Fmt.epr "%s\n%!") fmt
 
 (*md We rename the EDSL locally to, e.g., be able to add functions. *)
 module Gedsl = struct
@@ -64,8 +64,8 @@ module Repository = struct
 end
 
 let version_string =
-  sprintf "%s (Genspio: %s)"
-    (try Sys.getenv "multigit_version" with _ -> "0")
+  Fmt.str "%s (Genspio: %s)"
+    (try Caml.Sys.getenv "multigit_version" with _ -> "0")
     Genspio.Meta.version
 
 module Multi_status = struct
@@ -75,8 +75,8 @@ module Multi_status = struct
   end)
 
   let long_description () =
-    [ sprintf "This is `%s` version %s." name version_string
-    ; sprintf "Description: “%s”" description ]
+    [ Fmt.str "This is `%s` version %s." name version_string
+    ; Fmt.str "Description: “%s”" description ]
 
   let extra_help () =
     [ ""; "Use `git multi-status /path/to/repos1 /path/to/repos2` to display"
@@ -116,7 +116,7 @@ Pretty cool, right:
       call
         [ str "git"; str "log"
         ; Str.concat_list
-            [ ksprintf str "--pretty=format:%%w(%d,%d,%d)" columns
+            [ Fmt.kstr str "--pretty=format:%%w(%d,%d,%d)" columns
                 first_line_indent other_lines_indent
             ; str_value
             ; (if final_newline then str "%n" else str "") ]
@@ -153,14 +153,14 @@ Pretty cool, right:
     let description (_, _, c) = c
 
     let top_row () =
-      sprintf "| %s |" (String.concat ~sep:" | " (List.map (all ()) ~f:title))
+      Fmt.str "| %s |" (String.concat ~sep:" | " (List.map (all ()) ~f:title))
 
     let row () =
       let open Gedsl in
       printf
-        (ksprintf str "| %s |\\n"
+        (Fmt.kstr str "| %s |\\n"
            ( List.map ~f:title (all ())
-           |> List.map ~f:(fun t -> sprintf "%%-%ds" (String.length t))
+           |> List.map ~f:(fun t -> Fmt.str "%%-%ds" (String.length t))
            |> String.concat ~sep:" | " ))
         (List.map (all ()) ~f:code)
 
@@ -168,20 +168,20 @@ Pretty cool, right:
       let longest =
         List.map (all ()) ~f:(fun c -> title c |> String.length)
         |> List.fold ~init:0 ~f:max in
-      [sprintf "The table shows %d columns:" (List.length (all ())); ""]
+      [Fmt.str "The table shows %d columns:" (List.length (all ())); ""]
       @ List.map (all ()) ~f:(fun c ->
-            sprintf "* `%s`%s-> %s." (title c)
+            Fmt.str "* `%s`%s-> %s." (title c)
               (String.make (longest - (title c |> String.length)) ' ')
               (description c))
   end
 
   let msgf fmt l =
     let open Gedsl in
-    eprintf (ksprintf str "%s: %s\\n" name fmt) l
+    eprintf (Fmt.kstr str "%s: %s\\n" name fmt) l
 
   let script () =
     let open Gedsl in
-    let out f l = printf (ksprintf str "%s\n" f) l in
+    let out f l = printf (Fmt.kstr str "%s\n" f) l in
     let modified_files = exec ["git"; "status"; "-s"; "-uno"] in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let to_list_of_names u =
@@ -199,10 +199,10 @@ Pretty cool, right:
       seq
         [ printf (str "#=== ") []
         ; printf
-            (ksprintf str "%%-%ds\n" (total_width - 5))
+            (Fmt.kstr str "%%-%ds\n" (total_width - 5))
             [Str.concat_list [path; str ":"]]
           ||> exec ["sed"; "s/ /=/g"]
-        ; out (sprintf "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
+        ; out (Fmt.str "%s %s" (String.make 40 ' ') (Columns.top_row ())) []
         ; topdir#set (getenv (str "PWD"))
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
@@ -245,7 +245,7 @@ Pretty cool, right:
           ~doc:"Like all the `--show-*` options together."
       & flag ["--no-config"]
           ~doc:
-            (sprintf "Do not look at the `%s` git-config option."
+            (Fmt.str "Do not look at the `%s` git-config option."
                Git_config.paths_option)
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage ()
@@ -265,7 +265,7 @@ Pretty cool, right:
         in
         deal_with_describe describe
           [ if_seq version
-              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~t:[out (Fmt.str "%s: %s" name version_string) []]
               ~e:
                 [ setenv ~var:(str "PAGER") (str "cat")
                 ; Elist.iter anon ~f:(fun p -> do_section (p ()))
@@ -284,8 +284,8 @@ module Activity_report = struct
   end)
 
   let long_description () =
-    [ sprintf "This is `%s` version %s." name version_string
-    ; sprintf "Description: “%s”" description ]
+    [ Fmt.str "This is `%s` version %s." name version_string
+    ; Fmt.str "Description: “%s”" description ]
 
   let extra_help () =
     [ ""
@@ -304,7 +304,7 @@ module Activity_report = struct
       let open Arg in
       flag ["--no-config"]
         ~doc:
-          (sprintf "Do not look at the `%s` git-config option."
+          (Fmt.str "Do not look at the `%s` git-config option."
              Git_config.paths_option)
       & string ["--since"]
           ~doc:
@@ -313,15 +313,15 @@ module Activity_report = struct
           ~default:(str default_since)
       & string ["--section-base"]
           ~doc:
-            (sprintf
+            (Fmt.str
                "The base markdown section ('##', '###', etc. default: %s)"
                default_section_base)
           ~default:(str default_section_base)
       & flag ["--fetch"]
-          ~doc:(sprintf "Run `git fetch --all` before showing a repository.")
+          ~doc:(Fmt.str "Run `git fetch --all` before showing a repository.")
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ()) in
-    let out f l = printf (ksprintf str "%s\n" f) l in
+    let out f l = printf (Fmt.kstr str "%s\n" f) l in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let display_section ~section_base ~since ~fetch_before path =
       let topdir = tmp_file "topdir" in
@@ -392,7 +392,7 @@ module Activity_report = struct
         let tmp_since = tmp_file "gar-since" in
         deal_with_describe describe
           [ if_seq version
-              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~t:[out (Fmt.str "%s: %s" name version_string) []]
               ~e:
                 [ tmp_since#set since
                 ; if_seq
@@ -431,8 +431,8 @@ module Fetch_all = struct
   end)
 
   let long_description () =
-    [ sprintf "This is `%s` version %s." name version_string
-    ; sprintf "Description: “%s”" description ]
+    [ Fmt.str "This is `%s` version %s." name version_string
+    ; Fmt.str "Description: “%s”" description ]
 
   let extra_help () =
     [ ""; "Use `git fetch-all /path/to/repos1 /path/to/repos2` to run"
@@ -442,7 +442,7 @@ module Fetch_all = struct
 
   let script () =
     let open Gedsl in
-    let out f l = printf (ksprintf str "%s\n" f) l in
+    let out f l = printf (Fmt.kstr str "%s\n" f) l in
     let repo_name p = call [str "basename"; p] |> get_stdout_one_line in
     let fetch_remote errors_file repo line =
       let log =
@@ -495,7 +495,7 @@ module Fetch_all = struct
       let open Arg in
       flag ["--no-config"]
         ~doc:
-          (sprintf "Do not look at the `%s` git-config option."
+          (Fmt.str "Do not look at the `%s` git-config option."
              Git_config.paths_option)
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ()) in
@@ -504,7 +504,7 @@ module Fetch_all = struct
         let go = fetch_in ~errors_file:errors in
         deal_with_describe describe
           [ if_seq version
-              ~t:[out (sprintf "%s: %s" name version_string) []]
+              ~t:[out (Fmt.str "%s: %s" name version_string) []]
               ~e:
                 [ errors#set (str "")
                 ; Elist.iter anon ~f:(fun p -> go (p ()))
@@ -519,11 +519,11 @@ module Fetch_all = struct
 end
 
 let cmdf fmt =
-  ksprintf
+  Fmt.kstr
     (fun s ->
-      match Sys.command s with
+      match Caml.Sys.command s with
       | 0 -> ()
-      | other -> ksprintf failwith "CMD: %S failed with %d" s other)
+      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other)
     fmt
 
 module Meta_repository = struct
@@ -541,30 +541,30 @@ module Meta_repository = struct
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
             assemble potential more ) in
     let words =
-      String.split s ~on:(`Character ' ')
-      |> List.map ~f:String.strip
-      |> List.filter ~f:(( <> ) "") in
+      String.split s ~on:' ' |> List.map ~f:String.strip
+      |> List.filter ~f:String.(( <> ) "") in
     assemble 0 words ; Buffer.contents buf
 
   let cmd_to_string_list cmd =
     let i = Unix.open_process_in cmd in
     let rec loop acc =
-      try loop (input_line i :: acc) with _ -> close_in i ; List.rev acc in
+      try loop (Caml.input_line i :: acc)
+      with _ -> Caml.close_in i ; List.rev acc in
     loop []
 
   let readme_md ~path:_ ~output =
-    let o = open_out output in
-    let open Format in
+    let o = Caml.open_out output in
+    let open Caml.Format in
     let fmt = formatter_of_out_channel o in
     let out f = fprintf fmt f in
     let sec c s = out "%s\n%s\n\n" s (String.make (String.length s) c) in
     let title = sec '=' in
     let section = sec '-' in
-    let par f = ksprintf (fun s -> out "%s\n\n" (wrap s)) f in
+    let par f = Fmt.kstr (fun s -> out "%s\n\n" (wrap s)) f in
     let cmd_lines s = cmd_to_string_list ("PATH=%s:$PATH " ^ s) in
     let cmd_output s = cmd_lines s |> String.concat ~sep:"\n" in
     let see_output_of_help fmt =
-      ksprintf
+      Fmt.kstr
         (fun s ->
           let lines =
             cmd_output (s ^ " | grep -E -v '^usage:' | sed 's/->/→/'") in
@@ -628,14 +628,14 @@ module Meta_repository = struct
     let smondets = ["genspio-doc"; "vecosek"] in
     let example_cmd ?(wrap_display = true) ?(with_fence = `Yes)
         ?(ignore_output = false) f =
-      ksprintf
+      Fmt.kstr
         (fun s ->
           let lines = cmd_lines s in
           let w =
             if wrap_display then wrap ~newline:" \\\n" ~indent:6 ~columns:70
             else fun e -> e in
           out "    $ %s\n" (w s) ;
-          if lines <> [] || ignore_output then
+          if Poly.(lines <> []) || ignore_output then
             let fence = String.make 72 '`' in
             match with_fence with
             | `Yes ->
@@ -664,7 +664,7 @@ module Meta_repository = struct
        “multi-status” is full of zeros (we use the `--no-config` option \
        to get consistent output w.r.t. users' configuration):" ;
     let on_all f cmd =
-      ksprintf f "%s --no-config %s" cmd
+      Fmt.kstr f "%s --no-config %s" cmd
         (String.concat ~sep:" " all_git_repo_tops) in
     on_all (example_cmd "%s") "git multi-status" ;
     par "" ;
@@ -686,7 +686,7 @@ module Meta_repository = struct
       git_repos_hammerlab ;
     example_cmd
       "git -C %s/vecosek remote add wrong-ssh \
-       git@gitlab.com/i-don-t-have-access/to-this.git"
+       git@@gitlab.com/i-don-t-have-access/to-this.git"
       git_repos_smondet ;
     par "" ;
     par "And *now,* we call `git-fetch-all`:" ;
@@ -746,14 +746,15 @@ set the environment variable: `repomode=true`.
 let () =
   let path = Sys.argv.(1) in
   cmdf "mkdir -p %s" (Filename.quote path) ;
-  let repomode = try Sys.getenv "repomode" = "true" with _ -> false in
+  let repomode =
+    try String.(Caml.Sys.getenv "repomode" = "true") with _ -> false in
   let output filename script long_description =
     let gms =
       if repomode then path // "bin" // filename else path // filename in
     msg "Outputting %S" gms ;
     cmdf "mkdir -p %s" Filename.(quote (dirname gms)) ;
-    let o = open_out gms in
-    Format.(
+    let o = Caml.open_out gms in
+    Caml.Format.(
       fprintf
         (formatter_of_out_channel o)
         "#!/bin/sh\n\n%s\n\n%a\n"
@@ -761,12 +762,12 @@ let () =
           @ [ "The following is generated by an OCaml program using the \
                Genspio EDSL."; "See <https://smondet.gitlab.io/genspio-doc/>."
             ]
-        |> List.map ~f:(sprintf "# %s")
+        |> List.map ~f:(Fmt.str "# %s")
         |> String.concat ~sep:"\n" )
         Genspio.Compile.To_slow_flow.Script.pp_posix
         (Genspio.Compile.To_slow_flow.compile
            (script () |> Genspio.Transform.Constant_propagation.process))) ;
-    close_out o ;
+    Caml.close_out o ;
     cmdf "chmod +x %s" (Filename.quote gms) in
   Multi_status.(output name script long_description) ;
   Activity_report.(output name script long_description) ;
@@ -774,4 +775,4 @@ let () =
   if repomode then
     Meta_repository.readme_md ~path:(path // "bin")
       ~output:(path // "README.md") ;
-  printf "Done.\n%!"
+  Fmt.pr "Done.\n%!"

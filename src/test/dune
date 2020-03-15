@@ -1,2 +1,2 @@
-(executable (name main)  (libraries genspio tests nonstd sosa))
+(executable (name main)  (libraries genspio tests base fmt))
 

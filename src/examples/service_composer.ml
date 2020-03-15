@@ -37,20 +37,20 @@ The scripts generated with `Dispatcher_script` also know about aliases, e.g.
 
 
 *)
-open Nonstd
-module String = Sosa.Native_string
+open! Base
+module Filename = Caml.Filename
 
 let ( // ) = Filename.concat
-let msg fmt = ksprintf (eprintf "%s\n%!") fmt
+let msg fmt = Fmt.kstr (Fmt.epr "%s\n%!") fmt
 
 module Gedsl = Genspio.EDSL
 
 let cmdf fmt =
-  ksprintf
+  Fmt.kstr
     (fun s ->
-      match Sys.command s with
+      match Caml.Sys.command s with
       | 0 -> ()
-      | other -> ksprintf failwith "CMD: %S failed with %d" s other)
+      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other)
     fmt
 
 module Version = struct
@@ -59,7 +59,7 @@ module Version = struct
       Unix.(
         gettimeofday () |> gmtime
         |> fun {tm_sec; tm_min; tm_hour; tm_mday; tm_mon; tm_year; _} ->
-        sprintf "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
+        Fmt.str "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
           tm_mday tm_hour tm_min tm_sec)
 
   let get () = Lazy.force version
@@ -96,20 +96,20 @@ The function `write` is the only real I/O of this whole OCaml program.
   let write ?(compiler = `Slow_flow) t ~output_path ~root =
     let path =
       output_path // String.concat ~sep:"-" (root :: t.relative_path) in
-    let o = open_out path in
+    let o = Caml.open_out path in
     msg "Outputting “%s” to %s\n%!" t.description path ;
     ( match compiler with
     | `Slow_flow ->
-        Format.(
-          fprintf
-            (formatter_of_out_channel o)
+        Fmt.(
+          pf
+            (Caml.Format.formatter_of_out_channel o)
             "#!/bin/sh\n\n%a\n" Genspio.Compile.To_slow_flow.Script.pp_posix
             (Genspio.Compile.To_slow_flow.compile
                (t.make ~root |> Genspio.Transform.Constant_propagation.process)))
     | `Standard ->
-        fprintf o "#!/bin/sh\n\n%s\n"
+        Caml.Printf.fprintf o "#!/bin/sh\n\n%s\n"
           (Genspio.Compile.to_many_lines (t.make ~root)) ) ;
-    close_out o ; cmdf "chmod +x %s" path
+    Caml.close_out o ; cmdf "chmod +x %s" path
 end
 
 (*md Configuration of the scripts is bootstrapped with an environment
@@ -251,39 +251,30 @@ module Manual = struct
             Buffer.add_string buf ((if col = 0 then "" else " ") ^ one) ;
             assemble potential more ) in
     let words =
-      String.split s ~on:(`Character ' ')
-      |> List.map ~f:String.strip
-      |> List.filter ~f:(( <> ) "") in
+      String.split s ~on:' ' |> List.map ~f:String.strip
+      |> List.filter ~f:String.(( <> ) "") in
     assemble 0 words ; Buffer.contents buf
 
   let par s = raws [wrap s; ""]
   let code_block s = raws (["```"] @ s @ ["```"; ""])
 
   let list l =
-    raws (List.map l ~f:(fun p -> sprintf "* %s" (wrap ~indent:2 p)) @ [""])
+    raws (List.map l ~f:(fun p -> Fmt.str "* %s" (wrap ~indent:2 p)) @ [""])
 
-  (* `StringLabels.uppercase` is deprecated but
-     `StringLabels.uppercase_ascii` is not available in OCaml 4.03.0
-     which will still support.
-  *)
-  [@@@warning "-3"]
-
-  let pre_title root = StringLabels.uppercase root
-
-  [@@@warning "+3"]
+  let pre_title root = String.uppercase root
 
   let () =
     add
     @@ from (fun ~root _ ->
-           ksprintf title "%s: Compose Processes With Screen" (pre_title root))
+           Fmt.kstr title "%s: Compose Processes With Screen" (pre_title root))
     @ from (fun ~root env ->
-          ksprintf par
+          Fmt.kstr par
             "The `%s*` scripts are a family of POSIX shell executables that \
              manage a set of long running processes in a GNU-Screen session. \
              Current version is `%s`."
             root
             Version.(get ())
-          @ ksprintf par
+          @ Fmt.kstr par
               "The  configuration is stored in a directory: the root path can \
                be itself configured with the `$%s` environment variable \
                (default value: `%s`). One edits the configuration by calling \
@@ -297,7 +288,7 @@ module Manual = struct
                The code generator serves as one of the usage examples of the \
                library, see its \
                [implementation](https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html)."
-          @ ksprintf par
+          @ Fmt.kstr par
               "The code generator can also be used to change a few parameters \
                like the “name-prefix” (`%s` here), or the default value \
                of the configuration path (`%s`). This can be useful to build \
@@ -307,19 +298,19 @@ module Manual = struct
     @ extended
         ( section "Installation"
         @ from (fun ~root _ ->
-              ksprintf par
+              Fmt.kstr par
                 "Simply copy `%s*` to somewhere in your `$PATH`, the scripts \
                  depend on a reasonably valid version of `/bin/sh` and GNU \
                  Screen."
                 root
-              @ ksprintf par
+              @ Fmt.kstr par
                   "If you are using the code-generator, you can just point \
                    the `--output-path` option at the right directory.") )
     @ section "Usage"
     @ from (fun ~root _ ->
           let intro fmt =
-            ksprintf
-              (ksprintf par
+            Fmt.kstr
+              (Fmt.kstr par
                  "The basic manual is obtained from the `%s man` command.%s"
                  root)
               fmt in
@@ -329,25 +320,25 @@ module Manual = struct
                 `%s man --extended`."
                root)
             ~no:(intro "")
-          @ ksprintf par
+          @ Fmt.kstr par
               "Then, see `%s --help` first, or for any sub-command try \
                `%s <command> --help`."
               root root)
     @ section "Screen Session Isolation"
     @ from (fun ~root _ ->
-          ksprintf par
+          Fmt.kstr par
             "`%s` isolates Screen sessions by using their session name." root
-          @ ksprintf par
+          @ Fmt.kstr par
               "The screen session name can be configured a 2 levels:"
           @ list
-              [ sprintf
+              [ Fmt.str
                   "At script-generation time, one can set the default-value \
                    (with the option `--screen-name`)."
-              ; sprintf
+              ; Fmt.str
                   "At configuration time, one can overwrite the value with \
                    `-S`, see `%s config init --help`."
                   root ]
-          @ ksprintf par
+          @ Fmt.kstr par
               "If none of those two options is provided, `%s config init` \
                will generate a name, which is function of the root path and \
                generation parameters and tries to ensure that the session is \
@@ -357,14 +348,14 @@ module Manual = struct
         ( section "Docker Image For the Generator"
         @ from (fun ~root:_ _ ->
               let image = "smondet/genspio-doc-dockerfiles:apps406" in
-              ksprintf par
+              Fmt.kstr par
                 "If you have [`opam`](https://opam.ocaml.org), setting up the \
                  genspio repository is easy (only simple, pure OCaml \
                  dependencies), if not, or if you just like Docker™, the \
                  generator is available in the `%s` image, see:"
                 image
               @ code_block
-                  [ sprintf "docker run -it %s genspio-service-composer --help"
+                  [ Fmt.str "docker run -it %s genspio-service-composer --help"
                       image ]) )
 
   let output ~root ~env extended =
@@ -524,7 +515,7 @@ module Configuration_script = struct
               [ (str "show", str "display")
               ; (str "rmjob", str "removejob")
               ; (str "init", str "initialize") ]
-          ~name:(sprintf "%s-%s" root name)
+          ~name:(Fmt.str "%s-%s" root name)
           ~description ())
 end
 
@@ -583,7 +574,7 @@ module Init_script = struct
           string
             ["--screen-session-name"; "-S"]
             ~doc:
-              (sprintf
+              (Fmt.str
                  "Set the screen session name (the default is a function of \
                   the root path and other constants of the script)")
             ~default:(Environment.make_default_screen_name env)
@@ -676,9 +667,9 @@ module Start_script = struct
           & describe_option_and_usage ()
               ~more_usage:
                 [ "Use"
-                ; sprintf "  %s %s --all" env.Environment.prefix name
+                ; Fmt.str "  %s %s --all" env.Environment.prefix name
                 ; "or"
-                ; sprintf "  %s %s Job1 .. JobN" env.Environment.prefix name ]
+                ; Fmt.str "  %s %s Job1 .. JobN" env.Environment.prefix name ]
         in
         let start_one name =
           if_then_else (Job.is_running env name)
@@ -943,12 +934,12 @@ end
 
 module Example_script = struct
   let basic env root =
-    let call s = sprintf "%s %s" root s in
+    let call s = Fmt.str "%s %s" root s in
     let conf = "/tmp/example-basic.d" in
-    let cmt fmt = sprintf ("# " ^^ fmt) in
+    let cmt fmt = Fmt.str Caml.("# " ^^ fmt) in
     ( "basic"
     , [ cmt "We setup the configuration root path:"
-      ; sprintf "export %s=%s" (Environment.var_configuration_path env) conf
+      ; Fmt.str "export %s=%s" (Environment.var_configuration_path env) conf
       ; cmt "Show the current configuration:"
       ; call "config show"
       ; cmt "OK, let's initialize configuration:"
@@ -974,17 +965,16 @@ module Example_script = struct
   let to_script l =
     let prefix = "#####" in
     let add_prefix pre s =
-      String.split ~on:(`Character '\n') s
-      |> String.concat ~sep:(sprintf "\n%s" pre) in
+      String.split ~on:'\n' s |> String.concat ~sep:(Fmt.str "\n%s" pre) in
     let prefix_indent = prefix ^ "  " in
     List.concat_map l ~f:(function
       | s when String.strip s |> String.is_prefix ~prefix:"#" ->
-          [ sprintf "printf '%s%s\\n'" prefix (String.make 74 '#')
-          ; sprintf "printf '%s %%s\\n' %s" prefix
+          [ Fmt.str "printf '%s%s\\n'" prefix (String.make 74 '#')
+          ; Fmt.str "printf '%s %%s\\n' %s" prefix
               (Filename.quote (add_prefix prefix_indent s))
-          ; sprintf "printf '%s\n'" prefix ]
+          ; Fmt.str "printf '%s\n'" prefix ]
       | s ->
-          [ sprintf "printf '%s >> %%s\\n' %s" prefix
+          [ Fmt.str "printf '%s >> %%s\\n' %s" prefix
               (Filename.quote (add_prefix prefix_indent s))
           ; s ])
     |> String.concat ~sep:"\n"
@@ -1003,7 +993,7 @@ module Example_script = struct
           flag ["--run"] ~doc:"Also run the example."
           & string ["--name"; "-n"]
               ~doc:
-                (sprintf "Choose the example (default: %S)." default_example)
+                (Fmt.str "Choose the example (default: %S)." default_example)
               ~default:(str default_example)
           & describe_option_and_usage () in
         let run_or_show run example =
@@ -1036,7 +1026,7 @@ module Example_script = struct
       add
         ( section "Examples"
         @ extended
-            ( ksprintf par "%s Here is the “basic” example:" first_sentence
+            ( Fmt.kstr par "%s Here is the “basic” example:" first_sentence
             @ from (fun ~root env -> code_block (basic env root |> snd)) )
             ~no:(par first_sentence) ))
 end
@@ -1059,7 +1049,7 @@ let () =
     add
       (extended
          ( section "Authors"
-         @ ksprintf par "[Seb Mondet](https://seb.mondet.org)."
+         @ Fmt.kstr par "[Seb Mondet](https://seb.mondet.org)."
          @ section "License"
          @ par
              "The code generator is covered by the Apache 2.0 \
@@ -1100,32 +1090,33 @@ call `make`. *)
 let () =
   let anon = ref [] in
   let anon_fun p = anon := p :: !anon in
-  let usage = sprintf "%s [-help] <path>" Sys.argv.(0) in
+  let usage = Fmt.str "%s [-help] <path>" Sys.argv.(0) in
   let name = ref None in
   let output_path = ref None in
   let config_path = ref None in
   let screen_name = ref None in
   let output_readme = ref false in
+  let module Arg = Caml.Arg in
   let args =
     Arg.align
       [ ( "--name"
         , Arg.String (fun s -> name := Some s)
-        , sprintf "<script-name> Name of the script." )
+        , Fmt.str "<script-name> Name of the script." )
       ; ( "--configuration-path"
         , Arg.String (fun s -> config_path := Some s)
-        , sprintf "<path> Path to the default configuration root." )
+        , Fmt.str "<path> Path to the default configuration root." )
       ; ( "--screen-name"
         , Arg.String (fun s -> screen_name := Some s)
-        , sprintf "<name> Force the default screen-session name." )
+        , Fmt.str "<name> Force the default screen-session name." )
       ; ( "--output-readme"
         , Arg.Set output_readme
-        , sprintf " Output the manual to a `README.md`." )
+        , Fmt.str " Output the manual to a `README.md`." )
       ; ( "--output-path"
         , Arg.String (fun s -> output_path := Some s)
-        , sprintf "<script-name> Where to write the scripts." ) ] in
+        , Fmt.str "<script-name> Where to write the scripts." ) ] in
   Arg.parse args anon_fun usage ;
   List.iter !anon ~f:(msg "Ignoring %s") ;
-  let die () = exit 2 in
+  let die () = Caml.exit 2 in
   let need opt = function
     | Some o -> o
     | None ->
