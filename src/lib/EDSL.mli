@@ -271,6 +271,9 @@ val printf : str t -> str t list -> unit t
 val eprintf : str t -> str t list -> unit t
 (** Like {!printf} but redirected to ["stderr"]. *)
 
+val with_stdout_to_stderr : unit t -> unit t
+(** Run a command with [stdout] redirected to [stderr] *)
+
 (** {3 Escaping The Execution Flow } *)
 
 val fail : string -> unit t

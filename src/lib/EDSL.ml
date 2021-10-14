@@ -140,7 +140,8 @@ let if_seq ~t ?e c =
   | Some f -> if_then_else c (seq t) (seq f)
 
 let printf fmt l = call (string "printf" :: string "--" :: fmt :: l)
-let eprintf fmt l = with_redirections (printf fmt l) [to_fd (int 1) (int 2)]
+let with_stdout_to_stderr cmd = with_redirections cmd [to_fd (int 1) (int 2)]
+let eprintf fmt l = with_stdout_to_stderr (printf fmt l)
 
 module Command_line = struct
   type 'a cli_option = {switches: string list; doc: string; default: 'a}
