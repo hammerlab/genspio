@@ -371,15 +371,14 @@ let check_sequence ?(verbosity = `Announce ">> ")
     | `Silent -> write_output ~stdout:(stdout id) ~stderr:(stderr id) u
     | `Announce prompt ->
         seq
-          [ printf (Fmt.kstr str "%s %s\\n" prompt id) []
+          [ eprintf (Fmt.kstr str "%s %s\\n" prompt id) []
           ; write_output ~stdout:(stdout id) ~stderr:(stderr id) u ]
     | `Output_all -> u in
   let check idx (nam, u) next =
     let id = Fmt.str "%d. %s" idx nam in
     if_seq
       (log id u |> succeeds)
-      ~t:
-        [on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id); next]
+      ~t:[on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id); next]
       ~e:[on_failure ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id)]
   in
   let rec loop i = function
