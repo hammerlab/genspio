@@ -1,41 +1,39 @@
 (*md This example creates a family of scripts using the `EDSL` API,
-and in particular the `Dispatcher_script` and `Script_with_describe`
-modules.
+  and in particular the `Dispatcher_script` and `Script_with_describe`
+  modules.
 
-A simple way to generate and install the scripts is:
+  A simple way to generate and install the scripts is:
 
-    genspio_service_composer=_build/default/src/examples/service_composer.exe
-    dune build $genspio_service_composer
-    $genspio_service_composer --name cosc --output-path $BINNPATH
-  
-The `cosc*` scripts will be installed and ready to use in `$BINPATH`
-as long as the path is part of the `$PATH` variable.
-Then one can just try:
+      genspio_service_composer=_build/default/src/examples/service_composer.exe
+      dune build $genspio_service_composer
+      $genspio_service_composer --name cosc --output-path $BINNPATH
 
-    cosc --help
+  The `cosc*` scripts will be installed and ready to use in `$BINPATH`
+  as long as the path is part of the `$PATH` variable.
+  Then one can just try:
 
-Quite a few scripts will have been created:
+      cosc --help
 
-    $BINPATH/cosc
-    $BINPATH/cosc-manual
-    $BINPATH/cosc-version
-    $BINPATH/cosc-attach
-    $BINPATH/cosc-example
-    $BINPATH/cosc-logs
-    $BINPATH/cosc-configuration
-    $BINPATH/cosc-configuration-initialize
-    $BINPATH/cosc-configuration-display
-    $BINPATH/cosc-configuration-addjob
-    $BINPATH/cosc-configuration-removejob
-    $BINPATH/cosc-configuration-destroy
-    $BINPATH/cosc-start
-    $BINPATH/cosc-status
-    $BINPATH/cosc-kill
+  Quite a few scripts will have been created:
 
-The scripts generated with `Dispatcher_script` also know about aliases, e.g.
-`cosc config show` is actually able to call `cosc-configuration-display`.
+      $BINPATH/cosc
+      $BINPATH/cosc-manual
+      $BINPATH/cosc-version
+      $BINPATH/cosc-attach
+      $BINPATH/cosc-example
+      $BINPATH/cosc-logs
+      $BINPATH/cosc-configuration
+      $BINPATH/cosc-configuration-initialize
+      $BINPATH/cosc-configuration-display
+      $BINPATH/cosc-configuration-addjob
+      $BINPATH/cosc-configuration-removejob
+      $BINPATH/cosc-configuration-destroy
+      $BINPATH/cosc-start
+      $BINPATH/cosc-status
+      $BINPATH/cosc-kill
 
-
+  The scripts generated with `Dispatcher_script` also know about aliases, e.g.
+  `cosc config show` is actually able to call `cosc-configuration-display`.
 *)
 open! Base
 module Filename = Caml.Filename
@@ -50,7 +48,7 @@ let cmdf fmt =
     (fun s ->
       match Caml.Sys.command s with
       | 0 -> ()
-      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other)
+      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other )
     fmt
 
 module Version = struct
@@ -59,22 +57,20 @@ module Version = struct
       Unix.(
         gettimeofday () |> gmtime
         |> fun {tm_sec; tm_min; tm_hour; tm_mday; tm_mon; tm_year; _} ->
-        Fmt.str "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon)
-          tm_mday tm_hour tm_min tm_sec)
+        Fmt.str "%4d%02d%02d.%02d%02d%02d" (1900 + tm_year) (1 + tm_mon) tm_mday
+          tm_hour tm_min tm_sec)
 
   let get () = Lazy.force version
   let str () = Gedsl.str (get ())
 end
 
 (*md A lot of (too much?) attention has been spent making the “root”
-name of the scripts parametrizable (the string `cosc` in the example
-above).
+  name of the scripts parametrizable (the string `cosc` in the example
+  above).
 
-The `Script` module wraps the scripts as “relative” paths,
-descriptions, and the actual script contents.
-
-
- *)
+  The `Script` module wraps the scripts as “relative” paths,
+  descriptions, and the actual script contents.
+*)
 module Script = struct
   type t =
     { relative_path: string list
@@ -84,18 +80,17 @@ module Script = struct
   let make relative_path ~description make = {relative_path; description; make}
 
   (*md
-See below what `relative_path` means:
+    See below what `relative_path` means:
 
-```ocaml
-let path =
-  output_path // String.concat ~sep:"-" (root :: t.relative_path)
-```
-
-The function `write` is the only real I/O of this whole OCaml program.
- *)
-  let write ?(compiler = `Slow_flow) t ~output_path ~root =
+    ```ocaml
     let path =
-      output_path // String.concat ~sep:"-" (root :: t.relative_path) in
+      output_path // String.concat ~sep:"-" (root :: t.relative_path)
+    ```
+
+    The function `write` is the only real I/O of this whole OCaml program.
+  *)
+  let write ?(compiler = `Slow_flow) t ~output_path ~root =
+    let path = output_path // String.concat ~sep:"-" (root :: t.relative_path) in
     let o = Caml.open_out path in
     msg "Outputting “%s” to %s\n%!" t.description path ;
     ( match compiler with
@@ -105,7 +100,7 @@ The function `write` is the only real I/O of this whole OCaml program.
             (Caml.Format.formatter_of_out_channel o)
             "#!/bin/sh\n\n%a\n" Genspio.Compile.To_slow_flow.Script.pp_posix
             (Genspio.Compile.To_slow_flow.compile
-               (t.make ~root |> Genspio.Transform.Constant_propagation.process)))
+               (t.make ~root |> Genspio.Transform.Constant_propagation.process) ))
     | `Standard ->
         Caml.Printf.fprintf o "#!/bin/sh\n\n%s\n"
           (Genspio.Compile.to_many_lines (t.make ~root)) ) ;
@@ -113,12 +108,11 @@ The function `write` is the only real I/O of this whole OCaml program.
 end
 
 (*md Configuration of the scripts is bootstrapped with an environment
-variable, which gives the script a root-path to start from. Then, the
-remaining configuration lies in files within the root path, it is
-editable by the scripts (e.g. with `cosc config init`,
-`cosc config addjob`, etc.).
-
- *)
+  variable, which gives the script a root-path to start from. Then, the
+  remaining configuration lies in files within the root path, it is
+  editable by the scripts (e.g. with `cosc config init`,
+  `cosc config addjob`, etc.).
+*)
 module Environment = struct
   type t =
     { prefix: string
@@ -132,10 +126,10 @@ module Environment = struct
   open Gedsl
 
   (*md
-The function `posixish_hash` creates a script that uses POSIX's
-[cksum](http://pubs.opengroup.org/onlinepubs/009695299/utilities/cksum.html)
-to output a stronger hash.
-*)
+    The function `posixish_hash` creates a script that uses POSIX's
+    [cksum](http://pubs.opengroup.org/onlinepubs/009695299/utilities/cksum.html)
+    to output a stronger hash.
+  *)
   let posixish_hash path =
     let cksum = call [str "cksum"] in
     seq
@@ -151,7 +145,7 @@ to output a stronger hash.
       (if_then_else
          Str.(g =$= str "")
          (exec ["printf"; "%s"; default_value])
-         (call [str "printf"; str "%s"; g]))
+         (call [str "printf"; str "%s"; g]) )
 
   let var_configuration_path t = t.prefix ^ "_root"
 
@@ -168,10 +162,8 @@ to output a stronger hash.
           ; write_stdout ~path:tmp#path
               (seq
                  [ printf (str "%s\\n%s\\n%s\\n")
-                     [ str t.prefix
-                     ; str t.default_configuration_path
-                     ; configuration_path t ] ])
-          ; posixish_hash tmp#path ]
+                     [ str t.prefix; str t.default_configuration_path
+                     ; configuration_path t ] ] ); posixish_hash tmp#path ]
         |> get_stdout_one_line
 
   let screen_name_path t = configuration_path t /// str "screen-session-name"
@@ -182,7 +174,7 @@ to output a stronger hash.
       ; ( "set-screen-name"
         , write_stdout ~path:(screen_name_path t)
             (printf (str "%s\\n")
-               [Option.value screen_name ~default:(make_default_screen_name t)])
+               [Option.value screen_name ~default:(make_default_screen_name t)] )
         ) ]
 
   let is_initialized t =
@@ -192,7 +184,7 @@ to output a stronger hash.
     if_then_else (is_initialized t) nop
       (seq
          [ say "Configuration is not initialized (%s)" [configuration_path t]
-         ; fail "ERROR: Not-initialized" ])
+         ; fail "ERROR: Not-initialized" ] )
 
   let screen_name t =
     get_stdout_one_line
@@ -219,8 +211,8 @@ to output a stronger hash.
 end
 
 (*md The output of the `cosc manual` command is the processed content of the
-`Manual._global_` variable; a list of Markdown strings, accumulated
-throughout this file.
+  `Manual._global_` variable; a list of Markdown strings, accumulated
+  throughout this file.
 *)
 module Manual = struct
   type item =
@@ -266,7 +258,7 @@ module Manual = struct
   let () =
     add
     @@ from (fun ~root _ ->
-           Fmt.kstr title "%s: Compose Processes With Screen" (pre_title root))
+           Fmt.kstr title "%s: Compose Processes With Screen" (pre_title root) )
     @ from (fun ~root env ->
           Fmt.kstr par
             "The `%s*` scripts are a family of POSIX shell executables that \
@@ -278,8 +270,8 @@ module Manual = struct
               "The  configuration is stored in a directory: the root path can \
                be itself configured with the `$%s` environment variable \
                (default value: `%s`). One edits the configuration by calling \
-               `%s config {addjob,initialize,destroy,…}`, and displays it \
-               with `%s config show`."
+               `%s config {addjob,initialize,destroy,…}`, and displays it with \
+               `%s config show`."
               (Environment.var_configuration_path env)
               env.Environment.default_configuration_path root root
           @ par
@@ -290,11 +282,11 @@ module Manual = struct
                [implementation](https://smondet.gitlab.io/genspio-doc/master/service-composer-example.html)."
           @ Fmt.kstr par
               "The code generator can also be used to change a few parameters \
-               like the “name-prefix” (`%s` here), or the default value \
-               of the configuration path (`%s`). This can be useful to build \
+               like the “name-prefix” (`%s` here), or the default value of the \
+               configuration path (`%s`). This can be useful to build \
                custom/project-specific scripts that can remain independent \
                from each other without setting an environment variable."
-              root env.Environment.default_configuration_path)
+              root env.Environment.default_configuration_path )
     @ extended
         ( section "Installation"
         @ from (fun ~root _ ->
@@ -304,32 +296,31 @@ module Manual = struct
                  Screen."
                 root
               @ Fmt.kstr par
-                  "If you are using the code-generator, you can just point \
-                   the `--output-path` option at the right directory.") )
+                  "If you are using the code-generator, you can just point the \
+                   `--output-path` option at the right directory." ) )
     @ section "Usage"
     @ from (fun ~root _ ->
           let intro fmt =
             Fmt.kstr
               (Fmt.kstr par
                  "The basic manual is obtained from the `%s man` command.%s"
-                 root)
+                 root )
               fmt in
           extended
             (intro
                " The, present, “`README.md`” version is the result of \
                 `%s man --extended`."
-               root)
+               root )
             ~no:(intro "")
           @ Fmt.kstr par
               "Then, see `%s --help` first, or for any sub-command try \
                `%s <command> --help`."
-              root root)
+              root root )
     @ section "Screen Session Isolation"
     @ from (fun ~root _ ->
           Fmt.kstr par
             "`%s` isolates Screen sessions by using their session name." root
-          @ Fmt.kstr par
-              "The screen session name can be configured a 2 levels:"
+          @ Fmt.kstr par "The screen session name can be configured a 2 levels:"
           @ list
               [ Fmt.str
                   "At script-generation time, one can set the default-value \
@@ -339,11 +330,11 @@ module Manual = struct
                    `-S`, see `%s config init --help`."
                   root ]
           @ Fmt.kstr par
-              "If none of those two options is provided, `%s config init` \
-               will generate a name, which is function of the root path and \
+              "If none of those two options is provided, `%s config init` will \
+               generate a name, which is function of the root path and \
                generation parameters and tries to ensure that the session is \
                unique on the host."
-              root)
+              root )
     @ extended
         ( section "Docker Image For the Generator"
         @ from (fun ~root:_ _ ->
@@ -356,7 +347,7 @@ module Manual = struct
                 image
               @ code_block
                   [ Fmt.str "docker run -it %s genspio-service-composer --help"
-                      image ]) )
+                      image ] ) )
 
   let output ~root ~env extended =
     let open Gedsl in
@@ -364,26 +355,25 @@ module Manual = struct
       | Raw s -> printf (str "%s\\n") [str s]
       | Root_env f -> seq @@ List.map ~f:one (f ~root env)
       | Extended {yes; no} ->
-          if_seq extended ~t:(List.map ~f:one yes) ~e:(List.map ~f:one no)
-    in
+          if_seq extended ~t:(List.map ~f:one yes) ~e:(List.map ~f:one no) in
     seq (List.map !_global_ ~f:one)
 end
 
 (*md The `Job` module provides Genspio expressions to uniformly define
-the notion of “job:” a process attached to a given `screen` window,
-with potential log-keeping.
-  
-Within the “root” configuration path, a give job “`TheJob`” is
-attached to a few files:
+  the notion of “job:” a process attached to a given `screen` window,
+  with potential log-keeping.
 
-* `TheJob.job`: contains the shell command to execute.
-* `TheJob.log`: contains the logs (mostly empty if `--no-log` is set).
-* `TheJob.options`: contains the options, one per line in
-  shell-variable-syntax (e.g. `no_log=true`)
-* `TheJob.pid`: stores the PID of the job once started.
-* `TheJob-run.sh`: script that is generated to run the job (the PID is
-  actually the one of this script, i.e. the parent of all potential
-  processes created by the job).
+  Within the “root” configuration path, a give job “`TheJob`” is
+  attached to a few files:
+
+  * `TheJob.job`: contains the shell command to execute.
+  * `TheJob.log`: contains the logs (mostly empty if `--no-log` is set).
+  * `TheJob.options`: contains the options, one per line in
+    shell-variable-syntax (e.g. `no_log=true`)
+  * `TheJob.pid`: stores the PID of the job once started.
+  * `TheJob-run.sh`: script that is generated to run the job (the PID is
+    actually the one of this script, i.e. the parent of all potential
+    processes created by the job).
 *)
 module Job = struct
   open Gedsl
@@ -418,7 +408,7 @@ module Job = struct
             (seq
                [ if_then_else no_log
                    (printf (str "no_log=true\\n") [])
-                   (printf (str "no_log=false\\n") []) ]) ]
+                   (printf (str "no_log=false\\n") []) ] ) ]
 
     let no_log env name =
       greps_to (str "no_log=true") @@ call [str "cat"; path env name]
@@ -459,7 +449,7 @@ module Job = struct
                    ~e:
                      [ printf
                          (str "{ sh %s 2>&1 ; } | tee -a %s\\n")
-                         [job_path env name; log_path env name] ] ]) ] in
+                         [job_path env name; log_path env name] ] ] ) ] in
     (mk, runner)
 
   let delete env name =
@@ -467,14 +457,14 @@ module Job = struct
     seq
       (List.map ~f:rm
          [ job_path env name; log_path env name; pid_path env name
-         ; run_path env name; Options.path env name ])
+         ; run_path env name; Options.path env name ] )
 end
 
 (*md The `Screen` module contains Genspio expressions to manipulate a
-GNU-Screen session,
-see the relevant
-[manual](https://www.gnu.org/software/screen/manual/screen.html).
- *)
+  GNU-Screen session,
+  see the relevant
+  [manual](https://www.gnu.org/software/screen/manual/screen.html).
+*)
 module Screen = struct
   (*
   *)
@@ -497,11 +487,9 @@ end
 
 (*md
 
-## The Scripts
+  ## The Scripts
 
-All the `*_script` modules define one actual script to be generated.
-
-
+  All the `*_script` modules define one actual script to be generated.
 *)
 module Configuration_script = struct
   let description = "Manage the configuration."
@@ -512,11 +500,10 @@ module Configuration_script = struct
         Gedsl.Dispatcher_script.make
           ~aliases:
             Gedsl.
-              [ (str "show", str "display")
-              ; (str "rmjob", str "removejob")
+              [ (str "show", str "display"); (str "rmjob", str "removejob")
               ; (str "init", str "initialize") ]
           ~name:(Fmt.str "%s-%s" root name)
-          ~description ())
+          ~description () )
 end
 
 module Manual_script = struct
@@ -535,7 +522,7 @@ module Manual_script = struct
           & describe_option_and_usage () in
         parse opts (fun ~anon:_ extended no_pager describe ->
             deal_with_describe describe
-              [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()]))
+              [Manual.output ~root ~env extended ||> pager ~disable:no_pager ()] ) )
 end
 
 module Version_script = struct
@@ -557,7 +544,7 @@ module Version_script = struct
                   ~t:
                     [ say "%s %s (Genspio %s)"
                         [str root; Version.str (); str Genspio.Meta.version] ]
-                  ~e:[say "%s" [Version.str ()]] ]))
+                  ~e:[say "%s" [Version.str ()]] ] ) )
 end
 
 module Init_script = struct
@@ -576,12 +563,12 @@ module Init_script = struct
             ~doc:
               (Fmt.str
                  "Set the screen session name (the default is a function of \
-                  the root path and other constants of the script)")
+                  the root path and other constants of the script)" )
             ~default:(Environment.make_default_screen_name env)
           & describe_option_and_usage () in
         parse opts (fun ~anon:_ screen_name describe ->
             deal_with_describe describe
-              [Environment.init ~screen_name env; say "Done." []]))
+              [Environment.init ~screen_name env; say "Done." []] ) )
 end
 
 module Add_job_script = struct
@@ -616,15 +603,12 @@ module Add_job_script = struct
                   Str.(shell_command =$= default_none)
                   (fail "option --command is mandatory")
               ; mkdir_p @@ Environment.configuration_path env
-              ; Job.Options.write ~no_log env name
-              ; say "Creating %s" [jpath]
+              ; Job.Options.write ~no_log env name; say "Creating %s" [jpath]
               ; write_stdout ~path:jpath
                   (seq
-                     [ interpreter >> exec ["cat"]
-                     ; str " '" >> exec ["cat"]
+                     [ interpreter >> exec ["cat"]; str " '" >> exec ["cat"]
                      ; shell_command >> exec ["sed"; "s/'/'\\\\''/g"]
-                     ; str "'\n" >> exec ["cat"] ])
-              ; say "Done." [] ]))
+                     ; str "'\n" >> exec ["cat"] ] ); say "Done." [] ] ) )
 end
 
 module Remove_job_script = struct
@@ -647,9 +631,8 @@ module Remove_job_script = struct
                            ~t:
                              [ say "Removing %s..." [name ()]
                              ; Job.delete env (name ()) ]
-                           ~e:[say "Job %s does not seem to exist..." [name ()]])
-                      ])
-              ; say "Done." [] ]))
+                           ~e:[say "Job %s does not seem to exist..." [name ()]]
+                        ) ] ); say "Done." [] ] ) )
 end
 
 module Start_script = struct
@@ -666,8 +649,7 @@ module Start_script = struct
           flag ["--all"] ~doc:"Start all jobs"
           & describe_option_and_usage ()
               ~more_usage:
-                [ "Use"
-                ; Fmt.str "  %s %s --all" env.Environment.prefix name
+                [ "Use"; Fmt.str "  %s %s --all" env.Environment.prefix name
                 ; "or"
                 ; Fmt.str "  %s %s Job1 .. JobN" env.Environment.prefix name ]
         in
@@ -685,7 +667,7 @@ module Start_script = struct
                      ; Screen.call env
                          [ str "-X"; str "screen"; str "-t"
                          ; Screen.window_name name; str "sh"; runpath ] ]
-                   ~e:[say "* Job '%s' is not configured!" [name]] ]) in
+                   ~e:[say "* Job '%s' is not configured!" [name]] ] ) in
         parse opts (fun ~anon all describe ->
             deal_with_describe describe
               [ Screen.ensure_running env
@@ -695,13 +677,12 @@ module Start_script = struct
                         [Environment.configuration_path env]
                     ; Environment.on_jobs env (fun path ->
                           let name = Job.name path in
-                          start_one name) ]
+                          start_one name ) ]
                   ~e:
                     [ Elist.iter anon ~f:(fun item ->
                           let name = item () in
-                          seq [say "Starting job '%s':" [name]; start_one name])
-                    ]
-              ; say "Done." [] ]))
+                          seq [say "Starting job '%s':" [name]; start_one name] )
+                    ]; say "Done." [] ] ) )
 end
 
 module Configuration_display_script = struct
@@ -717,23 +698,20 @@ module Configuration_display_script = struct
         parse opts (fun ~anon:_ describe ->
             let path = Environment.configuration_path env in
             deal_with_describe describe
-              [ say "Configuration path: %s" [path]
-              ; Environment.display env
+              [ say "Configuration path: %s" [path]; Environment.display env
               ; if_seq (is_directory path)
                   ~t:
                     [ Environment.on_jobs env (fun path ->
                           printf
                             (str
-                               "Job: '%s'\\n |-> Command: [%s]\\n |-> \
-                                Options: %s\\n")
+                               "Job: '%s'\\n |-> Command: [%s]\\n |-> Options: \
+                                %s\\n" )
                             [ Job.name path; Job.command path
                             ; call
-                                [ str "cat"
-                                ; Job.Options.path env (Job.name path) ]
+                                [str "cat"; Job.Options.path env (Job.name path)]
                               ||> exec ["tr"; "\\n"; ","]
-                              |> get_stdout ]) ]
-                  ~e:[say "Configuration is empty (not even a directory)" []]
-              ]))
+                              |> get_stdout ] ) ]
+                  ~e:[say "Configuration is empty (not even a directory)" []] ] ) )
 end
 
 module Configuration_destroy_script = struct
@@ -754,7 +732,7 @@ module Configuration_destroy_script = struct
                   ~t:[verbose_call [str "rm"; str "-fr"; path]]
                   ~e:
                     [ say "Configuration is not even a directory: %s" [path]
-                    ; fail "FAILURE" ] ]))
+                    ; fail "FAILURE" ] ] ) )
 end
 
 module Attach_script = struct
@@ -787,7 +765,7 @@ module Attach_script = struct
           flag ["--create"] ~doc:"Create if it doesn't exist."
           & describe_option_and_usage () in
         parse opts (fun ~anon:_ create describe ->
-            deal_with_describe describe [go env create]))
+            deal_with_describe describe [go env create] ) )
 end
 
 module Kill_script = struct
@@ -817,22 +795,21 @@ module Kill_script = struct
                             ; if_seq
                                 ( Screen.call env
                                     [ str "-Q"; str "-p"
-                                    ; Screen.window_name (item ())
-                                    ; str "-X"; str "info" ]
+                                    ; Screen.window_name (item ()); str "-X"
+                                    ; str "info" ]
                                 |> succeeds_silently )
                                 ~t:
                                   [ say "-> Window found, killing now." []
                                   ; Screen.call env
-                                      [ str "-p"
-                                      ; Screen.window_name (item ())
+                                      [ str "-p"; Screen.window_name (item ())
                                       ; str "-X"; str "kill" ]
                                   ; kills#set (str "yes") ]
                                 ~e:
                                   [ say "-> Window for job '%s' not found!"
-                                      [item ()] ] ])
+                                      [item ()] ] ] )
                     ; if_seq
                         Str.(kills#get =$= str "")
-                        ~t:[say "Nothing was killed …" []] ] ]))
+                        ~t:[say "Nothing was killed …" []] ] ] ) )
 end
 
 module Logs_script = struct
@@ -879,16 +856,15 @@ module Logs_script = struct
                                   (Job.Options.no_log env job)
                                   ~t:
                                     [ say
-                                        "Job %s is configured to have no \
-                                         logs, try --screen"
+                                        "Job %s is configured to have no logs, \
+                                         try --screen"
                                         [job] ]
-                                  ~e:[cat_file job lp] ] ]) ]))
+                                  ~e:[cat_file job lp] ] ] ) ] ) )
 end
 
 module Status_script = struct
   include Gedsl.Script_with_describe (struct
-    let name = "status"
-    let description = "Get the status(es) of the processes."
+    let name = "status" let description = "Get the status(es) of the processes."
   end)
 
   let make ~env () =
@@ -928,8 +904,8 @@ module Status_script = struct
                       ~e:
                         [ say "Job `%s` is not running (stat: %s)"
                             [ job
-                            ; Job.ps_stat_or_fail env job
-                              |> get_stdout_one_line ] ]) ]))
+                            ; Job.ps_stat_or_fail env job |> get_stdout_one_line
+                            ] ] ) ] ) )
 end
 
 module Example_script = struct
@@ -940,10 +916,8 @@ module Example_script = struct
     ( "basic"
     , [ cmt "We setup the configuration root path:"
       ; Fmt.str "export %s=%s" (Environment.var_configuration_path env) conf
-      ; cmt "Show the current configuration:"
-      ; call "config show"
-      ; cmt "OK, let's initialize configuration:"
-      ; call "config init"
+      ; cmt "Show the current configuration:"; call "config show"
+      ; cmt "OK, let's initialize configuration:"; call "config init"
       ; cmt "Let's configure a few jobs:"
       ; call
           {sh|config addjob --name DMesg --no-log -c "watch -c -d -n 30 'dmesg -P'"|sh}
@@ -951,16 +925,12 @@ module Example_script = struct
       ; call
           "config addjob --name Dummy --interpreter 'bash -c' \\\n\
           \    -c 'while true ; do sleep 3 ; echo \"$(date)\" ; done'"
-      ; cmt "Show the updated configuration:"
-      ; call "config show"
-      ; cmt "Show the current status:"
-      ; call "status"; cmt "Start everything:"; call "start --all"
-      ; cmt "Show the updated status:"
-      ; call "status"; cmt "Stop everything:"; call "kill --all"
-      ; cmt "Show the updated (short) status:"
-      ; call "status --short"
-      ; cmt "Destroy the configuration:"
-      ; call "config destroy" ] )
+      ; cmt "Show the updated configuration:"; call "config show"
+      ; cmt "Show the current status:"; call "status"; cmt "Start everything:"
+      ; call "start --all"; cmt "Show the updated status:"; call "status"
+      ; cmt "Stop everything:"; call "kill --all"
+      ; cmt "Show the updated (short) status:"; call "status --short"
+      ; cmt "Destroy the configuration:"; call "config destroy" ] )
 
   let to_script l =
     let prefix = "#####" in
@@ -975,8 +945,7 @@ module Example_script = struct
           ; Fmt.str "printf '%s\n'" prefix ]
       | s ->
           [ Fmt.str "printf '%s >> %%s\\n' %s" prefix
-              (Filename.quote (add_prefix prefix_indent s))
-          ; s ])
+              (Filename.quote (add_prefix prefix_indent s)); s ] )
     |> String.concat ~sep:"\n"
 
   include Gedsl.Script_with_describe (struct
@@ -992,8 +961,7 @@ module Example_script = struct
           let open Arg in
           flag ["--run"] ~doc:"Also run the example."
           & string ["--name"; "-n"]
-              ~doc:
-                (Fmt.str "Choose the example (default: %S)." default_example)
+              ~doc:(Fmt.str "Choose the example (default: %S)." default_example)
               ~default:(str default_example)
           & describe_option_and_usage () in
         let run_or_show run example =
@@ -1001,22 +969,22 @@ module Example_script = struct
             let tmp = tmp_file "example-script" in
             seq
               [ tmp#set (to_script example |> str)
-              ; say "Running as %s" [tmp#path]
-              ; call [str "sh"; tmp#path] ] in
+              ; say "Running as %s" [tmp#path]; call [str "sh"; tmp#path] ]
+          in
           if_seq run ~t:[do_run ()]
             ~e:
               [ printf (str "Example:\\n\\n") []
               ; seq
                   (List.map example ~f:(fun s ->
-                       printf (str "    %s\\n") [str s])) ] in
+                       printf (str "    %s\\n") [str s] ) ) ] in
         parse opts (fun ~anon:_ run example describe ->
             deal_with_describe describe
               [ switch
                   ( List.map [basic env root] ~f:(fun (n, cl) ->
-                        case Str.(example =$= str n) [run_or_show run cl])
+                        case Str.(example =$= str n) [run_or_show run cl] )
                   @ [ default
                         [say "Unknown example: %s" [example]; fail "Stopping"]
-                    ] ) ]))
+                    ] ) ] ) )
 
   let () =
     let first_sentence =
@@ -1041,7 +1009,7 @@ module Base_script = struct
           ~aliases:
             Gedsl.
               [(str "config", str "configuration"); (str "man", str "manual")]
-          ~name:root ~description ())
+          ~name:root ~description () )
 end
 
 let () =
@@ -1055,42 +1023,35 @@ let () =
              "The code generator is covered by the Apache 2.0 \
               [license](http://www.apache.org/licenses/LICENSE-2.0), the \
               scripts are ISC [licensed](https://opensource.org/licenses/ISC)."
-         )))
+         ) ))
 
 (*md
-The `make` function drives the generation of the list of scripts.
-
- *)
+  The `make` function drives the generation of the list of scripts.
+*)
 
 let make ?default_configuration_path ?default_screen_name ~name ~output_path ()
     =
   let env =
-    Environment.make ?default_screen_name ?default_configuration_path name
-  in
+    Environment.make ?default_screen_name ?default_configuration_path name in
   let scripts =
-    [ Base_script.make ()
-    ; Configuration_script.make ()
+    [ Base_script.make (); Configuration_script.make ()
     ; Configuration_display_script.make ~env ()
-    ; Configuration_destroy_script.make ~env ()
-    ; Add_job_script.make ~env ()
-    ; Init_script.make ~env ()
-    ; Remove_job_script.make ~env ()
+    ; Configuration_destroy_script.make ~env (); Add_job_script.make ~env ()
+    ; Init_script.make ~env (); Remove_job_script.make ~env ()
     ; Start_script.make ~env (); Logs_script.make ~env ()
     ; Attach_script.make ~env (); Kill_script.make ~env ()
-    ; Manual_script.make ~env ()
-    ; Version_script.make ~env ()
-    ; Example_script.make ~env ()
-    ; Status_script.make ~env () ] in
+    ; Manual_script.make ~env (); Version_script.make ~env ()
+    ; Example_script.make ~env (); Status_script.make ~env () ] in
   cmdf "mkdir -p %s" output_path ;
   List.iter scripts ~f:(Script.write ~output_path ~root:name) ;
   msg "Done."
 
 (*md Finally the “main” program, uses the venerable `Arg` module to
-call `make`. *)
+  call `make`. *)
 let () =
   let anon = ref [] in
   let anon_fun p = anon := p :: !anon in
-  let usage = Fmt.str "%s [-help] <path>" Sys.argv.(0) in
+  let usage = Fmt.str "%s [-help] <path>" Caml.Sys.argv.(0) in
   let name = ref None in
   let output_path = ref None in
   let config_path = ref None in
@@ -1128,5 +1089,4 @@ let () =
     ?default_screen_name:!screen_name ~output_path () ;
   if !output_readme then (
     msg "Outputting manual to %s/README.md" output_path ;
-    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path
-    )
+    cmdf "%s/%s-manual --extended > %s/README.md" output_path name output_path )

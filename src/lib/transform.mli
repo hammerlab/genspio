@@ -9,12 +9,10 @@ module Visitor : sig
          method bool_operator :
            bool Language.t * [`And | `Or] * bool Language.t -> bool Language.t
 
-         method bool_to_string :
-           bool Language.t -> Language.c_string Language.t
+         method bool_to_string : bool Language.t -> Language.c_string Language.t
 
          method byte_array_concat :
-              Language.byte_array list Language.t
-           -> Language.byte_array Language.t
+           Language.byte_array list Language.t -> Language.byte_array Language.t
 
          method byte_array_to_c_string :
            Language.byte_array Language.t -> Language.c_string Language.t
@@ -26,11 +24,8 @@ module Visitor : sig
            Language.c_string Language.t -> Language.byte_array Language.t
 
          method comment : string * 'a Language.t -> 'a Language.t
-
          method exec : Language.c_string Language.t list -> unit Language.t
-
          method expression : 'a Language.t -> 'a Language.t
-
          method fail : string -> unit Language.t
 
          method feed :
@@ -56,7 +51,6 @@ module Visitor : sig
            -> int Language.t
 
          method int_to_string : int Language.t -> Language.c_string Language.t
-
          method list : 'a Language.t list -> 'a list Language.t
 
          method list_append :
@@ -72,9 +66,7 @@ module Visitor : sig
            -> Language.byte_array Language.t
 
          method literal : 'a Language.Literal.t -> 'a Language.t
-
          method no_op : unit Language.t
-
          method not : bool Language.t -> bool Language.t
 
          method output_as_string :
@@ -89,7 +81,6 @@ module Visitor : sig
            unit Language.t * Language.fd_redirection list -> unit Language.t
 
          method returns : expr:'a Language.t -> value:int -> bool Language.t
-
          method seq : unit Language.t list -> unit Language.t
 
          method setenv :
@@ -102,9 +93,7 @@ module Visitor : sig
               * Language.byte_array Language.t
            -> bool Language.t
 
-         method string_to_bool :
-           Language.c_string Language.t -> bool Language.t
-
+         method string_to_bool : Language.c_string Language.t -> bool Language.t
          method string_to_int : Language.c_string Language.t -> int Language.t
 
          method string_to_list :

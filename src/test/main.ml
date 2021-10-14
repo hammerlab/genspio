@@ -25,8 +25,7 @@ let () =
          seq
            [ if_then_else
                (file_exists (string "/etc/passwd"))
-               (shexit 23) (shexit 1)
-           ; shexit 2 ]) ;
+               (shexit 23) (shexit 1); shexit 2 ]) ;
   ()
 
 let () =
@@ -36,8 +35,7 @@ let () =
          seq
            [ if_then_else
                (file_exists (string "/etc/passwd") |> not)
-               (shexit 1) (shexit 23)
-           ; shexit 2 ]) ;
+               (shexit 1) (shexit 23); shexit 2 ]) ;
   ()
 
 let () =
@@ -58,8 +56,7 @@ let () =
        seq
          [ if_then (file_exists path) (call [string "rm"; string "-f"; path])
          ; write_stdout ~path (seq [tprintf "bouh"; exec ["ls"; "-la"]])
-         ; if_then (file_exists path |> not) (return 11)
-         ; return 4 ]) ;
+         ; if_then (file_exists path |> not) (return 11); return 4 ]) ;
   ()
 
 let () =
@@ -74,8 +71,7 @@ let () =
          [ write_output ~stdout ~stderr ~return_value
              (seq
                 [ tprintf "%s" "hello"
-                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]
-                ; return 12 ])
+                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]; return 12 ] )
          ; call [string "cat"; return_value]
          ; assert_or_fail "hello-1"
              C_string.(
@@ -84,18 +80,15 @@ let () =
          ; write_output ~stderr ~return_value
              (seq
                 [ tprintf "%s" "hello"
-                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]
-                ; return 12 ])
+                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]; return 12 ] )
          ; write_output ~return_value
              (seq
                 [ tprintf "%s" "hello"
-                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]
-                ; return 12 ])
+                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]; return 12 ] )
          ; write_output ~stdout
              (seq
                 [ tprintf "%s" "helloooo"
-                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]
-                ; return 12 ])
+                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]; return 12 ] )
          ; call [string "cat"; stdout]
          ; assert_or_fail "hello-2"
              C_string.(
@@ -104,8 +97,7 @@ let () =
          ; write_output
              (seq
                 [ tprintf "%s" "hello"
-                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]
-                ; return 12 ])
+                ; exec ["sh"; "-c"; "printf \"olleh\" 1>&2"]; return 12 ] )
          ; return 42 ]) ;
   ()
 
@@ -124,10 +116,9 @@ let () =
          [ call [string "rm"; string "-f"; stdout; stderr; return_value_path]
          ; write_output ~stdout ~stderr ~return_value:return_value_path
              (seq
-                [ tprintf "%s" will_be_escaped
-                ; tprintf "%s" will_not_be_escaped
+                [ tprintf "%s" will_be_escaped; tprintf "%s" will_not_be_escaped
                 ; exec ["sh"; "-c"; "printf \"err\\t\\n\" 1>&2"]
-                ; return return_value_value ])
+                ; return return_value_value ] )
          ; if_then_else
              Byte_array.(
                get_stdout (call [string "cat"; stdout])
@@ -139,8 +130,8 @@ let () =
                    Byte_array.(
                      get_stdout (call [string "cat"; return_value_path])
                      =$= Fmt.kstr byte_array "%d" return_value_value)
-                   (return 11) (return 22))
-                (return 23))
+                   (return 11) (return 22) )
+                (return 23) )
              (return 24) ]) ;
   ()
 
@@ -149,7 +140,7 @@ let () =
   @@ exits ~name:"Basic strings" 12
        Construct.(
          (* This looks dumb but finding an encoding of strings that makes
-       this work was pretty hard using CRAZIX shell *)
+            this work was pretty hard using CRAZIX shell *)
          if_then_else
            C_string.(string "some" =$= string "some\n")
            (return 11) (return 12)) ;
@@ -165,7 +156,7 @@ let () =
              =$= ( get_stdout
                      (if_then_else
                         (string "bouh\n" =$= string "bouh")
-                        (tprintf "nnnooo") (tprintf "some"))
+                        (tprintf "nnnooo") (tprintf "some") )
                  |> Byte_array.to_c ))
            (return 11) (return 12)) ;
   ()
@@ -184,9 +175,7 @@ let () =
   add_tests
   @@ exits 11 ~name:"empty-string"
        Construct.(
-         if_then_else
-           C_string.(string "" =$= string "")
-           (return 11) (return 12)) ;
+         if_then_else C_string.(string "" =$= string "") (return 11) (return 12)) ;
   ()
 
 let () =
@@ -210,13 +199,12 @@ let () =
        let cat_potentially_empty =
          if_then_else (exec ["cat"; tmp] |> succeeds) nop (tprintf "") in
        seq
-         [ exec ["rm"; "-f"; tmp]
-         ; exec ["rm"; "-f"; tmp]
+         [ exec ["rm"; "-f"; tmp]; exec ["rm"; "-f"; tmp]
          ; loop_while
              Byte_array.(
                cat_potentially_empty |> get_stdout <$> byte_array "nnnn")
-             ~body:(exec ["sh"; "-c"; Fmt.str "printf n >> %s" tmp])
-         ; return 13 ]) ;
+             ~body:(exec ["sh"; "-c"; Fmt.str "printf n >> %s" tmp]); return 13
+         ]) ;
   ()
 
 let () =
@@ -244,7 +232,7 @@ let () =
             [ printf
                 (string
                    "######## Begin action ########\\n=== one: '%s' two: \
-                    '%s'\\n=== dollar-sharp '%s'\\n")
+                    '%s'\\n=== dollar-sharp '%s'\\n" )
                 [one; two; getenv (string "#")]
             ; switch
                 [ case
@@ -259,28 +247,28 @@ let () =
                 ; case
                     C_string.(string single =$= string "--")
                     (let concated_in_ocaml =
-                       String.concat ~sep:""
-                         [anon1; "-g"; minus_g; anon2; anon3] in
+                       String.concat ~sep:"" [anon1; "-g"; minus_g; anon2; anon3]
+                     in
                      [ printf
                          (Fmt.kstr string
                             "######### In dash-dash case: #########\\n=== \
                              length-of-all: %d\\nbone: '%%s'\\n=== anon3: \
                              '%%s'\\n=== concat_elist anon: '%%s'\\n=== \
                              string.concat: '%%s'\\n"
-                            (String.length concated_in_ocaml))
+                            (String.length concated_in_ocaml) )
                          [ Bool.to_string bone; string anon3
                          ; C_string.concat_elist anon; string concated_in_ocaml
                          ]
                      ; Elist.iter anon ~f:(fun v ->
-                           printf (string "=== anonth: %s\\n") [v ()])
+                           printf (string "=== anonth: %s\\n") [v ()] )
                      ; assert_or_fail "dash-dash"
                          ( (not bone)
                          &&& C_string.(
                                concat_elist anon
                                =$= string
                                      (String.concat ~sep:""
-                                        [anon1; "-g"; minus_g; anon2; anon3]))
-                         ) ])
+                                        [anon1; "-g"; minus_g; anon2; anon3] ))
+                         ) ] )
                 ; default
                     [ assert_or_fail "single-is-anon"
                         ( (not bone)
@@ -288,7 +276,7 @@ let () =
                               concat_elist anon
                               =$= string
                                     (String.concat ~sep:""
-                                       [single; anon1; anon2; anon3])) ) ] ]
+                                       [single; anon1; anon2; anon3] )) ) ] ]
             ; if_then_else
                 (C_string.(one =$= two) ||| bone)
                 (return 11)
@@ -297,12 +285,12 @@ let () =
                    (* Should be always true *)
                    (return 12)
                    (* i.e. we're testing that weird characters have good escaping *)
-                   (return 44)) ])) in
+                   (return 44) ) ] )) in
   List.mapi
     ~f:(fun i f -> f i)
     [ make 11 minus_f ""; make 12 "not-one" ""
-    ; make 12 "not-one" "" ~anon3:(String.make 20 'S')
-    ; make 11 "not-one" "-v"; make 12 minus_f "--"
+    ; make 12 "not-one" "" ~anon3:(String.make 20 'S'); make 11 "not-one" "-v"
+    ; make 12 minus_f "--"
     ; (* the `--` should prevent the `-g one` from being parsed *)
       make 12 minus_f "--" ~anon3:(String.make 6 'S')
     ; make 12 minus_f "--" ~anon3:(String.make 7 'S')
@@ -311,16 +299,15 @@ let () =
     ; make 12 minus_f "--" ~anon3:(String.make 10 'S')
     ; make 12 minus_f "--" ~anon3:(String.make 11 'S')
     ; make 12 minus_f "--" ~anon3:(String.make 12 'S')
-    ; make 12 minus_f "--" ~anon3:(String.make 20 'S')
-    ; make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
-      make 12 "not-one" "--v"; make 12 "not-one" "-v j"
-    ; make 11 "not \\ di $bouh one" "-v"
+    ; make 12 minus_f "--" ~anon3:(String.make 20 'S'); make 12 "not-one" "-x"
+    ; (* option does not exist (untreated for now) *) make 12 "not-one" "--v"
+    ; make 12 "not-one" "-v j"; make 11 "not \\ di $bouh one" "-v"
     ; make 12 "not \\ di $bouh one" " -- -v"
     ; make 12 "one \nwith spaces and \ttabs -dashes -- " ""
     ; make 12 "one \nwith  spaces and \ttabs -dashes -- " ""
     ; make 12 "one with \\ spaces and \ttabs -dashes -- " ""
-    ; make 0 "not-one" "--help"; make 0 "not-one" "-help"
-    ; make 0 "not-one" "-h" ]
+    ; make 0 "not-one" "--help"; make 0 "not-one" "-help"; make 0 "not-one" "-h"
+    ]
   |> List.concat
 
 let () =
@@ -334,7 +321,7 @@ let () =
           (* let tmp = tmp_file "single-is-anon" in *)
           get_stdout
             (Elist.iter anon ~f:(fun item ->
-                 printf (string "^^^%s@@@") [item ()]))
+                 printf (string "^^^%s@@@") [item ()] ) )
           (* |> Byte_array.to_c *)
           =$= ( List.map ~f:(Fmt.str "^^^%s@@@@@@") anons_expected
               |> String.concat ~sep:"" |> str )) in
@@ -358,7 +345,7 @@ let () =
              [ printf
                  (string
                     "######## Begin action ########\\n=== one: '%s' two: \
-                     '%s'\\n=== dollar-sharp '%s'\\n")
+                     '%s'\\n=== dollar-sharp '%s'\\n" )
                  [one; two; getenv (string "#")]
              ; switch
                  [ case
@@ -376,19 +363,19 @@ let () =
                               length-of-all: %d\\nbone: '%%s'\\n=== anon3: \
                               '%%s'\\n=== concat_elist anon: '%%s'\\n=== \
                               string.concat: '%%s'\\n"
-                             (String.length concated_in_ocaml))
+                             (String.length concated_in_ocaml) )
                           [ Bool.to_string bone; string anon3
                           ; Str.concat_elist anon; string concated_in_ocaml ]
                       ; Elist.iter anon ~f:(fun v ->
-                            printf (string "=== anonth: %s\\n") [v ()])
+                            printf (string "=== anonth: %s\\n") [v ()] )
                       ; assert_or_fail "dash-dash"
                           ( (not bone)
                           &&& check_anon anon
-                                [anon1; "-g"; minus_g; anon2; anon3] ) ])
+                                [anon1; "-g"; minus_g; anon2; anon3] ) ] )
                  ; default
                      [ assert_or_fail "single-is-anon"
                          (let anons_expected = [single; anon1; anon2; anon3] in
-                          (not bone) &&& check_anon anon anons_expected) ] ]
+                          (not bone) &&& check_anon anon anons_expected ) ] ]
              ; if_then_else
                  (Str.(one =$= two) ||| bone)
                  (return 11)
@@ -397,7 +384,7 @@ let () =
                     (* Should be always true *)
                     (return 12)
                     (* i.e. we're testing that weird characters have good escaping *)
-                    (return 44)) ])) in
+                    (return 44) ) ] ) ) in
   let only_anon args name =
     exits
       ~name:(Fmt.str "parse-cli-only-anon-%s" name)
@@ -405,15 +392,14 @@ let () =
       (Command_line.parse spec (fun ~anon _ _ _ ->
            assert_or_fail
              (Fmt.str "anon-is-anon-%s" name)
-             (check_anon anon args))) in
-  [ only_anon [] "nothing"
-  ; only_anon ["one"] "one"
+             (check_anon anon args) ) ) in
+  [ only_anon [] "nothing"; only_anon ["one"] "one"
   ; only_anon (List.init 4 ~f:(Fmt.str "a%d")) "fouras" ]
   @ List.mapi
       ~f:(fun i f -> f i)
       [ make 11 minus_f ""; make 12 "not-one" ""
-      ; make 12 "not-one" "" ~anon3:(String.make 20 'S')
-      ; make 11 "not-one" "-v"; make 12 minus_f "--"
+      ; make 12 "not-one" "" ~anon3:(String.make 20 'S'); make 11 "not-one" "-v"
+      ; make 12 minus_f "--"
       ; (* the `--` should prevent the `-g one` from being parsed *)
         make 12 minus_f "--" ~anon3:(String.make 6 'S')
       ; make 12 minus_f "--" ~anon3:(String.make 7 'S')
@@ -422,10 +408,9 @@ let () =
       ; make 12 minus_f "--" ~anon3:(String.make 10 'S')
       ; make 12 minus_f "--" ~anon3:(String.make 11 'S')
       ; make 12 minus_f "--" ~anon3:(String.make 12 'S')
-      ; make 12 minus_f "--" ~anon3:(String.make 20 'S')
-      ; make 12 "not-one" "-x"; (* option does not exist (untreated for now) *)
-        make 12 "not-one" "--v"; make 12 "not-one" "-v j"
-      ; make 11 "not \\ di $bouh one" "-v"
+      ; make 12 minus_f "--" ~anon3:(String.make 20 'S'); make 12 "not-one" "-x"
+      ; (* option does not exist (untreated for now) *) make 12 "not-one" "--v"
+      ; make 12 "not-one" "-v j"; make 11 "not \\ di $bouh one" "-v"
       ; make 12 "not \\ di $bouh one" " -- -v"
       ; make 12 "one \nwith spaces and \ttabs -dashes -- " ""
       ; make 12 "one \nwith  spaces and \ttabs -dashes -- " ""
@@ -448,10 +433,8 @@ let () =
          seq
            [ write_output ~return_value:(string "/tmp/dieretval")
                (seq
-                  [ tprintf "Going to die\n"
-                  ; fail "cannot capture death"
-                  ; return 42 ])
-           ; return 23 ]) ;
+                  [ tprintf "Going to die\n"; fail "cannot capture death"
+                  ; return 42 ] ); return 23 ]) ;
   ()
 
 let () =
@@ -462,8 +445,7 @@ let () =
            [ byte_array "dj ijdedej j42 ijde - '' "
              >> seq
                   [ tprintf "Going to die\n"; fail "cannot poison death"
-                  ; return 42 ]
-           ; return 23 ]) ;
+                  ; return 42 ]; return 23 ]) ;
   ()
 
 let () =
@@ -482,10 +464,8 @@ let () =
           (exec ["sh"; "-c"; cmd] |> returns ~value)
           (return gives) (return does_not_give)) in
   List.concat
-    [ t "ls" gives 0
-    ; t "ls /deijdsljidisjeidje" does_not_give 0
-    ; t "ls /deijdsljidisjeidje" does_not_give 42
-    ; t "exit 2" gives 2
+    [ t "ls" gives 0; t "ls /deijdsljidisjeidje" does_not_give 0
+    ; t "ls /deijdsljidisjeidje" does_not_give 42; t "exit 2" gives 2
     ; exits 21 ~name:"More complex return check"
         Construct.(
           if_then_else
@@ -538,9 +518,7 @@ let () =
          if_then_else (succeeds ut) nop
            (seq [tprintf "Failure !"; fail "succeed_or_die"]) in
        seq
-         [ exec ["rm"; "-f"; tmp]
-         ; tprintf "ps-output:\\n"
-         ; exec ["ps"]
+         [ exec ["rm"; "-f"; tmp]; tprintf "ps-output:\\n"; exec ["ps"]
          ; if_then_else
              C_string.(
                seq [tprintf "aaa"; cat_tmp]
@@ -552,14 +530,14 @@ let () =
 let () =
   add_tests
   @@ (* Use of the `call` constructor: *)
-     exits 28
-       Construct.(
-         if_then_else
-           ( call
-               [ string "cat"
-               ; get_stdout (tprintf "/does not exist") |> Byte_array.to_c ]
-           |> succeeds )
-           (return 11) (return 28)) ;
+  exits 28
+    Construct.(
+      if_then_else
+        ( call
+            [ string "cat"
+            ; get_stdout (tprintf "/does not exist") |> Byte_array.to_c ]
+        |> succeeds )
+        (return 11) (return 28)) ;
   ()
 
 let () =
@@ -658,7 +636,7 @@ let () =
        (let open Construct in
        let alternate_get_env v =
          (* We cannot use OCaml's Sys.getenv because the compilation output may
-         be run on a different host/system (through SSH or alike). *)
+            be run on a different host/system (through SSH or alike). *)
          exec ["sh"; "-c"; Fmt.str "echo ${%s} | tr -d '\\n'" v]
          |> get_stdout |> Byte_array.to_c in
        if_then_else
@@ -729,7 +707,7 @@ let () =
                      (Fmt.kstr string
                         "\\n====\\nvarname: %s\\nvalue: %S\\ngetenv: \
                          {%%s}\\nshell: {%%s}\\n"
-                        varname value)
+                        varname value )
                      [ getenv var
                      ; exec ["sh"; "-c"; Fmt.str "echo \"ECHO: $%s\"" varname]
                        |> get_stdout |> Byte_array.to_c ]
@@ -771,7 +749,7 @@ let () =
   @@ List.concat
        [ exits 2 ~name:"no-trap" (return 2)
          (* Dying with error messages does not work without `trap` any more
-       (string-schism): *)
+            (string-schism): *)
          (* exits 2 ~no_trap:true ~name:"no-trap-but-failwith" Genspio.EDSL.( *)
          (*     seq [ *)
          (*       with_failwith (fun die -> *)
@@ -782,12 +760,10 @@ let () =
          (*           ] *)
          (*         ); *)
          (*     ] *)
-         (*   ); *)
-        ]
+         (*   ); *) ]
 
 let () =
-  add_tests
-  @@ exits 21 ~name:"empty-seq" Genspio.EDSL.(seq [seq []; return 21]) ;
+  add_tests @@ exits 21 ~name:"empty-seq" Genspio.EDSL.(seq [seq []; return 21]) ;
   ()
 
 let () =
@@ -802,45 +778,39 @@ let () =
            let recognizable = "heelllloooooo" in
            seq
              [ call
-                 [ string "printf"; string "1: %s, 2: %s\n"; tmp1#path
-                 ; tmp2#path ]
+                 [string "printf"; string "1: %s, 2: %s\n"; tmp1#path; tmp2#path]
              ; tmp1#set init; tmp2#set init
              ; write_output ~stdout:tmp1#path ~stderr:tmp2#path
                  (with_redirections
                     (exec ["printf"; "%s"; recognizable])
-                    [to_fd (int 1) (int 2)])
+                    [to_fd (int 1) (int 2)] )
              ; assert_or_fail "stdout-empty" C_string.(tmp1#get_c =$= empty)
              ; assert_or_fail "stderr-hello"
                  ( (* We can only test with grep because stderr contains a bunch of
-               other stuff, especially since we use the
-               `-x` option of the shells *)
+                      other stuff, especially since we use the
+                      `-x` option of the shells *)
                    tmp2#get
                  >> exec ["grep"; recognizable]
-                 |> succeeds )
-             ; return 2 ])
+                 |> succeeds ); return 2 ])
        ; exits 3 ~name:"redirect-many"
            (let open Genspio.EDSL_v0 in
            let tmp1 = tmp_file "fd3" in
            let tmp2 = tmp_file "fd3-other" in
            let recognizable = "heelllloooooo" in
            seq
-             [ tmp1#set (byte_array "")
-             ; tmp2#set (byte_array "")
+             [ tmp1#set (byte_array ""); tmp2#set (byte_array "")
              ; with_redirections
                  (exec ["printf"; "%s"; recognizable])
-                 [ to_file (int 3) tmp1#path
-                 ; to_file (int 3) tmp2#path
+                 [ to_file (int 3) tmp1#path; to_file (int 3) tmp2#path
                  ; (* we hijack tmp1's use of fd 3 *) to_fd (int 2) (int 3)
-                 ; to_fd (int 1) (int 2) ]
-             ; call [string "cat"; tmp1#path]
+                 ; to_fd (int 1) (int 2) ]; call [string "cat"; tmp1#path]
              ; call [string "cat"; tmp2#path]
              ; assert_or_fail "fd3-empty" C_string.(tmp1#get_c =$= string "")
              ; assert_or_fail "fd3-other-recog"
                  ( (* Again going through fd `2` we've grabbed some junk: *)
                    tmp2#get
                  >> exec ["grep"; recognizable]
-                 |> succeeds )
-             ; return 3 ])
+                 |> succeeds ); return 3 ])
        ; exits 2 ~name:"redirect-fails"
            (let open Genspio.EDSL_v0 in
            let tmp1 = tmp_file "fd3" in
@@ -858,7 +828,7 @@ let () =
                     (exec ["printf"; "%s"; recognizable])
                     [ to_fd (int 4) (int 3)
                     ; (* This fails because &3 is not open! *)
-                      to_file (int 1) tmp1#path ])
+                      to_file (int 1) tmp1#path ] )
              ; call [string "printf"; string "%s:\\n"; tmp1#path]
              ; call [string "cat"; tmp1#path]
              ; call [string "printf"; string "%s:\\n"; tmp2#path]
@@ -893,8 +863,7 @@ let () =
                    |> Bool.of_string |> not )
                ; assert_or_fail "test6"
                    ( Bool.to_string (exec ["ls"; "/"] |> succeeds_silently)
-                   |> Bool.of_string )
-               ; return 2 ])
+                   |> Bool.of_string ); return 2 ])
        ; exits 77 ~name:"bool-string-wrong-conversions"
            Genspio.EDSL.(
              if_then_else
@@ -913,8 +882,7 @@ let () =
                  =$= string "onetwothree")
            ; assert_or_fail "test2"
                C_string.(
-                 C_string.concat_elist
-                   (Elist.make [string "one"; string "two"])
+                 C_string.concat_elist (Elist.make [string "one"; string "two"])
                  =$= string "onetwo")
            ; assert_or_fail "test3"
                C_string.(
@@ -934,8 +902,7 @@ let () =
                C_string.(
                  C_string.concat_elist
                    (Elist.make [string "one"; string ""; string ""])
-                 =$= string "one")
-           ; return 5 ]) ;
+                 =$= string "one"); return 5 ]) ;
   ()
 
 let () =
@@ -975,8 +942,7 @@ let () =
       let tmp = Fmt.kstr tmp_file "listitertest%d" i in
       let tmp2 = Fmt.kstr tmp_file "listserializationtest%d" i in
       seq
-        [ tmp#set (byte_array "")
-        ; (* We serialize the list to `tmp2`: *)
+        [ tmp#set (byte_array ""); (* We serialize the list to `tmp2`: *)
           tmp2#set (Elist.serialize_byte_array_list slist)
         ; (* We get back the serialized list from `tmp2`: *)
           tmp2#get |> Elist.deserialize_to_byte_array_list
@@ -994,19 +960,17 @@ let () =
                            [tmp#get_c; string ":"; v () |> Byte_array.to_c]
                        |> C_string.to_bytes )
                      (* The `:` makes sure we count right [""] ≠ [""; ""] etc. *)
-                    ])
+                   ] )
         ; assert_or_fail name
             C_string.(
               tmp#get_c
-              =$= string
-                    (String.concat (List.map l ~f:(Fmt.str ":%s")) ~sep:""))
+              =$= string (String.concat (List.map l ~f:(Fmt.str ":%s")) ~sep:""))
         ; return 5 ]) in
   List.concat_mapi ~f:make_list_iter_strings_test
     [ ["zero"]; ["one"; "two"; "three"]; ["four"]; []; [""]; [""; ""]
     ; [""; "bouh"; ""; "bah"]; ["deiajd\ndedaeijl"; ""]
     ; ["deiajd\ndeda\001eijl"; ":"]
-      (* Used `\001` because we convert to C-strings in the *)
-     ]
+      (* Used `\001` because we convert to C-strings in the *) ]
 
 let () =
   add_tests
@@ -1037,10 +1001,9 @@ let () =
                        Integer.(v () = v ())
                    ; tmp#set
                        Integer.(
-                         (tmp#get |> of_byte_array) + v () |> to_byte_array) ])
+                         (tmp#get |> of_byte_array) + v () |> to_byte_array) ] )
         ; printf (string "TMP: %s, TMP2: %s\\n") [tmp#path; tmp2#path]
-        ; call [string "cat"; tmp#path]
-        ; printf (string "::\\n") []
+        ; call [string "cat"; tmp#path]; printf (string "::\\n") []
         ; assert_or_fail name
             C_string.(
               tmp#get_c
@@ -1056,10 +1019,8 @@ let () =
            (let open Genspio.EDSL_v0 in
            let bag =
              pipe
-               [ exec ["printf"; "hello-world\\n"]
-               ; exec ["tr"; "-d"; "-"]
-               ; exec ["sed"; "s/wo/Wo/"]
-               ; exec ["sed"; "s/h/H/"]
+               [ exec ["printf"; "hello-world\\n"]; exec ["tr"; "-d"; "-"]
+               ; exec ["sed"; "s/wo/Wo/"]; exec ["sed"; "s/h/H/"]
                ; exec ["tr"; "-d"; "\\n"] ]
              |> get_stdout |> Byte_array.to_c in
            let fed =
@@ -1073,12 +1034,10 @@ let () =
                  ; "pipe-basic1 assertion"
                    %%% assert_or_fail "pipe-basic1"
                          C_string.(
-                           "Bag in pipe-basic 1" %%% bag
-                           =$= string "HelloWorld")
+                           "Bag in pipe-basic 1" %%% bag =$= string "HelloWorld")
                  ; "pipe-basic2 assertion"
                    %%% assert_or_fail "pipe-basic2"
-                         C_string.(fed =$= string "BelloWorld")
-                 ; return 13 ])
+                         C_string.(fed =$= string "BelloWorld"); return 13 ])
        ; exits 42 ~name:"pipe-xargs"
            Genspio.EDSL_v0.(
              seq
@@ -1087,8 +1046,7 @@ let () =
                      get_stdout
                        ( exec ["printf"; "1\\n2\\n3\\n"]
                        ||> exec ["xargs"; "printf"; "%02d:%02d:%02d"] )
-                     |> Byte_array.to_c =$= string "01:02:03")
-               ; return 42 ]) ]
+                     |> Byte_array.to_c =$= string "01:02:03"); return 42 ]) ]
 
 let () =
   let tests =
@@ -1098,11 +1056,10 @@ let () =
           let tmp2 = tmp_file "edsl-ng-on-stdin-lines-tmp2" in
           let cmd = exec ["ls"; "/"] in
           seq
-            [ write_stdout cmd ~path:tmp1#path
-            ; tmp2#set (str "")
+            [ write_stdout cmd ~path:tmp1#path; tmp2#set (str "")
             ; cmd
               ||> on_stdin_lines (fun line ->
-                      seq [tmp2#append line; tmp2#append (str "\n")])
+                      seq [tmp2#append line; tmp2#append (str "\n")] )
             ; say "<<%s>> Vs <<%s>>" [tmp1#get; tmp2#get]
             ; assert_or_fail "tmp1 = tmp2" Str.(tmp1#get =$= tmp2#get)
             ; return 12 ])
@@ -1111,8 +1068,7 @@ let () =
           seq
             [ assert_or_fail "ls is there" (command_available (str "ls"))
             ; assert_or_fail "lslslsls is not there"
-                (not (command_available (str "lslslsls")))
-            ; return 12 ])
+                (not (command_available (str "lslslsls"))); return 12 ])
     ; exits 12 ~name:"edsl-ng-getout-1line"
         Genspio.EDSL.(
           let make_test f input output =
@@ -1146,8 +1102,7 @@ let () =
                 "  \\nAA" ""
             ; make_test
                 (get_stdout_one_line ~first_line:true ~remove_spaces:true)
-                "     " ""
-            ; return 12 ])
+                "     " ""; return 12 ])
     ; exits 12 ~name:"edsl-ng-is-stuff"
         Genspio.EDSL.(
           let tmp = tmp_file "bouh" in
@@ -1162,15 +1117,14 @@ let () =
             ; assert_or_fail "is-exec" (is_executable tmp#path)
             ; assert_or_fail "is-read" (is_readable tmp#path)
             ; assert_or_fail "is-not-read"
-                (is_readable (str "/etc/shadow") |> not)
-            ; return 12 ])
+                (is_readable (str "/etc/shadow") |> not); return 12 ])
     ; exits 12 ~name:"edsl-ng-greps-to"
         Genspio.EDSL.(
           let tst extended_re re pre does =
             assert_or_fail
               (Fmt.str "%s does %smatch %s (E: %b)" re
                  (if does then "" else "not")
-                 pre extended_re)
+                 pre extended_re )
               ( greps_to ~extended_re (str re) (printf (str pre) [])
               |> if does then fun e -> e else not ) in
           let tn = tst false in
@@ -1184,8 +1138,8 @@ let () =
             ; tn "hel*o" "\\n ldje hello  dleijsd\\n" true
             ; te "hel*o" "\\n ldje hello  dleijsd\\n" true
             ; tn " hell?o " "\\n ldje hello  dleijsd\\n" false
-            ; te " hell?o " "\\n ldje hello  dleijsd\\n" true
-            ; return 12 ]) ] in
+            ; te " hell?o " "\\n ldje hello  dleijsd\\n" true; return 12 ]) ]
+  in
   add_tests (List.concat tests)
 
 let () =
@@ -1203,15 +1157,12 @@ let () =
                if_seq
                  Str.(item () =$= str "s003")
                  ~t:
-                   [ printf (str "then: %s\\n") [item ()]
-                   ; thens#append (item ()) ]
+                   [printf (str "then: %s\\n") [item ()]; thens#append (item ())]
                  ~e:
-                   [ printf (str "else: %s\\n") [item ()]
-                   ; elses#append (item ()) ])
+                   [printf (str "else: %s\\n") [item ()]; elses#append (item ())] )
          ; if_seq
              ( Str.(thens#get =$= str "s003")
-             &&& greps_to (str "s002s004s005") (call [str "echo"; elses#get])
-             )
+             &&& greps_to (str "s002s004s005") (call [str "echo"; elses#get]) )
              ~t:[return 13] ~e:[return 12] ])
 
 let compilation_error_tests () =
@@ -1229,7 +1180,7 @@ let compilation_error_tests () =
           ; code= Some _
           ; comment_backtrace= ["comment 1"; "comment 0"] } ->
           true
-      | _ -> false) ;
+      | _ -> false ) ;
   let too_big = String.make 200_000 'B' in
   test
     EDSL.("comment 0" %%% seq [exec ["echo"; too_big]])
@@ -1240,9 +1191,8 @@ let compilation_error_tests () =
           ; comment_backtrace= ["comment 0"] }
         when String.(that_one = Filename.quote too_big) ->
           true
-      | _ -> false) ;
-  let options =
-    {Genspio.Compile.To_posix.multi_line with fail_with= `Nothing} in
+      | _ -> false ) ;
+  let options = {Genspio.Compile.To_posix.multi_line with fail_with= `Nothing} in
   test ~options
     EDSL.(
       "comment 0" %%% seq [exec ["echo"; "fail"]; "cmt2" %%% fail "failure"])
@@ -1252,7 +1202,7 @@ let compilation_error_tests () =
           ; code= None
           ; comment_backtrace= ["cmt2"; "comment 0"] } ->
           true
-      | _ -> false) ;
+      | _ -> false ) ;
   Fmt.pr "Compilation-error tests:\n%!" ;
   List.iter (List.rev !results) ~f:(fun (expr, succ, res) ->
       let expr_str = Genspio.Compile.to_string_hum expr in
@@ -1263,7 +1213,7 @@ let compilation_error_tests () =
       Fmt.pr "* %s: %s\n%s\n%!%!"
         (if succ then "SUCCESS" else "FAILURE")
         (try String.sub expr_str ~pos:0 ~len:60 with _ -> expr_str)
-        res_str) ;
+        res_str ) ;
   List.exists !results ~f:(fun (_, res, _) -> Bool.(res = false))
 
 let () =
@@ -1274,7 +1224,7 @@ let () =
     Fmt.kstr
       (fun s ->
         Fmt.epr "Error: %s\nUsage: %s\n%!" s usage ;
-        Caml.exit 1)
+        Caml.exit 1 )
       fmt in
   let anon_fun p = anon := p :: !anon in
   let no_compilation_tests = ref false in
@@ -1287,8 +1237,7 @@ let () =
       [ ( "--important-shells"
         , Arg.String (fun s -> important_shells := String.split ~on:',' s)
         , Fmt.str
-            "<comma-sep-list> Set the shells that are considered \
-             “important”\n\
+            "<comma-sep-list> Set the shells that are considered “important”\n\
              \t(default: '%s')."
             (String.concat ~sep:"," !important_shells) )
       ; ( "--filter-tests"
@@ -1326,7 +1275,7 @@ let () =
             fun tests ->
               List.filter tests ~f:(function
                 | Tests.Test_lib.Test.Exits {name; _} when matches name -> true
-                | _ -> false) in
+                | _ -> false ) in
       Fmt.pr "Testlist: %d\n%!" (List.length testlist) ;
       let testdir =
         let tests =
@@ -1335,13 +1284,10 @@ let () =
             ~f:(fun shell ->
               let make compilation optimization_passes =
                 Shell_directory.
-                  {shell; verbose= true; compilation; optimization_passes}
-              in
-              [ make `Std_one_liner []
-              ; make `Std_multi_line []
-              ; make `Std_multi_line [`Cst_prop]
-              ; make `Slow_stack []
-              ; make `Slow_stack [`Cst_prop] ]) in
+                  {shell; verbose= true; compilation; optimization_passes} in
+              [ make `Std_one_liner []; make `Std_multi_line []
+              ; make `Std_multi_line [`Cst_prop]; make `Slow_stack []
+              ; make `Slow_stack [`Cst_prop] ] ) in
         let open Test_directory in
         {shell_tests= tests; important_shells= !important_shells; verbose= true}
       in
@@ -1351,7 +1297,7 @@ let () =
             let mo = Caml.open_out p in
             Caml.Printf.fprintf mo "%s\n" v ;
             Caml.close_out mo
-        | `Directory v -> Fmt.kstr Sys.command "mkdir -p '%s'" v |> ignore)) ;
+        | `Directory v -> Fmt.kstr Sys.command "mkdir -p '%s'" v |> ignore ) ) ;
   let errors =
     if !no_compilation_tests then false else compilation_error_tests () in
   if !extra_slow_flow_tests then Genspio.To_slow_flow.test () ;

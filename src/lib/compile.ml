@@ -35,9 +35,8 @@ module To_posix = struct
   let failure_to_stderr : death_function =
    fun ~comment_stack msg ->
     let summary s =
-      match String.sub s ~pos:0 ~len:65 with
-      | s -> s ^ " …"
-      | exception _ -> s in
+      match String.sub s ~pos:0 ~len:65 with s -> s ^ " …" | exception _ -> s
+    in
     let open Fmt in
     let big_string ppf s = pf ppf "@[%s@]" (summary s) in
     let msg_str =
@@ -51,8 +50,8 @@ module To_posix = struct
               pf ppf ";@ Comment-stack:@ @[[%a]@]"
                 (list
                    ~sep:(fun ppf () -> pf ppf ",@ ")
-                   (fun ppf s -> pf ppf "@[`%s`@]" s))
-                more)
+                   (fun ppf s -> pf ppf "@[`%s`@]" s) )
+                more )
         ()
       |> Caml.Filename.quote in
     str " printf -- '%%s\\n' %s >&2 " msg_str
@@ -80,13 +79,13 @@ module To_posix = struct
           (fun ~die ->
             to_shell
               {statement_separator; die_command= Some die; max_argument_length}
-              term)
+              term )
     | `Trap_and_kill (ret, signal) ->
         with_die_function ~print_failure ~statement_separator
           ~signal_name:signal ~trap:(`Exit_with ret) (fun ~die ->
             to_shell
               {statement_separator; die_command= Some die; max_argument_length}
-              term)
+              term )
 
   let string ?options term =
     match string_exn ?options term with

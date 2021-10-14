@@ -14,7 +14,7 @@ module Shell_script = struct
     let m =
       String.map n ~f:(function
         | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
-        | _ -> '_') in
+        | _ -> '_' ) in
     try String.sub ~pos:0 ~len:40 m with _ -> m
 
   let path {name; content; _} =
@@ -25,8 +25,7 @@ module Shell_script = struct
 
   let call f = exec ["sh"; path f]
 
-  type compiled =
-    {files: (string * string list) list; call: unit Genspio.EDSL.t}
+  type compiled = {files: (string * string list) list; call: unit Genspio.EDSL.t}
 
   let rec compile ({name; content; dependencies} as s) =
     let filename = path s in
@@ -77,7 +76,7 @@ module Run_environment = struct
                             [ "mv"; "-f"
                             ; Filename.chop_suffix (tmp_name_of_url t) ".xz"
                             ; base ] ] ) ] in
-          (base, [], wget))
+          (base, [], wget) )
   end
 
   module Ssh = struct
@@ -91,8 +90,7 @@ module Run_environment = struct
       match password with None -> cmd | Some p -> ["sshpass"; "-p"; p] @ cmd
 
     let scp ?password ~ssh_port () =
-      sshpass ?password @@ ["scp"] @ ssh_options
-      @ ["-P"; Int.to_string ssh_port]
+      sshpass ?password @@ ["scp"] @ ssh_options @ ["-P"; Int.to_string ssh_port]
 
     let script_over_ssh ?root_password ~ssh_port ~name script =
       let open Shell_script in
@@ -159,34 +157,33 @@ module Run_environment = struct
              ( [ "qemu-system-arm"; "-M"; machine; "-m"; "1024M"; "-kernel"
                ; File.local_file_name kernel ]
              @ Option.value_map initrd ~default:[] ~f:(fun f ->
-                   ["-initrd"; File.local_file_name f])
+                   ["-initrd"; File.local_file_name f] )
              @ [ "-pidfile"; "qemu.pid"; "-net"; "nic"; "-net"
-               ; Fmt.str "user,hostfwd=tcp::%d-:22" ssh_port
-               ; "-nographic"; "-sd"
-               ; File.local_file_name sd_card
-               ; "-append"
+               ; Fmt.str "user,hostfwd=tcp::%d-:22" ssh_port; "-nographic"
+               ; "-sd"; File.local_file_name sd_card; "-append"
                ; Fmt.str "console=ttyAMA0 verbose debug root=%s" root_device ]
-             ))
+             ) )
     | {ssh_port; vm= Qemu_amd46 {hda; ui}; _} ->
         (* See https://wiki.qemu.org/Hosts/BSD
-         qemu-system-x86_64 -m 2048 \
-          -hda FreeBSD-11.0-RELEASE-amd64.qcow2 -enable-kvm \
-          -netdev user,id=mynet0,hostfwd=tcp:127.0.0.1:7722-:22 \
-          -device e1000,netdev=mynet0 *)
+           qemu-system-x86_64 -m 2048 \
+            -hda FreeBSD-11.0-RELEASE-amd64.qcow2 -enable-kvm \
+            -netdev user,id=mynet0,hostfwd=tcp:127.0.0.1:7722-:22 \
+            -device e1000,netdev=mynet0 *)
         let open Shell_script in
         let open Genspio.EDSL in
         make "Start-qemu"
           (exec
-             ( [ "qemu-system-x86_64" (* ; "-M"
-                * ; machine *)
-               ; "-m"; "1024M" (* ; "-enable-kvm" → requires `sudo`?*)
-               ; "-hda"; File.local_file_name hda ]
+             ( [ "qemu-system-x86_64"
+                 (* ; "-M"
+                    * ; machine *); "-m"
+               ; "1024M" (* ; "-enable-kvm" → requires `sudo`?*); "-hda"
+               ; File.local_file_name hda ]
              @ [ "-pidfile"; "qemu.pid"; "-netdev"
                ; Fmt.str "user,id=mynet0,hostfwd=tcp::%d-:22" ssh_port
                ; ( match ui with
                  | `Curses -> "-curses"
-                 | `No_graphic -> "-nographic" )
-               ; "-device"; "e1000,netdev=mynet0" ] ))
+                 | `No_graphic -> "-nographic" ); "-device"
+               ; "e1000,netdev=mynet0" ] ) )
 
   let kill_qemu_vm : t -> Shell_script.t = function
     | {name; _} ->
@@ -195,7 +192,7 @@ module Run_environment = struct
         Shell_script.(make (Fmt.str "kill-qemu-%s" name))
         @@ check_sequence
              (* ~name:(Fmt.str "Killing Qemu VM")
-       * ~clean_up:[fail "kill_qemu_vm"] *)
+                * ~clean_up:[fail "kill_qemu_vm"] *)
              [ ( "Kill-qemu-vm"
                , if_seq
                    (file_exists (string "qemu.pid"))
@@ -207,10 +204,9 @@ module Run_environment = struct
                            [ printf
                                (string
                                   "PID file here (PID: %s) but Kill failed, \
-                                   deleting `qemu.pid`")
-                               [pid]
-                           ; exec ["rm"; "qemu.pid"]
-                           ; exec ["false"] ] ]
+                                   deleting `qemu.pid`" )
+                               [pid]; exec ["rm"; "qemu.pid"]; exec ["false"] ]
+                     ]
                    ~e:[printf (string "No PID file") []; exec ["false"]] ) ]
 
   let configure : t -> Shell_script.t = function
@@ -227,7 +223,7 @@ module Run_environment = struct
                   ~t:[report#append (Fmt.kstr str "* `%s`: found.\n" name)]
                   ~e:
                     [ report#append (Fmt.kstr str "* `%s`: NOT FOUND!\n" name)
-                    ; there_was_a_failure#set (bool true |> Bool.to_string) ])
+                    ; there_was_a_failure#set (bool true |> Bool.to_string) ] )
           @ [ call [string "cat"; report#path]
             ; if_seq
                 (there_was_a_failure#get |> Bool.of_string)
@@ -258,7 +254,7 @@ module Run_environment = struct
       @ [ Fmt.str "# %s: %s" target
             (Option.value_map
                ~f:(String.map ~f:(function '\n' -> ' ' | c -> c))
-               doc ~default:"NOT DOCUMENTED")
+               doc ~default:"NOT DOCUMENTED" )
         ; Fmt.str "%s: %s" target (String.concat ~sep:" " deps)
         ; Fmt.str "\t@@%s" (Genspio.Compile.to_one_liner ~no_trap:true action)
         ] in
@@ -276,7 +272,7 @@ module Run_environment = struct
               ( name
               , make_script_entry ~phony:true name ~deps
                   (Ssh.script_over_ssh ?root_password ~ssh_port ~name
-                     (Shell_script.make (Fmt.str "setup-%s" name) cmds)) )
+                     (Shell_script.make (Fmt.str "setup-%s" name) cmds) ) )
           | Copy_relative (src, dst) ->
               ( name
               , make_entry ~phony:true name ~deps
@@ -287,13 +283,13 @@ module Run_environment = struct
                           @@ ["ssh"; "-p"; Int.to_string ssh_port]
                           @ Ssh.ssh_options
                           @ [ "root@localhost"
-                            ; Fmt.str "tar -x -f - ; mv %s %s" src dst ] )) ))
+                            ; Fmt.str "tar -x -f - ; mv %s %s" src dst ] )) ) )
     in
     let makefile =
       ["# Makefile genrated by Genspio's VM-Tester"]
       @ List.concat_map dependencies ~f:(fun (base, deps, cmd) ->
             Shell_script.(make (Fmt.str "get-%s" (sanitize_name base)) cmd)
-            |> make_script_entry ~deps base)
+            |> make_script_entry ~deps base )
       @ make_script_entry ~phony:true "configure" (configure tvm)
           ~doc:"Configure this local-host (i.e. check for requirements)."
       @ make_script_entry ~deps:start_deps ~phony:true "start"
@@ -314,9 +310,8 @@ module Run_environment = struct
               Ssh.sshpass ?password:root_password [] |> String.concat ~sep:" "
             in
             printf
-              (Fmt.kstr string "%s ssh -p %d %s root@@localhost" prefix
-                 ssh_port
-                 (String.concat ~sep:" " Ssh.ssh_options))
+              (Fmt.kstr string "%s ssh -p %d %s root@@localhost" prefix ssh_port
+                 (String.concat ~sep:" " Ssh.ssh_options) )
               []) in
     let help =
       make_script_entry ~phony:true "help"
@@ -328,11 +323,10 @@ module Run_environment = struct
                 ; "\\nHelp\\n====\\n\\nThis a generated Makefile (by \
                    Genspio-VM-Tester):\\n\\n%s\\n\\n%s\\n"
                 ; List.map
-                    ( ("help", Some "Display this help message")
-                    :: !help_entries ) ~f:(function
+                    (("help", Some "Display this help message") :: !help_entries)
+                    ~f:(function
                     | _, None -> ""
-                    | target, Some doc ->
-                        Fmt.str "* `make %s`: %s\n" target doc)
+                    | target, Some doc -> Fmt.str "* `make %s`: %s\n" target doc )
                   |> String.concat ~sep:""
                 ; Fmt.str
                     "SSH: the command `make ssh` *outputs* an SSH command \
@@ -341,7 +335,7 @@ module Run_environment = struct
                      $ tar c some/dir/ | $(make ssh) 'tar x'\n\n\
                      (may need to be `tar -x -f -` for BSD tar).\n"
                     (Option.value_map ~default:"No root-password" root_password
-                       ~f:(Fmt.str "Root-password: %S")) ])) in
+                       ~f:(Fmt.str "Root-password: %S") ) ])) in
     ("Makefile", ("all: help" :: makefile) @ help @ [""]) :: !other_files
 
   module Example = struct
@@ -352,7 +346,7 @@ module Run_environment = struct
           (check_sequence
              [ ("opkg-update", exec ["opkg"; "update"])
              ; ("install-od", exec ["opkg"; "install"; "coreutils-od"])
-             ; ("install-make", exec ["opkg"; "install"; "make"]) ])
+             ; ("install-make", exec ["opkg"; "install"; "make"]) ] )
         @ more_setup in
       let base_url =
         "https://downloads.openwrt.org/snapshots/trunk/realview/generic/" in
@@ -372,7 +366,7 @@ module Run_environment = struct
         let open Genspio.EDSL in
         Setup.ssh_to_vm
           (check_sequence
-             [("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])])
+             [("apt-get-make", exec ["apt-get"; "install"; "--yes"; "make"])] )
         @ more_setup in
       qemu_arm "qemu_arm_wheezy" ~ssh_port ~machine:"vexpress-a9"
         ~kernel:(aurel32 "vmlinuz-3.2.0-4-vexpress")
@@ -418,7 +412,8 @@ let cmdf fmt =
     (fun cmd ->
       match Caml.Sys.command cmd with
       | 0 -> ()
-      | other -> Fmt.kstr failwith "Command %S did not return 0: %d" cmd other)
+      | other -> Fmt.kstr failwith "Command %S did not return 0: %d" cmd other
+      )
     fmt
 
 let write_lines p l =
@@ -432,7 +427,7 @@ let () =
     Fmt.kstr
       (fun s ->
         Fmt.epr "Wrong CLI: %s\n%!" s ;
-        Caml.exit 2)
+        Caml.exit 2 )
       fmt in
   let example = ref None in
   let path = ref None in
@@ -459,7 +454,7 @@ let () =
           Some
             ( match
                 List.find_map examples ~f:(fun (e, v, _) ->
-                    if String.(e = arg) then Some v else None)
+                    if String.(e = arg) then Some v else None )
               with
             | Some s -> s
             | None -> fail "Don't know VM %S" arg ) in
@@ -475,8 +470,8 @@ let () =
             (String.concat ~sep:"\n"
                (List.map
                   ~f:(fun (n, _, d) ->
-                    Fmt.str "%s* `%s`: %s" (String.make 25 ' ') n d)
-                  examples)) )
+                    Fmt.str "%s* `%s`: %s" (String.make 25 ' ') n d )
+                  examples ) ) )
       ; ( "--copy"
         , Arg.String
             (fun s ->
@@ -488,7 +483,7 @@ let () =
               match Base.String.split ~on:':' s with
               | [] | [_] -> fail "Error in --copy: need a `:` separator (%S)" s
               | [p; lp] -> add p lp
-              | p :: more -> add p (String.concat ~sep:":" more))
+              | p :: more -> add p (String.concat ~sep:":" more) )
         , "<p-src:p-dst> Copy <p-src> in the output directory and add its \
            upload to the VM to the `make setup` target as a relative path \
            <p-dst>." ) ] in
@@ -500,7 +495,7 @@ let () =
   Arg.parse args anon usage ;
   let more_setup =
     List.map !copy_directories ~f:(fun (_, locrel, hostp) ->
-        Run_environment.Setup.copy (`Relative locrel) (`Relative hostp)) in
+        Run_environment.Setup.copy (`Relative locrel) (`Relative hostp) ) in
   let re =
     match !example with
     | Some e -> e ~ssh_port:!ssh_port more_setup
@@ -513,6 +508,6 @@ let () =
   List.iter content ~f:(fun (filepath, content) ->
       let full = path // filepath in
       cmdf "mkdir -p %s" (Filename.dirname full) ;
-      write_lines full content) ;
+      write_lines full content ) ;
   List.iter !copy_directories ~f:(fun (p, local_rel, _) ->
-      cmdf "rsync -az %s %s/%s" p path local_rel)
+      cmdf "rsync -az %s %s/%s" p path local_rel )

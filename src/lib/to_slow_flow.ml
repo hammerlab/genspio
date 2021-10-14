@@ -1,19 +1,18 @@
 (*md
 
-The `To_slow_flow` Compiler is meant to be more portable than the
-“standard” one by using less complex constructs.
+  The `To_slow_flow` Compiler is meant to be more portable than the
+  “standard” one by using less complex constructs.
 
-In particular, the default `bash` installed on MacOSX is old and contains (at least) one bug
-which breaks many standard-compiled Genspio scripts,
-cf. the issue [`hammerlab/genspio#68`](https://github.com/hammerlab/genspio/issues/68),
+  In particular, the default `bash` installed on MacOSX is old and contains (at least) one bug
+  which breaks many standard-compiled Genspio scripts,
+  cf. the issue [`hammerlab/genspio#68`](https://github.com/hammerlab/genspio/issues/68),
 
-The `To_slow_flow` compiler is often tested
-on the “old darwin” VM (cf.
-[`src/examples/vm_tester.ml`](https://github.com/hammerlab/genspio/blob/4ad23712e7af5a2cd1471f5ca00165cd18a93011/src/examples/vm_tester.ml#L401)), and all the Genspio tests succeed, see also
-[comment](https://github.com/hammerlab/genspio/pull/75#issuecomment-411843975)
-on the initial PR
-[`hammerlab/genspio#75`](https://github.com/hammerlab/genspio/pull/75).
-
+  The `To_slow_flow` compiler is often tested
+  on the “old darwin” VM (cf.
+  [`src/examples/vm_tester.ml`](https://github.com/hammerlab/genspio/blob/4ad23712e7af5a2cd1471f5ca00165cd18a93011/src/examples/vm_tester.ml#L401)), and all the Genspio tests succeed, see also
+  [comment](https://github.com/hammerlab/genspio/pull/75#issuecomment-411843975)
+  on the initial PR
+  [`hammerlab/genspio#75`](https://github.com/hammerlab/genspio/pull/75).
 *)
 open Common
 open Language
@@ -22,7 +21,7 @@ let string_to_octal ?(prefix = "") s =
   with_buffer (fun str ->
       String.iter s ~f:(fun c ->
           str prefix ;
-          Char.to_int c |> Fmt.str "%03o" |> str))
+          Char.to_int c |> Fmt.str "%03o" |> str ) )
   |> fst
 
 let expand_octal_command ~remove_l s =
@@ -79,12 +78,10 @@ end
 
 (*md
 
-The `Script` module defines an intermediate representation for the compiler:
+  The `Script` module defines an intermediate representation for the compiler:
 
-- a sequence of “commands,” and
-- a return value.
-
-
+  - a sequence of “commands,” and
+  - a return value.
 *)
 module Script = struct
   type command =
@@ -111,14 +108,12 @@ module Script = struct
 
   (*md
 
-The function `to_argument` converts a return value into a piece of
-shell script that can be used as the argument of a shell command.
+    The function `to_argument` converts a return value into a piece of
+    shell script that can be used as the argument of a shell command.
 
-The oddly named `~arithmetic` option instructs the function to remove
-quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
-``$(( ... ))`` shell constructs do not allow quoted arguments.
-
-
+    The oddly named `~arithmetic` option instructs the function to remove
+    quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
+    ``$(( ... ))`` shell constructs do not allow quoted arguments.
   *)
   let to_argument ?(arithmetic = false) = function
     | Unit -> "\"$(exit 42)\""
@@ -143,13 +138,12 @@ quoting. See the ``| Int_bin_op (ia, op, ib) ->`` case below,
           (expand_octal_command ~remove_l:true (Fmt.str "${%s}" var))
 
   (*md
-  
-There are special cases where `to_argument` does not work with
-arbitrary content: when we need to compare strings with
-`[ ... <op> ... ]` constructs.
-In that case, we compare the octal representations.
 
-*)
+    There are special cases where `to_argument` does not work with
+    arbitrary content: when we need to compare strings with
+    `[ ... <op> ... ]` constructs.
+    In that case, we compare the octal representations.
+  *)
   let to_ascii = function
     | Unit -> assert false
     | Raw_inline s -> s
@@ -176,15 +170,14 @@ In that case, we compare the octal representations.
 
   (*md
 
- The last stage is `pp_posix`, it compiles the IR to a POSIX shell script:
+     The last stage is `pp_posix`, it compiles the IR to a POSIX shell script:
 
- ```ocaml
-   let compiled = (* ... *) in
-   fprintf fmt "%a" Script.pp_posix compiled
-   (* profit ! *)
-```
-
- *)
+     ```ocaml
+       let compiled = (* ... *) in
+       fprintf fmt "%a" Script.pp_posix compiled
+       (* profit ! *)
+    ```
+  *)
   let pp_posix fmt script =
     let open Format in
     let mkdir_done = ref [] in
@@ -264,8 +257,7 @@ In that case, we compare the octal representations.
     let condition = to_argument cond.result in
     let commands =
       cond.commands
-      @ [If_then_else {condition; block_then= t.commands; block_else= []}]
-    in
+      @ [If_then_else {condition; block_then= t.commands; block_else= []}] in
     make commands Unit
 
   let bool_to_file b tmp = [rawf "printf %b > %s" b (to_path_argument tmp)]
@@ -321,9 +313,8 @@ type Language.raw_command_annotation += Octal_in_variable of string
 
 (*md
 
-The compilation from a `'a Language.t` to the intermediary
-representation.
-
+  The compilation from a `'a Language.t` to the intermediary
+  representation.
 *)
 let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
  fun ~fail_commands ~tmpdb e ->
@@ -382,8 +373,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
         | File f ->
             [ If_then_else
                 { condition=
-                    Fmt.str
-                      "od -t o1 -An -v %s | grep ' 000' > /dev/null 2>&1 " f
+                    Fmt.str "od -t o1 -An -v %s | grep ' 000' > /dev/null 2>&1 "
+                      f
                 ; block_then=
                     Fmt.kstr fail_commands
                       "Byte array in %s cannot be converted to a C-String" f
@@ -452,7 +443,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
             match s.result with
             | Unit -> Script.commands s
             | Raw_inline cmd -> Script.(Raw cmd :: commands s)
-            | _ -> assert false) in
+            | _ -> assert false ) in
       Script.unit cmds
   | Not t ->
       Script.bool_not
@@ -473,7 +464,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                 (to_argument take_script.result)
                 (to_argument redirect_to_script.result) in
             ( precmds @ take_script.commands @ redirect_to_script.commands
-            , evals @ [rawf "eval $(%s)" print_exec_command] )) in
+            , evals @ [rawf "eval $(%s)" print_exec_command] ) ) in
       let uscript = continue unit_t in
       Script.assert_unit uscript ;
       Script.sub_shell ~pre:pre_commands (sub_shell_commands @ uscript.commands)
@@ -495,7 +486,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       let redirections =
         let make fd =
           Option.map ~f:(fun p ->
-              {take= Construct.int fd; redirect_to= `Path p}) in
+              {take= Construct.int fd; redirect_to= `Path p} ) in
         [make 1 stdout; make 2 stderr] |> List.filter_opt in
       let redscript =
         continue (Redirect_output (with_potential_return, redirections)) in
@@ -527,7 +518,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                  , `Eq
                  , Raw_cmd (None, to_argument string_script.result) )
              , No_op
-             , Fail "string-to-int" )) in
+             , Fail "string-to-int" ) ) in
       make (string_script.commands @ check.commands) string_script.result
   | Bool_to_string b ->
       let open Script in
@@ -539,7 +530,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               { condition= to_argument bs.result
               ; block_then= [rawf "printf true > %s" tmparg]
               ; block_else= [rawf "printf false > %s" tmparg] } in
-          bs.commands @ [extra])
+          bs.commands @ [extra] )
   | String_to_bool s ->
       let scr = continue s in
       let extra_check =
@@ -579,8 +570,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
                     @ [ rawf
                           "printf ' L%%s\\n' \"$(cat %s  | od -t o1 -An -v | \
                            tr -d ' \\n')\" >> %s"
-                          as_arg tmparg ]) ) in
-          List.concat_map scripts ~f:(fun c -> c.commands) @ echos)
+                          as_arg tmparg ] ) ) in
+          List.concat_map scripts ~f:(fun c -> c.commands) @ echos )
   | List_to_string (l, _) -> continue l
   | String_to_list (s, _) -> continue s
   | C_string_concat sl ->
@@ -599,7 +590,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               (to_path_argument a_script.result)
               (to_path_argument b_script.result)
               (to_path_argument tmp.result) in
-          a_script.commands @ b_script.commands @ [cat])
+          a_script.commands @ b_script.commands @ [cat] )
   | List_iter (l, f) ->
       let open Script in
       let l_script = continue l in
@@ -613,7 +604,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
           (f (fun () ->
                Raw_cmd
                  ( Some (Octal_in_variable file_var)
-                 , "=== This should never be used ===" ))) in
+                 , "=== This should never be used ===" ) ) ) in
       let loop =
         [ Script.rawf ": list_iter ; for %s in $(cat %s) ; do\n{\n%s\n}\ndone"
             file_var list_file
@@ -635,7 +626,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               | `Mod -> "%" )
               (to_argument ~arithmetic:true b_script.result)
               (to_path_argument tmp.result) in
-          a_script.commands @ b_script.commands @ [compute])
+          a_script.commands @ b_script.commands @ [compute] )
   | Int_bin_comparison (ia, op, ib) ->
       let open Script in
       let a_script = continue ia in
@@ -643,8 +634,8 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
       with_tmp ~tmpdb ~expression:e "int-bin-comparison" (fun tmp ->
           let compute =
             rawf
-              "{ if [ %s %s %s ] ; then printf true ; else printf false ; fi \
-               ; } > %s"
+              "{ if [ %s %s %s ] ; then printf true ; else printf false ; fi ; \
+               } > %s"
               (to_argument a_script.result)
               ( match op with
               | `Eq -> "-eq"
@@ -655,7 +646,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
               | `Ne -> "-ne" )
               (to_argument b_script.result)
               (to_path_argument tmp.result) in
-          a_script.commands @ b_script.commands @ [compute])
+          a_script.commands @ b_script.commands @ [compute] )
   | Feed (string, u) ->
       let open Script in
       let string_script = continue string in
@@ -678,7 +669,7 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
           string_script.commands
           @ [ rawf "eval 'printf \"%%s\" \"$'%s'\"' > %s"
                 (to_argument ~arithmetic:false string_script.result)
-                (to_path_argument tmp.result) ])
+                (to_path_argument tmp.result) ] )
   | Setenv (variable, value) ->
       let open Script in
       let var_script = continue variable in
@@ -701,20 +692,20 @@ let rec to_ir : type a. fail_commands:_ -> tmpdb:_ -> a t -> Script.t =
 
 (*md
 
-The main entry point (still compilation from a `'a Language.t` to the
-intermediary representation) but higher level.
+  The main entry point (still compilation from a `'a Language.t` to the
+  intermediary representation) but higher level.
 
-It is accessed through `Compile.To_slow_flow.compile`:
+  It is accessed through `Compile.To_slow_flow.compile`:
 
-```ocaml
-  val compile :
-       ?default_tmpdir:[`Fresh | `Use of string]
-    -> ?signal_name:string
-    -> ?trap:[`Exit_with of int | `None]
-    -> 'a EDSL.t
-    -> Script.t
-  (** Compile and {!EDSL.t} value to a script. *)
-```
+  ```ocaml
+    val compile :
+         ?default_tmpdir:[`Fresh | `Use of string]
+      -> ?signal_name:string
+      -> ?trap:[`Exit_with of int | `None]
+      -> 'a EDSL.t
+      -> Script.t
+    (** Compile and {!EDSL.t} value to a script. *)
+  ```
 *)
 let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
     ?(trap = `Exit_with 77) expr =
@@ -744,7 +735,7 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
   let make_tmp_vars =
     Tmp_db.tmp_vars tmpdb
     |> List.concat_map ~f:(fun (v, dir, cmd) ->
-           [cmtf "Making file %s" v; Make_directory dir; rawf "%s" cmd]) in
+           [cmtf "Making file %s" v; Make_directory dir; rawf "%s" cmd] ) in
   let last_call = rawf "ret=$?\n%s\nexit $ret\n" delete_fname in
   make
     ( [delete_tmps] @ make_tmp_vars @ tmp.commands @ before @ s.commands
@@ -753,9 +744,8 @@ let compile ?(default_tmpdir = `Fresh) ?(signal_name = "USR1")
 
 (*md
 
-Extra tests which can be activated for debugging purposes (option
-`--run-slow-stack-tests` in the main tests).
-
+  Extra tests which can be activated for debugging purposes (option
+  `--run-slow-stack-tests` in the main tests).
 *)
 let test () =
   let open Format in
@@ -765,8 +755,7 @@ let test () =
     let one = seq [call [c_string "printf"; c_string "hello"]; nop] in
     let two = call [c_string "echo"; c_string "echo"] in
     let three = call [c_string "printf"; c_string " world"] in
-    [ one
-    ; call [c_string "echo"; get_stdout one |> Byte_array.to_c_string]
+    [ one; call [c_string "echo"; get_stdout one |> Byte_array.to_c_string]
     ; call
         [ get_stdout two |> Byte_array.to_c_string
         ; get_stdout (seq [one; three]) |> Byte_array.to_c_string ]
@@ -778,8 +767,7 @@ let test () =
         [ with_redirections
             (seq [exec ["ls"; "/crazypath"]; printf (c_string "HELLO") []])
             [ to_file (int 1) (c_string "/tmp/testgenspio5")
-            ; to_fd (int 2) (int 1) ]
-        ; printf (c_string "NOW CAT:\\n") []
+            ; to_fd (int 2) (int 1) ]; printf (c_string "NOW CAT:\\n") []
         ; exec ["cat"; "/tmp/testgenspio5"] ]
     ; seq
         [ write_output
@@ -788,8 +776,7 @@ let test () =
               ( get_stdout (exec ["printf"; "/tmp/testgenspio6-ret"])
               |> Byte_array.to_c )
             (seq
-               [ printf (c_string "hello test 6\n") []
-               ; exec ["ls"; "/crazypath"] ])
+               [printf (c_string "hello test 6\n") []; exec ["ls"; "/crazypath"]] )
         ; printf
             (c_string "ERR: <<%s>>\\nRET: <<%s>>\\n")
             [ get_stdout (exec ["cat"; "/tmp/testgenspio6-err"])
@@ -802,7 +789,7 @@ let test () =
             (printf (c_string "s:%s:")
                [ C_string.concat_elist
                    (Elist.make
-                      [c_string "hello"; c_string " "; c_string "world"]) ])
+                      [c_string "hello"; c_string " "; c_string "world"] ) ] )
         ; if_then_else
             Byte_array.(
               get_stdout (exec ["cat"; "/tmp/testgenspio-7-out"])
@@ -816,15 +803,14 @@ let test () =
                 (make [c_string "hel"; c_string "lo"])
                 (append
                    (make [c_string " "; c_string "w"])
-                   (make [c_string "orl"; c_string "d"]))) ]
+                   (make [c_string "orl"; c_string "d"]) )) ]
     ; Elist.(
         iter
           (make
-             [ int 1; int 2
-             ; Integer.(int 1 + int 2)
-             ; Integer.(int 1 + int 1 + of_string (c_string "2")) ])
+             [ int 1; int 2; Integer.(int 1 + int 2)
+             ; Integer.(int 1 + int 1 + of_string (c_string "2")) ] )
           ~f:(fun item ->
-            printf (c_string "> %d\\n") [Integer.to_string (item ())]))
+            printf (c_string "> %d\\n") [Integer.to_string (item ())] ))
     ; if_then_else
         Integer.(
           int 1 + int 1 + of_string (c_string "2")
@@ -834,15 +820,13 @@ let test () =
         (printf (c_string "FAILURE\\n") [])
     ; byte_array "Hello World" >> exec ["cat"]
     ; pipe
-        [ printf (c_string "HELLX_WXRLD") []
-        ; exec ["sed"; "s/_/ /g"]
+        [ printf (c_string "HELLX_WXRLD") []; exec ["sed"; "s/_/ /g"]
         ; exec ["tr"; "X"; "O"] ]
     ; printf
         (c_string "HOME: '%s'\\nPWD: '%s'")
         [ getenv (c_string "HOME")
         ; getenv
-            (C_string.concat_list [c_string "P"; c_string "W"; c_string "D"])
-        ]
+            (C_string.concat_list [c_string "P"; c_string "W"; c_string "D"]) ]
     ; seq
         [ setenv
             ~var:
@@ -862,7 +846,7 @@ let test () =
          [ setenv ~var v1
          ; loop_seq_while
              C_string.(getenv var =$= v1)
-             [printf (c_string "Iteration\\n") []; setenv ~var v2] ]) ] in
+             [printf (c_string "Iteration\\n") []; setenv ~var v2] ] ) ] in
   List.iteri exprs ~f:(fun idx expr ->
       let ir = compile expr in
       fprintf std_formatter "==== TEST %d ====\n%a\n%!" idx Script.pp_posix ir ;
@@ -872,4 +856,4 @@ let test () =
       Caml.flush o ;
       Caml.close_out o ;
       let res = Fmt.kstr Caml.Sys.command "sh %s" script_file in
-      fprintf std_formatter "\nRESULT: %d\n" res)
+      fprintf std_formatter "\nRESULT: %d\n" res )

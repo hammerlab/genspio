@@ -83,9 +83,8 @@ let error ?code ~comment_backtrace error =
 let pp_error ppf {code; comment_backtrace; error= the_error} =
   let open Fmt in
   let summary s =
-    match String.sub s ~pos:0 ~len:70 with
-    | s -> s ^ " …"
-    | exception _ -> s in
+    match String.sub s ~pos:0 ~len:70 with s -> s ^ " …" | exception _ -> s
+  in
   let big_string ppf s = pf ppf "@[%s@]" (summary s) in
   pf ppf "@[<hov 2>" ;
   pf ppf "Error:@ @[%a@];@ "
@@ -99,7 +98,7 @@ let pp_error ppf {code; comment_backtrace; error= the_error} =
       | `No_fail_configured msg ->
           pf ppf "Call to `fail %a`@ while no “die” command is configured."
             (pp_death_message ~style:`Lispy ~big_string)
-            msg)
+            msg )
     the_error ;
   pf ppf "Code:@ @[%s@];@ "
     (match code with None -> "NONE" | Some c -> summary c) ;
@@ -132,11 +131,8 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
     let argument ?declaration ?variable_name argument =
       object
         method declaration = declaration
-
         method export = Option.map ~f:(Fmt.str "export %s ; ") declaration
-
         method variable_name = variable_name
-
         method argument = argument
       end in
     let check_length s =
@@ -181,7 +177,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
             | None -> arg#argument
             | Some vardef ->
                 variables := Fmt.str "%s ; " vardef :: !variables ;
-                arg#argument) in
+                arg#argument ) in
       List.rev !variables @ args
       |> String.concat ~sep:" " |> Fmt.str " { %s ; } " |> ir_unit
   | Raw_cmd (_, s) -> s |> ir_unit
@@ -202,12 +198,11 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
            [ Fmt.str " %s=%s" var bac
            ; Fmt.str
                {sh|if [ "$(printf -- %s | sed -e 's/\(.\{3\}\)/@\1/g' | grep @000)" = "" ] |sh}
-               value_n
-           ; Fmt.str "then printf -- %s" value
+               value_n; Fmt.str "then printf -- %s" value
            ; Fmt.str "else %s"
                (die
                   (C_string_failure
-                     {variable= var; content= bac; code= Fmt.str "%a" pp ba}))
+                     {variable= var; content= bac; code= Fmt.str "%a" pp ba} ) )
            ; (* (Fmt.str "Byte_array_to_c_string: error, $%s is not a C string" *)
              (*      var)); *) "fi" ]
       |> ir_octostring
@@ -227,16 +222,13 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
   | No_op -> ":" |> ir_unit
   | If (c, t, e) ->
       seq
-        [ Fmt.str "if { %s ; }" (continue c)
-        ; Fmt.str "then %s" (continue t)
-        ; Fmt.str "else %s" (continue e)
-        ; "fi" ]
+        [ Fmt.str "if { %s ; }" (continue c); Fmt.str "then %s" (continue t)
+        ; Fmt.str "else %s" (continue e); "fi" ]
       |> ir_unit
   | While {condition; body} ->
       seq
         [ Fmt.str "while { %s ; }" (continue condition)
-        ; Fmt.str "do %s" (continue body)
-        ; "done" ]
+        ; Fmt.str "do %s" (continue body); "done" ]
       |> ir_unit
   | Seq l -> seq (List.map l ~f:continue) |> ir_unit
   | Not t -> Fmt.str "! { %s ; }" (continue t) |> ir_bool
@@ -269,24 +261,24 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
             (Seq
                ( Raw_cmd (None, Fmt.str "( %s" (make_redirection one))
                  :: List.map more ~f:(fun r ->
-                        Raw_cmd (None, make_redirection r))
+                        Raw_cmd (None, make_redirection r) )
                @ [unit_t]
-               @ [Raw_cmd (None, ")")] )) )
+               @ [Raw_cmd (None, ")")] ) ) )
       |> ir_unit
   | Write_output {expr; stdout; stderr; return_value} ->
       let ret_arg =
         Option.map return_value ~f:(fun v ->
-            to_argument ~error_loc:e "retval" (`C_string v)) in
+            to_argument ~error_loc:e "retval" (`C_string v) ) in
       let var =
         Option.(ret_arg >>= (fun ra -> ra#export) |> value ~default:"") in
       let with_potential_return =
         Fmt.str "%s { %s %s ; }" var (continue expr)
           (Option.value_map ret_arg ~default:"" ~f:(fun r ->
-               Fmt.str "; printf -- \"$?\" > %s" r#argument)) in
+               Fmt.str "; printf -- \"$?\" > %s" r#argument ) ) in
       let redirections =
         let make fd =
           Option.map ~f:(fun p ->
-              {take= Construct.int fd; redirect_to= `Path p}) in
+              {take= Construct.int fd; redirect_to= `Path p} ) in
         [make 1 stdout; make 2 stderr] |> List.filter_opt in
       continue
         (Redirect_output (Raw_cmd (None, with_potential_return), redirections))
@@ -298,7 +290,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
       | String s ->
           with_buffer (fun str ->
               String.iter s ~f:(fun c ->
-                  Char.to_int c |> Fmt.str "%03o" |> str))
+                  Char.to_int c |> Fmt.str "%03o" |> str ) )
           |> fst |> ir_octostring
       | Bool true -> ir_bool "true"
       | Bool false -> ir_bool "false" )
@@ -308,7 +300,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
   | Int_to_string i ->
       continue
         (Output_as_string
-           (Raw_cmd (None, Fmt.str "printf -- '%%d' %s" (continue i))))
+           (Raw_cmd (None, Fmt.str "printf -- '%%d' %s" (continue i))) )
       |> ir_octostring
   | String_to_int s ->
       let var = Unique_name.variable "string_to_int" in
@@ -323,7 +315,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
         var content value value value
         (die
            (String_to_int_failure
-              {variable= var; content; code= Format.asprintf "%a" pp s}))
+              {variable= var; content; code= Format.asprintf "%a" pp s} ) )
       |> ir_int
   | Bool_to_string b ->
       continue
@@ -332,7 +324,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
               ( None
               , Fmt.str
                   "{ if %s ; then printf true ; else printf false ; fi ; }"
-                  (continue b) )))
+                  (continue b) ) ) )
       |> ir_octostring
   | String_to_bool s ->
       continue
@@ -346,7 +338,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
                    , `Eq
                    , Literal (Literal.String "false") )
                , Raw_cmd (None, "false")
-               , Fail (Fmt.str "String_to_bool") ) ))
+               , Fail (Fmt.str "String_to_bool") ) ) )
       |> ir_bool
   | List l ->
       (* Lists are space-separated internal represetations,
@@ -376,14 +368,12 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
       let variter = Unique_name.variable "list_iter_var" in
       let outputing_list = continue l in
       seq
-        [ Fmt.str "for %s in $(%s) " variter outputing_list
-        ; "do : "
+        [ Fmt.str "for %s in $(%s) " variter outputing_list; "do : "
         ; (* we cannot put a `;` after do so the first command is no-op *)
           continue
             (f (fun () ->
                  (* Here we remove the `G` from the internal represetation: *)
-                 Raw_cmd (None, Fmt.str "${%s#G}" variter)))
-        ; "done" ]
+                 Raw_cmd (None, Fmt.str "${%s#G}" variter) ) ); "done" ]
       |> ir_unit
   | Int_bin_op (ia, op, ib) ->
       Fmt.str "$(( %s %s %s ))" (continue ia)
@@ -407,9 +397,7 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
         (continue ib)
       |> ir_int
   | Feed (string, e) ->
-      Fmt.str {sh|  %s | %s  |sh}
-        (continue string |> expand_octal)
-        (continue e)
+      Fmt.str {sh|  %s | %s  |sh} (continue string |> expand_octal) (continue e)
       |> ir_unit
   | Pipe [] -> ":" |> ir_unit
   | Pipe l ->
@@ -428,8 +416,8 @@ let rec to_ir : type a. _ -> _ -> a Language.t -> internal_representation =
            equal to `${HOME}`
         *)
         Fmt.str
-          "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \
-           \"printf -- '%%s' %s\" ; } "
+          "{ %s=$(printf \\\"\\${%%s}\\\" $(%s | tr -d '\\n')) ; eval \"printf \
+           -- '%%s' %s\" ; } "
           var
           (continue s |> expand_octal)
           value in
@@ -465,5 +453,4 @@ let with_die_function ~print_failure ~statement_separator ~signal_name
     [ Fmt.str "export %s=$$" variable_name
     ; ( match trap with
       | `Exit_with ex -> Fmt.str "trap 'exit %d' %s" ex signal_name
-      | `None -> ": 'No Trap'" )
-    ; script ~die ]
+      | `None -> ": 'No Trap'" ); script ~die ]

@@ -1,11 +1,10 @@
 (*md This example creates scripts using the `EDSL` API...
 
-A simple way to generate and install the scripts is:
+  A simple way to generate and install the scripts is:
 
-    genspio_multigit=_build/default/src/examples/multigit.exe
-    dune build $genspio_multigit
-    $genspio_multigit $BINNPATH
-
+      genspio_multigit=_build/default/src/examples/multigit.exe
+      dune build $genspio_multigit
+      $genspio_multigit $BINNPATH
 *)
 open! Base
 module Filename = Caml.Filename
@@ -52,13 +51,11 @@ module Repository = struct
            ( ( match remote with
              | None -> exec ["git"; "remote"; "-v"]
              | Some s -> call (strs ["git"; "remote"; "get-url"] @ [s]) )
-           ||> exec ["grep"; g] ))
+           ||> exec ["grep"; g] ) )
         [printf (str o) []] in
     switch
-      [ remote_greps "gpg_remote" "GGPG"
-      ; remote_greps "github.com" "GHub"
-      ; remote_greps "gitlab" "GLab"
-      ; remote_greps "bitbucket" "BBkt"
+      [ remote_greps "gpg_remote" "GGPG"; remote_greps "github.com" "GHub"
+      ; remote_greps "gitlab" "GLab"; remote_greps "bitbucket" "BBkt"
       ; default [printf (str "Unkn") []] ]
     |> get_stdout_one_line
 end
@@ -96,31 +93,29 @@ module Multi_status = struct
       exec
         ( ["git"; "branch"; "-vv"]
         @ Option.value_map not_merged_in ~default:[] ~f:(fun br ->
-              ["--no-merged"; br]) )
+              ["--no-merged"; br] ) )
       ||> exec ["grep"; "-v"; "\\["]
 
     (*md
 
-If you have `git`, you have a shell line wrapper:
+      If you have `git`, you have a shell line wrapper:
 
-    $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" -1
-      DISCLAIMER: Use of this advanced
-    computing technology does not imply an
-    endorsement of Western industrial
-    civilization.
+          $ git log --pretty=format:"%w(42,4,2)$(fortune)%n" -1
+            DISCLAIMER: Use of this advanced
+          computing technology does not imply an
+          endorsement of Western industrial
+          civilization.
 
-Pretty cool, right:
-*)
+      Pretty cool, right:
+    *)
     let wrap_string_hack ~columns ~first_line_indent ~other_lines_indent
         ~final_newline str_value =
       call
         [ str "git"; str "log"
         ; Str.concat_list
             [ Fmt.kstr str "--pretty=format:%%w(%d,%d,%d)" columns
-                first_line_indent other_lines_indent
-            ; str_value
-            ; (if final_newline then str "%n" else str "") ]
-        ; str "-1" ]
+                first_line_indent other_lines_indent; str_value
+            ; (if final_newline then str "%n" else str "") ]; str "-1" ]
   end
 
   module Columns = struct
@@ -144,8 +139,7 @@ Pretty cool, right:
         ; ( "L/H"
           , list_local_branches ~not_merged_in:"HEAD" ()
           , "Not-remote-tracking local branches not merged in `HEAD`" )
-          (* git branch -vv --no-merged HEAD | grep -v '\[' *)
-         ] in
+          (* git branch -vv --no-merged HEAD | grep -v '\[' *) ] in
       List.map ~f:(fun (t, e, d) -> (t, get_count e, d)) counts
 
     let title (c, _, _) = c
@@ -161,7 +155,7 @@ Pretty cool, right:
         (Fmt.kstr str "| %s |\\n"
            ( List.map ~f:title (all ())
            |> List.map ~f:(fun t -> Fmt.str "%%-%ds" (String.length t))
-           |> String.concat ~sep:" | " ))
+           |> String.concat ~sep:" | " ) )
         (List.map (all ()) ~f:code)
 
     let help () =
@@ -172,7 +166,7 @@ Pretty cool, right:
       @ List.map (all ()) ~f:(fun c ->
             Fmt.str "* `%s`%s-> %s." (title c)
               (String.make (longest - (title c |> String.length)) ' ')
-              (description c))
+              (description c) )
   end
 
   let msgf fmt l =
@@ -207,15 +201,13 @@ Pretty cool, right:
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   seq
-                    [ call [str "cd"; topdir#get]
-                    ; call [str "cd"; line]
+                    [ call [str "cd"; topdir#get]; call [str "cd"; line]
                     ; printf (str "%-41s")
                         [ Str.concat_list
                             [Repository.get_kind (); str "::"; repo_name line]
                         ]
                       ||> exec ["sed"; "s/ /./g"]
-                      ||> exec ["tr"; "-d"; "\\n"]
-                    ; Columns.row ()
+                      ||> exec ["tr"; "-d"; "\\n"]; Columns.row ()
                     ; if_show show_modified modified_files
                         [ out "  |- Modified:" []
                         ; modified_files ||> exec ["sed"; "s:^ M:  |    -:"] ]
@@ -234,7 +226,7 @@ Pretty cool, right:
                             ~final_newline:true
                           @@ get_stdout
                                (Git.list_local_branches () |> to_list_of_names)
-                        ] ]) ] in
+                        ] ] ) ] in
     let open Command_line in
     let opts =
       let open Arg in
@@ -246,23 +238,23 @@ Pretty cool, right:
       & flag ["--no-config"]
           ~doc:
             (Fmt.str "Do not look at the `%s` git-config option."
-               Git_config.paths_option)
+               Git_config.paths_option )
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage ()
           ~more_usage:(extra_help () @ [""] @ Columns.help ()) in
     parse opts
-      (fun ~anon
-           show_modified
-           show_ahead
-           show_local
-           show_all
-           no_config
-           version
-           describe
-           ->
+      (fun
+        ~anon
+        show_modified
+        show_ahead
+        show_local
+        show_all
+        no_config
+        version
+        describe
+      ->
         let do_section =
-          display_section ~show_modified ~show_ahead ~show_local ~show_all
-        in
+          display_section ~show_modified ~show_ahead ~show_local ~show_all in
         deal_with_describe describe
           [ if_seq version
               ~t:[out (Fmt.str "%s: %s" name version_string) []]
@@ -272,7 +264,7 @@ Pretty cool, right:
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
-                        ||> on_stdin_lines (fun line -> do_section line) ] ] ])
+                        ||> on_stdin_lines (fun line -> do_section line) ] ] ] )
 end
 
 module Activity_report = struct
@@ -291,8 +283,8 @@ module Activity_report = struct
     [ ""
     ; "Use `git activity-report --since 2018-10-31 /path/to/repos1 \
        /path/to/repos2` to display"
-    ; "a detailed “recent happenings” report of all the git repositories \
-       found"; "in the folders `/path/to/repos1` and `/path/to/repos2`."; "" ]
+    ; "a detailed “recent happenings” report of all the git repositories found"
+    ; "in the folders `/path/to/repos1` and `/path/to/repos2`."; "" ]
     @ Git_config.paths_help ()
 
   let script () =
@@ -305,17 +297,15 @@ module Activity_report = struct
       flag ["--no-config"]
         ~doc:
           (Fmt.str "Do not look at the `%s` git-config option."
-             Git_config.paths_option)
+             Git_config.paths_option )
       & string ["--since"]
           ~doc:
-            "Date to get the logs/information since (default: “last \
-             sunday”)."
+            "Date to get the logs/information since (default: “last sunday”)."
           ~default:(str default_since)
       & string ["--section-base"]
           ~doc:
-            (Fmt.str
-               "The base markdown section ('##', '###', etc. default: %s)"
-               default_section_base)
+            (Fmt.str "The base markdown section ('##', '###', etc. default: %s)"
+               default_section_base )
           ~default:(str default_section_base)
       & flag ["--fetch"]
           ~doc:(Fmt.str "Run `git fetch --all` before showing a repository.")
@@ -331,8 +321,7 @@ module Activity_report = struct
         ; Repository.list_all [path]
           ||> on_stdin_lines (fun line ->
                   let since_opt = Str.concat_list [str "--since="; since] in
-                  let git_log l =
-                    call (strs ["git"; "--no-pager"; "log"] @ l) in
+                  let git_log l = call (strs ["git"; "--no-pager"; "log"] @ l) in
                   let commit_number l =
                     git_log ([since_opt; str "--oneline"] @ l) |> get_count
                   in
@@ -357,20 +346,18 @@ module Activity_report = struct
                         ~t:
                           [ out "\\n%s# %s: %s\\n"
                               [ section_base; Repository.get_kind ()
-                              ; repo_name line ]
-                          ; out "\\nWorking tree:\\n" []
+                              ; repo_name line ]; out "\\nWorking tree:\\n" []
                           ; fence ()
                           ; exec
                               [ "git"; "status"; "--short"; "--branch"
-                              ; "--show-stash" ]
-                          ; fence (); out "\\nGraph:\\n" []; fence ()
+                              ; "--show-stash" ]; fence ()
+                          ; out "\\nGraph:\\n" []; fence ()
                           ; git_log
                               ( [since_opt]
                               @ strs
                                   [ "--graph"; "--decorate"
                                   ; "--pretty=tformat:%w(72,0,2)%d %s"; "--all"
-                                  ] )
-                          ; fence ()
+                                  ] ); fence ()
                           ; git_log
                               ( [since_opt]
                               @ strs
@@ -385,8 +372,8 @@ module Activity_report = struct
                                         ; list_report
                                             (get_stdout_one_line
                                                ( line
-                                               >> exec ["sed"; "s/[ ,].*$//"]
-                                               )) ]) ] ]) ] in
+                                               >> exec ["sed"; "s/[ ,].*$//"] ) )
+                                        ] ) ] ] ) ] in
     parse opts
       (fun ~anon no_config since section_base fetch_before version describe ->
         let tmp_since = tmp_file "gar-since" in
@@ -406,22 +393,21 @@ module Activity_report = struct
                            [ str "date"; str "-d"
                            ; Str.concat_list
                                [ get_stdout_one_line today; str " -"
-                               ; get_stdout_one_line today_nth
-                               ; str " days" ]
+                               ; get_stdout_one_line today_nth; str " days" ]
                            ; str date_format ] in
                        [ eprintf
                            (str "Last Sunday was %s.\\n")
                            [get_stdout_one_line last_sunday]
-                       ; tmp_since#set (get_stdout_one_line last_sunday) ])
+                       ; tmp_since#set (get_stdout_one_line last_sunday) ] )
                 ; Elist.iter anon ~f:(fun p ->
                       display_section ~section_base ~since:tmp_since#get
-                        ~fetch_before (p ()))
+                        ~fetch_before (p ()) )
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
                         ||> on_stdin_lines (fun line ->
                                 display_section ~since:tmp_since#get
-                                  ~section_base ~fetch_before line) ] ] ])
+                                  ~section_base ~fetch_before line ) ] ] ] )
 end
 
 module Fetch_all = struct
@@ -453,7 +439,7 @@ module Fetch_all = struct
             (succeeds
                (with_redirections
                   (call [str "git"; str "fetch"; line])
-                  [to_file (int 2) log; to_fd (int 1) (int 2)]))
+                  [to_file (int 2) log; to_fd (int 1) (int 2)] ) )
             ~t:
               [ printf (str "[%s:%s OK]")
                   [Repository.get_kind ~remote:line (); line] ]
@@ -468,8 +454,8 @@ module Fetch_all = struct
                             [repo; line]
                         ; call [str "tail"; str "-n"; str "3"; log]
                           ||> exec ["sed"; "s/^/    * > /"]
-                        ; printf (str "    * See also `%s`.\\n") [log] ])) ] ]
-    in
+                        ; printf (str "    * See also `%s`.\\n") [log] ] ) ) ]
+        ] in
     let fetch_in ~errors_file path =
       let topdir = tmp_file "topdir" in
       let ls_remotes = exec ["git"; "remote"] in
@@ -479,8 +465,7 @@ module Fetch_all = struct
           ||> on_stdin_lines (fun line ->
                   let repo = repo_name (getenv (str "PWD")) in
                   seq
-                    [ call [str "cd"; topdir#get]
-                    ; call [str "cd"; line]
+                    [ call [str "cd"; topdir#get]; call [str "cd"; line]
                     ; printf (str ">> Repository %s: ") [repo]
                     ; if_seq
                         Str.(get_count ls_remotes =$= str "0")
@@ -488,15 +473,14 @@ module Fetch_all = struct
                         ~e:
                           [ ls_remotes
                             ||> on_stdin_lines (fetch_remote errors_file repo)
-                          ]
-                    ; printf (str "\\n") [] ]) ] in
+                          ]; printf (str "\\n") [] ] ) ] in
     let open Command_line in
     let opts =
       let open Arg in
       flag ["--no-config"]
         ~doc:
           (Fmt.str "Do not look at the `%s` git-config option."
-             Git_config.paths_option)
+             Git_config.paths_option )
       & flag ["--version"] ~doc:"Show version information."
       & describe_option_and_usage () ~more_usage:(extra_help ()) in
     parse opts (fun ~anon no_config version describe ->
@@ -506,8 +490,7 @@ module Fetch_all = struct
           [ if_seq version
               ~t:[out (Fmt.str "%s: %s" name version_string) []]
               ~e:
-                [ errors#set (str "")
-                ; Elist.iter anon ~f:(fun p -> go (p ()))
+                [ errors#set (str ""); Elist.iter anon ~f:(fun p -> go (p ()))
                 ; if_seq no_config ~t:[]
                     ~e:
                       [ Git_config.all_paths ()
@@ -515,7 +498,7 @@ module Fetch_all = struct
                 ; if_seq
                     Str.(errors#get <$> str "")
                     ~t:[out "\\n## Errors:" []; call [str "cat"; errors#path]]
-                ] ])
+                ] ] )
 end
 
 let cmdf fmt =
@@ -523,7 +506,7 @@ let cmdf fmt =
     (fun s ->
       match Caml.Sys.command s with
       | 0 -> ()
-      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other)
+      | other -> Fmt.kstr failwith "CMD: %S failed with %d" s other )
     fmt
 
 module Meta_repository = struct
@@ -568,14 +551,14 @@ module Meta_repository = struct
         (fun s ->
           let lines =
             cmd_output (s ^ " | grep -E -v '^usage:' | sed 's/->/→/'") in
-          out "%s\n" lines ; out "\n\n" ; out "See also `%s`.\n\n" s)
+          out "%s\n" lines ; out "\n\n" ; out "See also `%s`.\n\n" s )
         fmt in
     title "Git: Multi-Repository" ;
     par
       "This project provides a couple of scripts which handle multiple Git \
-       repositories at once. One can provide a list of directories to scan \
-       for repositories (non-recursively) on the command line or through \
-       Git's configuration mechanism." ;
+       repositories at once. One can provide a list of directories to scan for \
+       repositories (non-recursively) on the command line or through Git's \
+       configuration mechanism." ;
     par "The scripts provided as of now are:" ;
     let describe s =
       let lines = cmd_output (s ^ " --describe") in
@@ -644,25 +627,25 @@ module Meta_repository = struct
                 out "%s\n\n" fence
             | `Quote ->
                 out "\n" ;
-                List.iter lines ~f:(out "> %s\n"))
+                List.iter lines ~f:(out "> %s\n") )
         f in
     par
-      "Let's see a sequence of examples to demo the scripts. First, we \
-       prepare a set of *“test”* repositories in `%s`:"
+      "Let's see a sequence of examples to demo the scripts. First, we prepare \
+       a set of *“test”* repositories in `%s`:"
       git_repos_top ;
     (* Silent command: *) cmdf "rm -fr %s" git_repos_top ;
     List.iter all_git_repo_tops ~f:(example_cmd "mkdir -p %s") ;
     let clone repos uri_prefix path =
       List.iter repos ~f:(fun r ->
-          example_cmd "git clone %s%s.git %s/%s" uri_prefix r path r) in
+          example_cmd "git clone %s%s.git %s/%s" uri_prefix r path r ) in
     clone hammerlabs "https://github.com/hammerlab/" git_repos_hammerlab ;
     clone smondets "https://gitlab.com/smondet/" git_repos_smondet ;
     clone ["nonstd"] "https://bitbucket.org/smondet/" git_repos_bitbucket ;
     par "" ;
     par
       "For now, we haven't changed anything to the repositories so the \
-       “multi-status” is full of zeros (we use the `--no-config` option \
-       to get consistent output w.r.t. users' configuration):" ;
+       “multi-status” is full of zeros (we use the `--no-config` option to get \
+       consistent output w.r.t. users' configuration):" ;
     let on_all f cmd =
       Fmt.kstr f "%s --no-config %s" cmd
         (String.concat ~sep:" " all_git_repo_tops) in
@@ -677,9 +660,8 @@ module Meta_repository = struct
     par "" ;
     par
       "The script `git-fetch-all` is the simplest it just provides a nice \
-       display even when working with ≥ 30 repositories, and with \
-       **errors**, so we are going to add a couple of wrong remotes to spice \
-       things up." ;
+       display even when working with ≥ 30 repositories, and with **errors**, \
+       so we are going to add a couple of wrong remotes to spice things up." ;
     example_cmd
       "git -C %s/ketrew remote add wrong-http \
        https://example.com/dadams/h2g2.git"
@@ -703,8 +685,7 @@ module Meta_repository = struct
       git_repos_hammerlab ;
     example_cmd "echo 'This is Great' >> %s/ketrew/README.md"
       git_repos_hammerlab ;
-    example_cmd
-      "git -C %s/ketrew/ checkout -b new-branch-that-tracks -t master"
+    example_cmd "git -C %s/ketrew/ checkout -b new-branch-that-tracks -t master"
       git_repos_hammerlab ;
     example_cmd "git -C %s/ketrew/ commit -a -m 'Add greatness to the README'"
       git_repos_hammerlab ;
@@ -724,8 +705,7 @@ module Meta_repository = struct
        +%%Y-%%m-%%d) %s"
       git_repos_hammerlab ;
     par "" ;
-    par
-      "We can see the new commit in the new branch appears in the report ⮵." ;
+    par "We can see the new commit in the new branch appears in the report ⮵." ;
     par "And that's all for today ☺ !" ;
     section "License" ;
     par
@@ -736,21 +716,20 @@ module Meta_repository = struct
 end
 
 (*md
-The command-line interface is, for now, just about writing the scripts
-to a directory.
+  The command-line interface is, for now, just about writing the scripts
+  to a directory.
 
-To write the scripts in a `./bin` directory and add a `README.md` just
-set the environment variable: `repomode=true`.
+  To write the scripts in a `./bin` directory and add a `README.md` just
+  set the environment variable: `repomode=true`.
 *)
 
 let () =
-  let path = Sys.argv.(1) in
+  let path = Caml.Sys.argv.(1) in
   cmdf "mkdir -p %s" (Filename.quote path) ;
   let repomode =
     try String.(Caml.Sys.getenv "repomode" = "true") with _ -> false in
   let output filename script long_description =
-    let gms =
-      if repomode then path // "bin" // filename else path // filename in
+    let gms = if repomode then path // "bin" // filename else path // filename in
     msg "Outputting %S" gms ;
     cmdf "mkdir -p %s" Filename.(quote (dirname gms)) ;
     let o = Caml.open_out gms in
@@ -766,13 +745,12 @@ let () =
         |> String.concat ~sep:"\n" )
         Genspio.Compile.To_slow_flow.Script.pp_posix
         (Genspio.Compile.To_slow_flow.compile
-           (script () |> Genspio.Transform.Constant_propagation.process))) ;
+           (script () |> Genspio.Transform.Constant_propagation.process) )) ;
     Caml.close_out o ;
     cmdf "chmod +x %s" (Filename.quote gms) in
   Multi_status.(output name script long_description) ;
   Activity_report.(output name script long_description) ;
   Fetch_all.(output name script long_description) ;
   if repomode then
-    Meta_repository.readme_md ~path:(path // "bin")
-      ~output:(path // "README.md") ;
+    Meta_repository.readme_md ~path:(path // "bin") ~output:(path // "README.md") ;
   Fmt.pr "Done.\n%!"
