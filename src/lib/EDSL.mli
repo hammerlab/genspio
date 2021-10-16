@@ -1,9 +1,8 @@
 (** The Embedded Domain Specific Lanaguage to create “shell-expressions.” *)
 
-type 'a t = 'a Language.t
 (** The type of a Genspio expression. *)
+type 'a t = 'a Language.t
 
-type str = Language.byte_array
 (** Type to encode arbitrary byte-arrays in the EDSL as
     [str t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays.
@@ -14,6 +13,7 @@ type str = Language.byte_array
     environment variables must be C-strings. Genspio treats them
     properly by failing when a wrong byte-array needs to be converted
     to a C-string. *)
+type str = Language.byte_array
 
 type byte_array = Language.byte_array
 type c_string = Language.c_string
@@ -90,8 +90,7 @@ val file_exists : str t -> bool t
 
 (** Conversions of the [bool t] type. *)
 module Bool : sig
-  val to_string : bool t -> str t
-  val of_string : str t -> bool t
+  val to_string : bool t -> str t val of_string : str t -> bool t
 end
 
 (** {3 Integer Arithmetic} *)
@@ -100,10 +99,7 @@ end
 module Integer : sig
   val to_str : int t -> str t
   val of_str : str t -> int t
-
-  val bin_op :
-    int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
-
+  val bin_op : int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
   val add : int t -> int t -> int t
   val ( + ) : int t -> int t -> int t
   val sub : int t -> int t -> int t
@@ -212,8 +208,8 @@ val make_switch :
 
 (** {3 Redirections and File Descriptors } *)
 
-type fd_redirection
 (** Abstract type of file-descriptor redirections. *)
+type fd_redirection
 
 val to_fd : int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
@@ -271,6 +267,9 @@ val printf : str t -> str t list -> unit t
 val eprintf : str t -> str t list -> unit t
 (** Like {!printf} but redirected to ["stderr"]. *)
 
+val with_stdout_to_stderr : unit t -> unit t
+(** Run a command with [stdout] redirected to [stderr] *)
+
 (** {3 Escaping The Execution Flow } *)
 
 val fail : string -> unit t
@@ -280,13 +279,13 @@ val fail : string -> unit t
 
 (** {3 Temporary Files} *)
 
+(** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
   < get: str t  (** Get the current contents of the file *)
   ; set: str t -> unit t
   ; append: str t -> unit t
   ; delete: unit t
   ; path: str t >
-(** Abstraction of a file, cf. {!tmp_file}. *)
 
 val tmp_file : ?tmp_dir:str t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
@@ -422,14 +421,8 @@ val cat_markdown : string -> str t -> unit t
 
 val check_sequence :
      ?verbosity:[`Announce of string | `Output_all | `Silent]
-  -> ?on_failure:(   step:string * unit t
-                  -> stdout:str t
-                  -> stderr:str t
-                  -> unit t)
-  -> ?on_success:(   step:string * unit t
-                  -> stdout:str t
-                  -> stderr:str t
-                  -> unit t)
+  -> ?on_failure:(step:string * unit t -> stdout:str t -> stderr:str t -> unit t)
+  -> ?on_success:(step:string * unit t -> stdout:str t -> stderr:str t -> unit t)
   -> ?tmpdir:string
   -> (string * unit t) list
   -> unit t
@@ -582,8 +575,7 @@ Composer Example} which is where the above snippet comes from.
 
  *)
 module Script_with_describe (P : sig
-  val name : string
-  val description : string
+  val name : string val description : string
 end) : sig
   val name : string
   val description : string

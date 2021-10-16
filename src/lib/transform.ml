@@ -1,14 +1,13 @@
 (*md
 
-This module implements basic AST (type-preserving) transformations.
-  
-- The class `Visitor.nothing_doer` is an “open-recursion” AST visitor
-  (cf.
-  [chapter 12](https://v1.realworldocaml.org/v1/en/html/classes.html#open-recursion)
-  of RWO).
-- The module `Constant_propagation` implements many constant
-  propagation transformations using the visitor.
+  This module implements basic AST (type-preserving) transformations.
 
+  - The class `Visitor.nothing_doer` is an “open-recursion” AST visitor
+    (cf.
+    [chapter 12](https://v1.realworldocaml.org/v1/en/html/classes.html#open-recursion)
+    of RWO).
+  - The module `Constant_propagation` implements many constant
+    propagation transformations using the visitor.
 *)
 open Common
 
@@ -147,7 +146,7 @@ module Visitor = struct
       method expression : type a. a Language.t -> a Language.t =
         fun e ->
           Option.iter trace ~f:(fun formatter ->
-              Format.fprintf formatter "-> %a\n" pp e) ;
+              Format.fprintf formatter "-> %a\n" pp e ) ;
           match e with
           | Exec l -> self#exec (List.map l ~f:self#expression)
           | Raw_cmd (x, y) -> self#raw_cmd (x, y)
@@ -193,17 +192,16 @@ module Constant_propagation = struct
 
   (*md
 
-The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only the constructs that matter.
-
- *)
+    The `propagator` class inherits from `Visitor.nothing_doer` and overwrites only the constructs that matter.
+  *)
   class propagator ?trace () =
     object (self)
       inherit Visitor.nothing_doer ?trace () as _super
 
       (*md
-Boolean operators are not commutative, the left side has to be
-evaluated first and may break the execution flow (e.g. with `fail`).
-*)
+        Boolean operators are not commutative, the left side has to be
+        evaluated first and may break the execution flow (e.g. with `fail`).
+      *)
       method! bool_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
@@ -213,11 +211,10 @@ evaluated first and may break the execution flow (e.g. with `fail`).
         | _ -> Bool_operator (ga, op, gb)
 
       (*md
-We can only know how to simplify expressions when they are about
-literals (all non-literals can be non-deterministic and
-side-effectful).
-
- *)
+        We can only know how to simplify expressions when they are about
+        literals (all non-literals can be non-deterministic and
+        side-effectful).
+      *)
       method! string_operator (a, op, b) =
         let ga = self#expression a in
         let gb = self#expression b in
@@ -285,11 +282,10 @@ side-effectful).
                       Byte_array_to_c_string
                         (Literal (Literal.String (pstring ^ sitem)))
                       :: more
-                  | _, _ -> item :: prev)
+                  | _, _ -> item :: prev )
               |> List.rev in
-            match build with
-            | [one] -> one
-            | more -> C_string_concat (List more) )
+            match build with [one] -> one | more -> C_string_concat (List more)
+            )
         | default -> C_string_concat default
 
       method! byte_array_concat l =
@@ -305,7 +301,7 @@ side-effectful).
                   | ( Literal (Literal.String pstring) :: more
                     , Literal (Literal.String sitem) ) ->
                       Literal (Literal.String (pstring ^ sitem)) :: more
-                  | _, _ -> item :: prev)
+                  | _, _ -> item :: prev )
               |> List.rev in
             match build with
             | [one] -> one
@@ -359,7 +355,7 @@ side-effectful).
                   | `Le -> ( <= )
                   | `Gt -> ( > )
                   | `Ne -> ( <> ) )
-                    na nb))
+                    na nb ) )
         | _ -> default
     end
 
@@ -384,15 +380,12 @@ side-effectful).
     check "some bool"
       Construct.(bool true &&& bool false)
       Construct.(bool false) ;
-    check "some bool"
-      Construct.(bool false ||| bool true)
-      Construct.(bool true) ;
+    check "some bool" Construct.(bool false ||| bool true) Construct.(bool true) ;
     check "some bool and string"
       Construct.(
         if_then_else
           (not
-             ( bool false
-             ||| Byte_array.(byte_array "bouh" =$= byte_array "bah") ))
+             (bool false ||| Byte_array.(byte_array "bouh" =$= byte_array "bah")) )
           (fail "then") (fail "else"))
       Construct.(fail "then") ;
     check "seq []" Construct.(seq []) Construct.(nop) ;
@@ -452,7 +445,7 @@ side-effectful).
                Result:\n\
                %a\n\
                %!"
-              nth name pp e pp res pp p) ;
+              nth name pp e pp res pp p ) ;
         let nb = List.length more in
         Fmt.failwith "There %s %d test failure%s"
           (if nb > 1 then "were" else "was")

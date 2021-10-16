@@ -29,10 +29,9 @@ module Literal = struct
          |'/' | '#' | '@' | '!' | ' ' | '~' | '`' | '\\' | '|' | '?' | '>'
          |'<' | '.' | ',' | ':' | ';' | '{' | '}' | '(' | ')' | '[' | ']' ->
             true
-        | _ -> false)
+        | _ -> false )
 
-    let impossible_to_escape_for_variable =
-      String.exists ~f:Char.(( = ) '\x00')
+    let impossible_to_escape_for_variable = String.exists ~f:Char.(( = ) '\x00')
   end
 end
 
@@ -41,8 +40,8 @@ type raw_command_annotation += Magic_unit
 
 type fd_redirection =
   { take: int t
-  ; redirect_to:
-      [`Path of c_string t | `Fd of int t (* | `Input_of of unit t *)] }
+  ; redirect_to: [`Path of c_string t | `Fd of int t (* | `Input_of of unit t *)]
+  }
 
 and _ t =
   | Exec : c_string t list -> unit t
@@ -80,9 +79,7 @@ and _ t =
   | List_iter : 'a list t * ((unit -> 'a t) -> unit t) -> unit t
   | Byte_array_to_c_string : byte_array t -> c_string t
   | C_string_to_byte_array : c_string t -> byte_array t
-  | Int_bin_op :
-      int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t
-      -> int t
+  | Int_bin_op : int t * [`Plus | `Minus | `Mult | `Div | `Mod] * int t -> int t
   | Int_bin_comparison :
       int t * [`Eq | `Ne | `Gt | `Ge | `Lt | `Le] * int t
       -> bool t
@@ -149,13 +146,14 @@ let rec pp : type a. Format.formatter -> a t -> unit =
     | Redirect_output (u, l) ->
         let redirs fmt {take; redirect_to} =
           fprintf fmt "@[(%a@ >@ %a)@]" pp take
-            (fun fmt -> function `Fd f -> fprintf fmt "%a" pp f
-              | `Path f -> fprintf fmt "%a" pp f)
+            (fun fmt -> function
+              | `Fd f -> fprintf fmt "%a" pp f
+              | `Path f -> fprintf fmt "%a" pp f )
             redirect_to in
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "redirect@ %a@ %a" pp u
               (pp_print_list ~pp_sep:pp_print_space redirs)
-              l)
+              l )
     | Write_output {expr; stdout; stderr; return_value} ->
         let o name fmt opt =
           match opt with
@@ -163,17 +161,17 @@ let rec pp : type a. Format.formatter -> a t -> unit =
           | Some c -> fprintf fmt "@ @[<hov 2>(%s → %a)@]" name pp c in
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "write-output@ %a%a%a%a" pp expr (o "stdout") stdout
-              (o "stderr") stderr (o "return-value") return_value)
+              (o "stderr") stderr (o "return-value") return_value )
     | Feed (s, u) ->
         pp_in_expr fmt (fun fmt () -> fprintf fmt "%a@ >>@ %a" pp s pp u)
     | Pipe l ->
         pp_in_expr fmt (fun fmt () ->
             fprintf fmt "pipe:@ %a"
               (pp_print_list ~pp_sep:(fun fmt () -> fprintf fmt "@ |@ ") pp)
-              l)
+              l )
     | While {condition; body} ->
         pp_in_expr fmt (fun fmt () ->
-            fprintf fmt "while@ %a@ do:@ %a" pp condition pp body)
+            fprintf fmt "while@ %a@ do:@ %a" pp condition pp body )
     | Fail s -> pp_in_expr fmt (fun fmt () -> fprintf fmt "FAIL@ %S" s)
     | Int_to_string i -> pp_fun_call fmt "int-to-string" pp [i]
     | String_to_int i -> pp_fun_call fmt "string-to-int" pp [i]
@@ -189,15 +187,13 @@ let rec pp : type a. Format.formatter -> a t -> unit =
     | List_iter (l, f) ->
         let body = f (fun () -> Raw_cmd (None, "VARIABLE")) in
         pp_open_box fmt 1 ;
-        fprintf fmt
-          "(list-iter@ list: %a@ f: @[<hov 4>(fun VARIABLE ->@ %a)@])" pp l pp
-          body ;
+        fprintf fmt "(list-iter@ list: %a@ f: @[<hov 4>(fun VARIABLE ->@ %a)@])"
+          pp l pp body ;
         pp_close_box fmt ()
     (* : 'a list t * ((unit -> 'a t) -> unit t) -> unit t *)
     | Byte_array_to_c_string ba ->
         pp_fun_call fmt "byte-array-to-c-string" pp [ba]
-    | C_string_to_byte_array c ->
-        pp_fun_call fmt "c-string-to-byte-array" pp [c]
+    | C_string_to_byte_array c -> pp_fun_call fmt "c-string-to-byte-array" pp [c]
     | Getenv s -> pp_fun_call fmt "getenv" pp [s]
     | Setenv (s, v) -> pp_fun_call fmt "setenv" pp [s; v]
     | Comment (cmt, expr) ->
@@ -249,7 +245,7 @@ module Construct = struct
     let make_switch : (bool t * unit t) list -> default:unit t -> unit t =
      fun conds ~default ->
       List.fold_right conds ~init:default ~f:(fun (x, body) prev ->
-          if_then_else x body prev)
+          if_then_else x body prev )
 
     let write_output ?stdout ?stderr ?return_value expr =
       Write_output {expr; stdout; stderr; return_value}

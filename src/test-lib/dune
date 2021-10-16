@@ -1,1 +1,3 @@
-(library (name tests)  (libraries genspio uri base fmt) )
+(library
+ (name tests)
+ (libraries genspio uri base fmt))

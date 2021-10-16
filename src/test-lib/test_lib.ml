@@ -46,8 +46,7 @@ module Shell = struct
       Fmt.str "dpkg -s %s | grep ^Version" package in
     [ dash_like "dash" ~get_version:(package_version "dash")
     ; dash_like "bash" ~get_version:"bash --version | head -n 1"
-    ; dash_like "sh" ~get_version:(package_version "sh")
-    ; busybox
+    ; dash_like "sh" ~get_version:(package_version "sh"); busybox
     ; dash_like "ksh" ~get_version:"ksh --version 2>&1"
     ; dash_like "mksh" ~get_version:(package_version "mksh")
     ; dash_like "posh" ~get_version:(package_version "posh")
@@ -79,9 +78,9 @@ module Shell_directory = struct
           (let long =
              String.map name ~f:(function
                | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9') as c -> c
-               | _ -> '_') in
+               | _ -> '_' ) in
            if String.length long > 30 then String.sub long ~pos:0 ~len:30
-           else long)
+           else long )
           (List.length args) returns
           Caml.(
             Marshal.to_string script [Marshal.Closures]
@@ -116,9 +115,8 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
 
   let display_opti_script t = function
     | Exits {script; _} ->
-        List.fold t.optimization_passes ~init:script ~f:(fun prev ->
-          function
-          | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev)
+        List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
+          | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev )
         |> Genspio.Compile.to_string_hum
 
   let run_test_script t =
@@ -146,7 +144,7 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
           let lines =
             Fmt.str "printf -- \"%s\\n\" > %s" first_line file
             :: List.map echos ~f:(fun l ->
-                   Fmt.str "printf -- \"    %s\\n\" >> %s" l file) in
+                   Fmt.str "printf -- \"    %s\\n\" >> %s" l file ) in
           String.concat ~sep:"\n" lines in
         Fmt.str
           "mkdir -p _success _failure %s\n\
@@ -174,9 +172,8 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
   let script_content t = function
     | Exits {no_trap; script; _} -> (
         let script =
-          List.fold t.optimization_passes ~init:script ~f:(fun prev ->
-            function
-            | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev)
+          List.fold t.optimization_passes ~init:script ~f:(fun prev -> function
+            | `Cst_prop -> Genspio.Transform.Constant_propagation.process prev )
         in
         match t.compilation with
         | `Std_one_liner -> Genspio.Compile.to_one_liner ~no_trap script
@@ -200,24 +197,21 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
     seq
       [ exec
           [ "printf"
-          ; Fmt.str
-              "* Shell: %s, compilation; %s, opti: %s, total tests: %d\\n"
+          ; Fmt.str "* Shell: %s, compilation; %s, opti: %s, total tests: %d\\n"
               (Shell.to_string t.shell)
               ( match t.compilation with
               | `Std_one_liner -> "Standard-one-liner"
               | `Std_multi_line -> "Standard-multi-line"
               | `Slow_stack -> "Slow-stack" )
               ( List.map t.optimization_passes ~f:(function `Cst_prop ->
-                    "cst-prop")
+                    "cst-prop" )
               |> String.concat ~sep:"→" )
               (List.length testlist) ]
       ; call
-          [ string "printf"
-          ; string "    * Failures: %s.\\n"
+          [ string "printf"; string "    * Failures: %s.\\n"
           ; count_files "_failure/" ]
       ; call
-          [ string "printf"
-          ; string "    * Successes: %s.\\n"
+          [ string "printf"; string "    * Successes: %s.\\n"
           ; count_files "_success" ] ])
     |> Genspio.Compile.to_many_lines
 
@@ -233,13 +227,13 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
          (make_report_path t)
     :: Fmt.str "check:\n\t@@%s\n\n"
          ( List.map testlist ~f:(fun tst ->
-               Fmt.str "test -f '%s'" (success_path tst))
+               Fmt.str "test -f '%s'" (success_path tst) )
          |> String.concat ~sep:" \\\n      && " )
     :: List.map testlist ~f:(fun test ->
            Fmt.str "# Test %s with %s\n%s:\n\t%ssh %s" (unique_name test)
              (Shell.to_string t.shell) (success_path test)
              (if t.verbose then "" else "@")
-             (run_test_path test))
+             (run_test_path test) )
     |> String.concat ~sep:"\n"
 
   let scripts t testlist =
@@ -247,18 +241,16 @@ let optimize : type a. _ -> a Genspio.Language.t -> _ =
         [ (script_path test, script_content t test)
         ; (run_test_path test, run_test_script t test)
         ; (script_display test, display_script t test)
-        ; (script_opti_display test, display_opti_script t test) ])
+        ; (script_opti_display test, display_opti_script t test) ] )
 
   let contents t ~path testlist =
     let test_path = path in
     let makefile_path = Fmt.str "%s/Makefile" test_path in
-    [ `Directory test_path
-    ; `Directory (test_path // "script")
+    [ `Directory test_path; `Directory (test_path // "script")
     ; `File (makefile_path, makefile t testlist)
-    ; `File (test_path // make_report_path t, make_report_content t testlist)
-    ]
+    ; `File (test_path // make_report_path t, make_report_content t testlist) ]
     @ List.map (scripts t testlist) ~f:(fun (spath, content) ->
-          `File (Fmt.str "%s/%s" test_path spath, content))
+          `File (Fmt.str "%s/%s" test_path spath, content) )
 end
 
 module Test_directory = struct
@@ -288,46 +280,42 @@ module Test_directory = struct
   let makefile t =
     let shell_reports =
       List.map t.shell_tests ~f:(fun sh ->
-          Shell_directory.name sh // "report.md")
+          Shell_directory.name sh // "report.md" )
       |> String.concat ~sep:" " in
     let shell_names = List.map t.shell_tests ~f:Shell_directory.name in
     let shell_run_targets =
-      List.map shell_names ~f:(Fmt.str "run-%s") |> String.concat ~sep:" "
-    in
+      List.map shell_names ~f:(Fmt.str "run-%s") |> String.concat ~sep:" " in
     [ Fmt.str ".PHONY: run-all all clean clean-reports report check %s\n"
-        shell_run_targets
-    ; Fmt.str "all:\n\t@@cat help.md"
+        shell_run_targets; Fmt.str "all:\n\t@@cat help.md"
     ; Fmt.str "check: %s\n"
         ( List.filter_map t.shell_tests ~f:(fun sht ->
               if
                 List.mem t.important_shells ~equal:String.equal
                   (sht.Shell_directory.shell |> Shell.to_string)
               then Some (Fmt.str "check-%s" (Shell_directory.name sht))
-              else None)
-        |> String.concat ~sep:" " )
-    ; "report: report.md"
+              else None )
+        |> String.concat ~sep:" " ); "report: report.md"
     ; Fmt.str "report.md: %s\n\tcat %s > report.md" shell_reports shell_reports
     ; Fmt.str "clean-reports:\n\t@@rm report.md %s" shell_reports
     ; Fmt.str "clean: clean-reports\n\t@@%s"
         ( List.map shell_names ~f:(Fmt.str "( cd %s ; $(MAKE) clean ; )")
-        |> String.concat ~sep:" ; " )
-    ; Fmt.str "run-all: %s" shell_run_targets ]
+        |> String.concat ~sep:" ; " ); Fmt.str "run-all: %s" shell_run_targets
+    ]
     @ List.concat_map t.shell_tests ~f:(fun shtest ->
           let dir = Shell_directory.name shtest in
           [ Fmt.str "%s/report.md:\n\t@@ ( cd %s ; $(MAKE) report ; )" dir dir
           ; Fmt.str "run-%s:\n\t@@ ( cd %s ; $(MAKE) ; )" dir dir
-          ; Fmt.str "check-%s:\n\t@@ ( cd %s ; $(MAKE) check ; )" dir dir ])
+          ; Fmt.str "check-%s:\n\t@@ ( cd %s ; $(MAKE) check ; )" dir dir ] )
     |> String.concat ~sep:"\n"
 
   let contents t ~path testlist =
-    [ `Directory path
-    ; `File (path // "help.md", help t)
+    [ `Directory path; `File (path // "help.md", help t)
     ; `File (path // "Makefile", makefile t) ]
     @ List.concat_map t.shell_tests ~f:(fun shtest ->
           (* let comp = Shell_directory.{ shell; verbose = t.verbose } in *)
           Shell_directory.contents shtest
             ~path:(path // Shell_directory.name shtest)
-            testlist)
+            testlist )
 end
 
 module Example = struct
@@ -366,7 +354,7 @@ module Example = struct
         md_code_block "ocaml" ocaml_code ;
         if_show `Pretty_printed (fun () ->
             ff fmt "Pretty-printed:@\n@\n" ;
-            md_code_block "scheme" (Genspio.Compile.to_string_hum code)) ;
+            md_code_block "scheme" (Genspio.Compile.to_string_hum code) ) ;
         ( match Genspio.Compile.To_posix.(string ~options:multi_line) code with
         | Ok script ->
             let tmp = Filename.temp_file "genspio-example" ".sh" in
@@ -393,7 +381,7 @@ module Example = struct
             if_show `Compiled (fun () ->
                 ff fmt "Compiled to POSIX (%d bytes):@\n@\n"
                   (String.length script) ;
-                md_code_block "shell" script) ;
+                md_code_block "shell" script ) ;
             ff fmt "@[<hov 2>Running@ *it*@ " ;
             ( match result with
             | 0 -> ff fmt "**succeeds**."

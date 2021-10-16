@@ -21,7 +21,7 @@ let switch l =
       | `Default d ->
           default := Some d ;
           None
-      | `Case t -> Some t) in
+      | `Case t -> Some t ) in
   make_switch ~default:(Option.value ~default:nop !default) cases
 
 (*
@@ -51,25 +51,23 @@ let tmp_file ?tmp_dir name : file =
              if_then_else
                C_string.(getenv (c_string "TMPDIR") <$> c_string "")
                (call
-                  [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")])
-               (exec ["printf"; "%s"; default_tmp_dir]))
+                  [c_string "printf"; c_string "%s"; getenv (c_string "TMPDIR")] )
+               (exec ["printf"; "%s"; default_tmp_dir]) )
         |> to_c_string ) in
   let path =
     let clean =
       String.map name ~f:(function
         | ('a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' | '-') as c -> c
-        | _ -> '_') in
+        | _ -> '_' ) in
     C_string.concat_list
       [ get_tmp_dir; c_string "/"
       ; c_string
           (Fmt.str "genspio-tmp-file-%s-%s" clean
-             Caml.Digest.(string name |> to_hex)) ] in
+             Caml.Digest.(string name |> to_hex) ) ] in
   let tmp = C_string.concat_list [path; string "-tmp"] in
   object (self)
     method get = get_stdout (call [string "cat"; path])
-
     method get_c = self#get |> to_c_string
-
     method path = path
 
     method set v =
@@ -145,23 +143,23 @@ module Command_line = struct
     in
     let anon = anon_tmp#get |> Elist.deserialize_to_c_string_list in
     let applied_action =
-      (* 
-        The [loop] function below is building 3 pieces of Genspio code at once:
+      (*
+         The [loop] function below is building 3 pieces of Genspio code at once:
 
-        - variable initializations
-        - individual case statements (including variable assignments)
-          that are part of the ["while true { switch { .... } }"] loop 
-          that incrementally interprets each command line argument.
-        - [applied_action] (of type [unit t]) is the
-          the result of applying the [action] function to all the elements of
-          [options] + the list of anonymous arguments.
-          It is hence the (user-provided) code that uses the parsed arguments.
-          The [loop] function builds the closure as the loop goes since
-          [options] is a “difference list”, see also:
-          {{:https://drup.github.io/2016/08/02/difflists/}Drup's blog post}.
+         - variable initializations
+         - individual case statements (including variable assignments)
+           that are part of the ["while true { switch { .... } }"] loop
+           that incrementally interprets each command line argument.
+         - [applied_action] (of type [unit t]) is the
+           the result of applying the [action] function to all the elements of
+           [options] + the list of anonymous arguments.
+           It is hence the (user-provided) code that uses the parsed arguments.
+           The [loop] function builds the closure as the loop goes since
+           [options] is a “difference list”, see also:
+           {{:https://drup.github.io/2016/08/02/difflists/}Drup's blog post}.
 
-         The 2 first items are agglomerated in the [inits] and [cases]
-         references.
+          The 2 first items are agglomerated in the [inits] and [cases]
+          references.
       *)
       let rec loop : type a b. a -> (a, b) cli_options -> b =
        fun f -> function
@@ -174,17 +172,15 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| C_string.(c_string s =$= getenv (c_string "1"))))
+                      p ||| C_string.(c_string s =$= getenv (c_string "1")) ) )
                  [ if_seq
                      C_string.(getenv (string "2") =$= string "")
                      ~t:
                        [ eprintf
                            (string "ERROR option '%s' requires an argument\\n")
-                           [getenv (string "1")]
-                       ; fail "Wrong command line" ]
+                           [getenv (string "1")]; fail "Wrong command line" ]
                      ~e:[setenv ~var:(string var) (getenv (string "2"))]
-                 ; exec ["shift"]
-                 ; exec ["shift"] ]) ;
+                 ; exec ["shift"]; exec ["shift"] ] ) ;
             Fmt.kstr to_help "* `%s <string>`: %s"
               (String.concat ~sep:"," x.switches)
               x.doc ;
@@ -195,9 +191,10 @@ module Command_line = struct
             to_case
               (case
                  (List.fold ~init:(bool false) x.switches ~f:(fun p s ->
-                      p ||| C_string.equals (string s) (getenv (string "1"))))
+                      p ||| C_string.equals (string s) (getenv (string "1")) )
+                 )
                  [ setenv ~var:(string var) (Bool.to_string (bool true))
-                 ; exec ["shift"] ]) ;
+                 ; exec ["shift"] ] ) ;
             Fmt.kstr to_help "* `%s`: %s"
               (String.concat ~sep:"," x.switches)
               x.doc ;
@@ -220,10 +217,9 @@ module Command_line = struct
           let help_switches = ["-h"; "-help"; "--help"] in
           case
             (List.fold ~init:(bool false) help_switches ~f:(fun p s ->
-                 p ||| C_string.(c_string s =$= getenv (c_string "1"))))
+                 p ||| C_string.(c_string s =$= getenv (c_string "1")) ) )
             [ setenv ~var:help_flag_var (Bool.to_string (bool true))
-            ; byte_array help_msg >> exec ["cat"]
-            ; exec ["break"] ] in
+            ; byte_array help_msg >> exec ["cat"]; exec ["break"] ] in
         let dash_dash_case =
           case
             C_string.(getenv (c_string "1") =$= c_string "--")
@@ -245,11 +241,9 @@ module Command_line = struct
     seq
       [ setenv ~var:help_flag_var (Bool.to_string (bool false))
       ; anon_tmp#set (Elist.serialize_byte_array_list (Elist.make []))
-      ; seq (List.rev !inits)
-      ; while_loop
-      ; if_then_else
-          (bool_of_var (Fmt.str "%s_help" prefix))
-          nop applied_action ]
+      ; seq (List.rev !inits); while_loop
+      ; if_then_else (bool_of_var (Fmt.str "%s_help" prefix)) nop applied_action
+      ]
 end
 
 let loop_until_true ?(attempts = 20) ?(sleep = 2)
@@ -259,7 +253,6 @@ let loop_until_true ?(attempts = 20) ?(sleep = 2)
     let varname = string "C_ATTEMPTS" in
     object
       method set v = setenv ~var:varname (Integer.to_string v)
-
       method get = getenv varname |> Integer.of_string
     end in
   seq
@@ -272,11 +265,11 @@ let loop_until_true ?(attempts = 20) ?(sleep = 2)
              ; intvar#set Integer.(intvar#get + int 1)
              ; if_then
                  Integer.(intvar#get <= int attempts)
-                 (exec ["sleep"; Fmt.str "%d" sleep]) ])
-    ; exec ["printf"; "\\n"]
+                 (exec ["sleep"; Fmt.str "%d" sleep]) ] ); exec ["printf"; "\\n"]
     ; if_then_else
         Integer.(intvar#get > int attempts)
-        (seq [(* Fmt.str "Command failed %d times!" attempts; *) exec ["false"]])
+        (seq
+           [(* Fmt.str "Command failed %d times!" attempts; *) exec ["false"]] )
         (seq [(* Fmt.str "Command failed %d times!" attempts; *) exec ["true"]])
     ]
   |> returns ~value:0
@@ -290,12 +283,10 @@ let seq_and l = List.fold l ~init:(bool true) ~f:(fun u v -> u &&& succeeds v)
 
 let output_markdown_code tag f =
   seq
-    [ exec ["printf"; Fmt.str "``````````%s\\n" tag]
-    ; f
+    [ exec ["printf"; Fmt.str "``````````%s\\n" tag]; f
     ; exec ["printf"; Fmt.str "\\n``````````\\n"] ]
 
-let cat_markdown tag file =
-  output_markdown_code tag @@ call [string "cat"; file]
+let cat_markdown tag file = output_markdown_code tag @@ call [string "cat"; file]
 
 let fresh_name suf =
   let x =
@@ -307,14 +298,13 @@ let fresh_name suf =
 let sanitize_name n =
   String.map n ~f:(function
     | ('0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' | '-') as c -> c
-    | _ -> '_')
+    | _ -> '_' )
 
 let default_on_failure ~step:(i, _) ~stdout ~stderr =
   seq
     [ printf (Fmt.kstr c_string "Step '%s' FAILED:\\n" i) []
-    ; cat_markdown "stdout" stdout
-    ; cat_markdown "stderr" stderr
-    ; exec ["false"] ]
+    ; cat_markdown "stdout" stdout; cat_markdown "stderr" stderr; exec ["false"]
+    ]
 
 let check_sequence ?(verbosity = `Announce ">> ")
     ?(on_failure = default_on_failure)
@@ -340,8 +330,7 @@ let check_sequence ?(verbosity = `Announce ">> ")
     let id = Fmt.str "%d. %s" idx nam in
     if_seq
       (log id u |> succeeds)
-      ~t:
-        [on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id); next]
+      ~t:[on_success ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id); next]
       ~e:[on_failure ~step:(id, u) ~stdout:(stdout id) ~stderr:(stderr id)]
   in
   let rec loop i = function

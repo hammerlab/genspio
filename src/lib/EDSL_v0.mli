@@ -7,19 +7,19 @@ while the functions in the {!EDSL} module {i “hide”} the conversions
 
 *)
 
-type 'a t = 'a Language.t
 (** The type of a Genspio expression. *)
+type 'a t = 'a Language.t
 
-type byte_array = Language.byte_array
 (** Type to encode arbitrary byte-arrays in the EDSL as
     [byte_array t] values, OCaml literal strings or the outputs (as in
     [stdout]) of processes are byte-arrays. *)
+type byte_array = Language.byte_array
 
-type c_string = Language.c_string
 (** Type to encode NUL-terminated strings in the EDSL as
     [c_string t] values. C-strings cannot contain the ['\x00'] character.
     The command line arguments of commands as well as the contents of
     environment variables must be C-strings. *)
+type c_string = Language.c_string
 
 (** {3 Literals } *)
 
@@ -96,8 +96,7 @@ val file_exists : c_string t -> bool t
 
 (** Conversions of the [bool t] type. *)
 module Bool : sig
-  val to_string : bool t -> c_string t
-  val of_string : c_string t -> bool t
+  val to_string : bool t -> c_string t val of_string : c_string t -> bool t
 end
 
 (** {3 Integer Arithmetic} *)
@@ -108,10 +107,7 @@ module Integer : sig
   val to_byte_array : int t -> byte_array t
   val of_string : c_string t -> int t
   val of_byte_array : byte_array t -> int t
-
-  val bin_op :
-    int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
-
+  val bin_op : int t -> [`Div | `Minus | `Mult | `Plus | `Mod] -> int t -> int t
   val add : int t -> int t -> int t
   val ( + ) : int t -> int t -> int t
   val sub : int t -> int t -> int t
@@ -229,8 +225,8 @@ val make_switch :
 
 (** {3 Redirections and File Descriptors } *)
 
-type fd_redirection
 (** Abstract type of file-descriptor redirections. *)
+type fd_redirection
 
 val to_fd : int t -> int t -> fd_redirection
 (** Create a file-descriptor to  file-descriptor redirection. *)
@@ -301,6 +297,7 @@ val fail : string -> unit t
 
 (** {3 Temporary Files} *)
 
+(** Abstraction of a file, cf. {!tmp_file}. *)
 type file =
   < get: byte_array t  (** Get the current contents of the file *)
   ; get_c: c_string t
@@ -309,7 +306,6 @@ type file =
   ; append: byte_array t -> unit t
   ; delete: unit t
   ; path: c_string t >
-(** Abstraction of a file, cf. {!tmp_file}. *)
 
 val tmp_file : ?tmp_dir:c_string t -> string -> file
 (** Create a temporary file that may contain arbitrary strings (can be
@@ -394,10 +390,7 @@ module Command_line : sig
 
   module Arg : sig
     val string :
-         ?default:c_string t
-      -> doc:string
-      -> string list
-      -> c_string t option_spec
+      ?default:c_string t -> doc:string -> string list -> c_string t option_spec
 
     val flag :
       ?default:bool t -> doc:string -> string list -> bool t option_spec
@@ -408,8 +401,7 @@ module Command_line : sig
     val usage : string -> ('a, 'a) cli_options
   end
 
-  val parse :
-    ('a, unit t) cli_options -> (anon:c_string list t -> 'a) -> unit t
+  val parse : ('a, unit t) cli_options -> (anon:c_string list t -> 'a) -> unit t
 end
 
 (** {3 Additional Higher-Level Utilities} *)
@@ -449,14 +441,10 @@ val cat_markdown : string -> c_string t -> unit t
 
 val check_sequence :
      ?verbosity:[`Announce of string | `Output_all | `Silent]
-  -> ?on_failure:(   step:string * unit t
-                  -> stdout:c_string t
-                  -> stderr:c_string t
-                  -> unit t)
-  -> ?on_success:(   step:string * unit t
-                  -> stdout:c_string t
-                  -> stderr:c_string t
-                  -> unit t)
+  -> ?on_failure:
+       (step:string * unit t -> stdout:c_string t -> stderr:c_string t -> unit t)
+  -> ?on_success:
+       (step:string * unit t -> stdout:c_string t -> stderr:c_string t -> unit t)
   -> ?tmpdir:string
   -> (string * unit t) list
   -> unit t

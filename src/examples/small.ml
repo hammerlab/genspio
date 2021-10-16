@@ -37,8 +37,8 @@ Genspio.EDSL.(
 
 let () =
   example ~show:"[`Stderr]" "Failure with Comment"
-    "When an expression is wrapped with *“comments”* they also appear in \
-     some error messages (compilation *and* run-time when using the default \
+    "When an expression is wrapped with *“comments”* they also appear in some \
+     error messages (compilation *and* run-time when using the default \
      compiler) as “the comment stack.”"
     {ocaml|
 Genspio.EDSL.(
@@ -53,8 +53,7 @@ Genspio.EDSL.(
 |ocaml}
 
 let () =
-  example "Call a command with Shell-Strings"
-    ~show:"[`Stdout; `Pretty_printed]"
+  example "Call a command with Shell-Strings" ~show:"[`Stdout; `Pretty_printed]"
     "The `call` construct is a more general version of `exec` that can take \
      any EDSL string. As with `exec` the string will be checked for C-String \
      compatibilty, hence the calls to `byte-array-to-c-string` in the \
@@ -70,8 +69,8 @@ Genspio.EDSL.(
 
 let () =
   example "C-String Compilation Failure" ~show:"[]"
-    "When a string literal cannot be converted to a “C-String” the \
-     default compiler tries to catch the error at compile-time."
+    "When a string literal cannot be converted to a “C-String” the default \
+     compiler tries to catch the error at compile-time."
     {ocaml|
 Genspio.EDSL.(
   "A sequence that will fail" %%% seq [
