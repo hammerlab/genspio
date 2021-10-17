@@ -1,0 +1,23 @@
+name: build
+on: [push, pull_request]
+jobs:
+  run:
+    name: Build
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        #operating-system: [ubuntu-latest]
+        operating-system: [macos-latest, ubuntu-latest] #, windows-latest]
+        ocaml-compiler: [ '4.09.1' , '4.10.1', '4.11.1', '4.12.1' ]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up OCaml ${{ matrix.ocaml-compiler }}
+      uses: ocaml/setup-ocaml@v2
+      with:
+        ocaml-compiler: ${{ matrix.ocaml-compiler }}
+    - run: opam install . --deps-only
+    # Dependencies for the examples/tests:
+    - run: opam install uri ocamlformat
+    - run: opam exec -- dune build @check
+    - run: opam exec -- dune build @fmt
+
