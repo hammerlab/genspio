@@ -1,52 +1,5 @@
 #!/usr/bin/env bash
 
-
-
-travis_install_on_linux () {
-    # Install OCaml and OPAM PPAs
-    export ppa=avsm/ppa
-
-    echo "yes" | sudo add-apt-repository ppa:$ppa
-    sudo apt-get update -qq
-
-    export opam_init_options="--comp=$OCAML_VERSION"
-    sudo apt-get install -qq  opam time git
-
-    dpkg -s dash
-
-    export important_shells=bash,dash,busybox
-    export main_shell=dash
-}
-
-travis_install_on_osx () {
-
-    curl -OL "http://xquartz.macosforge.org/downloads/SL/XQuartz-2.7.6.dmg"
-    sudo hdiutil attach XQuartz-2.7.6.dmg > /dev/null 2>&1
-    sudo installer -verbose -pkg /Volumes/XQuartz-2.7.6/XQuartz.pkg -target / > /dev/null 2>&1
-
-    brew update > /dev/null 2>&1
-    brew install opam bash
-    # We get a newer bash see https://github.com/hammerlab/genspio/issues/68
-    export opam_init_options="--comp=$OCAML_VERSION"
-
-    # Get a POSIX shell
-    ## brew install dash
-
-    # the tests require more than the default limit
-    ulimit -n 2048
-
-
-    export important_shells=bash
-    export main_shell=bash
-}
-
-
-case $TRAVIS_OS_NAME in
-  osx) travis_install_on_osx ;;
-  linux) travis_install_on_linux ;;
-  *) echo "Unknown $TRAVIS_OS_NAME"; exit 1
-esac
-
 # configure and view settings
 export OPAMYES=1
 #echo "ocaml -version"
@@ -64,36 +17,17 @@ echo "/bin/bash --version"
 /bin/bash --version || echo "NO /bin/bash version"
 echo "/bin/sh --version"
 /bin/sh --version || echo "NO /bin/sh version"
-
-
-
 echo ">>> getconf ARG_MAX:"
 getconf ARG_MAX
-
 echo ">>> getconf -a:"
 getconf -a || echo "Not on OSX...?"
-
 echo ">>> xargs shows the limits:"
 echo "$(xargs --show-limits & { sleep 1 ; exit 0 ; } )"
-
 echo ">>> ULimits:"
 ulimit -a
 
-# bash ./tools/env-var-tst.sh
-
-# install OCaml packages
-opam init $opam_init_options
-eval `opam config env`
-
-opam update
-
-# Extra dependency for the tests:
-opam install --yes uri
-
-opam pin add genspio .
-opam install genspio
-
-export OCAMLPARAM='warn-error=Ad-58,_'
+export important_shells=bash
+export main_shell=bash
 
 genspio_test=src/test/main.exe
 genspio_downloader_maker=src/examples/downloader.exe
@@ -118,27 +52,27 @@ dune exec $genspio_test -- --run-constant-propagation-tests \
      --important-shells $important_shells _test/
 (
     cd _test
-    case $TRAVIS_OS_NAME in
-        osx)
-            (
-                echo "On OSX we do less tests because they take too long on Travis"
-                cd $main_shell-StdML
-                echo "Make $main_shell-StdML"
-                make
-                echo "Make Check"
-                make check
-                cd ../sh-SlowFlow/
-                echo "Make sh-SlowFlow"
-                make
-                echo "Make Check"
-                make check
-            ) ;;
-        linux)
+##    case $TRAVIS_OS_NAME in
+##        osx)
+##            (
+##                echo "On OSX we do less tests because they take too long on Travis"
+##                cd $main_shell-StdML
+##                echo "Make $main_shell-StdML"
+##                make
+##                echo "Make Check"
+##                make check
+##                cd ../sh-SlowFlow/
+##                echo "Make sh-SlowFlow"
+##                make
+##                echo "Make Check"
+##                make check
+##            ) ;;
+##        linux)
             make run-all
             make check
-            ;;
-        *) echo "Unknown $TRAVIS_OS_NAME"; exit 1
-    esac
+##            ;;
+##        *) echo "Unknown $TRAVIS_OS_NAME"; exit 1
+##    esac
 )
 
 
@@ -191,20 +125,20 @@ export PATH=$HOME/bin:$PATH
 ./tools/multigit-test.sh
 
 
-echo "================== Trigger Docker build ======================================"
-
-git branch --all
-
-echo "TRAVIS_BRANCH: $TRAVIS_BRANCH"
-echo "DOCKER_BUILD: $DOCKER_BUILD"
-
-if [ "$TRAVIS_BRANCH" = "master" ] && [ "$DOCKER_BUILD" = "true" ] ; then
-    curl -H "Content-Type: application/json" \
-         --data '{"source_type": "Branch", "source_name": "apps406"}' \
-         -X POST \
-         https://registry.hub.docker.com/u/smondet/genspio-doc-dockerfiles/trigger/f113ff75-c7d4-446d-9a71-2e4d7db63389/
-else
-    echo "Not triggering the Docker build this time."
-fi
+##echo "================== Trigger Docker build ======================================"
+##
+##git branch --all
+##
+##echo "TRAVIS_BRANCH: $TRAVIS_BRANCH"
+##echo "DOCKER_BUILD: $DOCKER_BUILD"
+##
+##if [ "$TRAVIS_BRANCH" = "master" ] && [ "$DOCKER_BUILD" = "true" ] ; then
+##    curl -H "Content-Type: application/json" \
+##         --data '{"source_type": "Branch", "source_name": "apps406"}' \
+##         -X POST \
+##         https://registry.hub.docker.com/u/smondet/genspio-doc-dockerfiles/trigger/f113ff75-c7d4-446d-9a71-2e4d7db63389/
+##else
+##    echo "Not triggering the Docker build this time."
+##fi
 
 
