@@ -1,8 +1,0 @@
-language: c
-sudo: true
-script: bash -e ./tools/travis_ci_test.sh
-os:
-- linux
-- osx
-env:
-  - OCAML_VERSION=4.06.1 DOCKER_BUILD=true
