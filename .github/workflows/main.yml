@@ -8,7 +8,8 @@ jobs:
       matrix:
         #operating-system: [ubuntu-latest]
         operating-system: [macos-latest, ubuntu-latest] #, windows-latest]
-        ocaml-compiler: [ '4.09.1' , '4.10.1', '4.11.1', '4.12.1' ]
+        #ocaml-compiler: [ '4.09.1' , '4.10.1', '4.11.1', '4.12.1', '4.13.0' ]
+        ocaml-compiler: [ '4.09.1' , '4.13.0' ]
     steps:
     - uses: actions/checkout@v2
     - name: Set up OCaml ${{ matrix.ocaml-compiler }}
@@ -19,7 +20,9 @@ jobs:
     # Dependencies for the examples/tests:
     - run: opam install uri ocamlformat
     - run: opam exec -- dune build @check
-    - run: opam exec -- dune build @fmt
-    - run: opam exec -- bash ./tools/ci_test.sh
+    - if:  ${{ matrix.ocaml-compiler == '4.13.0' }}
+      run: opam exec -- dune build @fmt
+    - if:  ${{ matrix.ocaml-compiler == '4.13.0' && matrix.operating-system == 'ubuntu-latest' }}
+      run: opam exec -- bash ./tools/ci_test.sh
 
 
