@@ -3,11 +3,11 @@ maintainer: "Seb Mondet <seb@mondet.org>"
 authors: [
   "Seb Mondet <seb@mondet.org>"
 ]
-homepage: "https://smondet.gitlab.io/genspio-doc/"
+homepage: "https://github.com/hammerlab/genspio/"
 bug-reports: "https://github.com/hammerlab/genspio/issues"
 dev-repo: "git+https://github.com/hammerlab/genspio.git"
 license: "Apache 2.0"
-version: "0.0.3-dev"
+version: "0.0.3"
 build: [
   ["dune" "build" "-p" name "-j" jobs ]
 ]
